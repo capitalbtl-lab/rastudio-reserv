@@ -199,6 +199,9 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(ui, /Сверить 10/);
     assert.match(ui, /function pullAudit/);
     assert.match(ui, /HINT\.auditAll/);
+    assert.match(ui, /AUDIT_ROLES/);
+    assert.match(ui, /Все роли/);
+    assert.match(ui, /function auditRole/);
     assert.match(pull, /kind === "audit"/);
     assert.match(pull, /auditOne/);
     assert.match(pull, /fallback = wanted/);

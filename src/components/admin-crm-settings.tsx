@@ -1266,13 +1266,30 @@ const AUDIT_REASON_CHIPS: { id: string; label: string }[] = [
   { id: "show", label: "Показ в Клиентах" },
   { id: "ctt", label: "Спутали с абонементом" },
   { id: "status", label: "Урок ещё не проведён" },
-  { id: "lead", label: "Лид в Альфе" },
-  { id: "arch", label: "Архив в Альфе" },
   { id: "fail", label: "Нет ответа Alfa" },
   { id: "wait", label: "Не сверяли" },
 ];
 
-const AUDIT_SEG_ORDER = AUDIT_REASON_CHIPS.map((c) => c.id).filter((id) => id !== "all" && id !== "ok");
+const AUDIT_SEG_ORDER = ["lead", "arch", ...AUDIT_REASON_CHIPS.map((c) => c.id).filter((id) => id !== "all" && id !== "ok")];
+
+const AUDIT_ROLES: { id: "all" | "клиент" | "лид" | "архив"; label: string }[] = [
+  { id: "all", label: "Все роли" },
+  { id: "клиент", label: "Клиенты" },
+  { id: "лид", label: "Лиды" },
+  { id: "архив", label: "Архив" },
+];
+
+const AUDIT_ROLE_HEAD: Record<"клиент" | "лид" | "архив", { label: string; rec: string }> = {
+  клиент: { label: "Клиенты", rec: "Ученики в Альфе. Сверяем шапку и кассу." },
+  лид: { label: "Лиды", rec: "Шапки клиента нет. Кассу не чинить." },
+  архив: { label: "Архив", rec: "Как текущих не сверяем." },
+};
+
+function auditRole(r: AuditSegIn): "лид" | "клиент" | "архив" {
+  if (r.alfaRole === "лид" || (r.codes || []).includes("лид")) return "лид";
+  if (r.alfaRole === "архив" || (r.codes || []).includes("архив")) return "архив";
+  return "клиент";
+}
 
 function auditCodeWords(codes?: string[]) {
   return [...new Set((codes || []).filter((c) => c && c !== "ok").map((c) => AUDIT_WORD[c] || c))];
@@ -1888,6 +1905,7 @@ function AuditFillList({
   const [open, setOpen] = useState("");
   const [query, setQuery] = useState("");
   const [reason, setReason] = useState("all");
+  const [role, setRole] = useState<"all" | "клиент" | "лид" | "архив">("all");
   const [pageSize, setPageSize] = useState(20);
   const [pageNeed, setPageNeed] = useState(0);
   const [pageDone, setPageDone] = useState(0);
@@ -1896,8 +1914,9 @@ function AuditFillList({
     if (!q) return true;
     return r.name.toLowerCase().includes(q) || String(r.cid).includes(q) || (r.groups || []).some((g) => g.toLowerCase().includes(q));
   });
-  const reasonN = (id: string) => named.filter((r) => auditReasonHit(r, id)).length;
-  const scoped = named.filter((r) => auditReasonHit(r, reason));
+  const reasonN = (id: string) => named.filter((r) => (role === "all" || auditRole(r) === role) && auditReasonHit(r, id)).length;
+  const roleN = (id: typeof role) => named.filter((r) => id === "all" || auditRole(r) === id).length;
+  const scoped = named.filter((r) => (role === "all" || auditRole(r) === role) && auditReasonHit(r, reason));
   const isPinned = (r: AuditUiRow) => String(r.cid) === open || r.cid === loadingCid;
   const doneOf = (r: AuditUiRow) => rowMatched(r);
   const failOf = (r: AuditUiRow) => Boolean(r.seen && auditFail(r.codes));
@@ -1907,11 +1926,19 @@ function AuditFillList({
     const ib = AUDIT_SEG_ORDER.indexOf(auditSeg(b).id);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || byName(a, b);
   };
+  const roleRank = (r: AuditUiRow) => ["клиент", "лид", "архив"].indexOf(auditRole(r));
+  const byLeft = (a: AuditUiRow, b: AuditUiRow) => {
+    if (role === "all") {
+      const d = roleRank(a) - roleRank(b);
+      if (d) return d;
+    }
+    return bySeg(a, b);
+  };
   const needRows = orderActiveQueue(
     scoped.filter((r) => !doneOf(r)),
     (r) => r.cid === loadingCid,
     () => true,
-    bySeg,
+    byLeft,
   );
   const doneRows = orderActiveQueue(
     scoped.filter((r) => doneOf(r)),
@@ -1930,7 +1957,7 @@ function AuditFillList({
   useEffect(() => {
     setPageNeed(0);
     setPageDone(0);
-  }, [q, pageSize, reason]);
+  }, [q, pageSize, reason, role]);
   useEffect(() => {
     setPageNeed(0);
     setPageDone(0);
@@ -1966,13 +1993,15 @@ function AuditFillList({
     const shown = open === id;
     const seg = auditSeg(row);
     const primary = seg.label;
-    const rest = auditCodeWords(row.codes).filter((w) => w !== primary);
-    const role = alfaRoleLabel(row.alfaRole);
+    const who = auditRole(row);
+    const roleWord = alfaRoleLabel(who);
+    const rest = auditCodeWords(row.codes).filter((w) => w !== primary && w !== "Лид в Альфе" && w !== "Архив в Альфе");
     const money = !row.seen
       ? "ещё не сверяли"
       : fail
         ? `Клиенты ${rubAudit(row.clients)} · касса ${rubAudit(row.cash)} · Alfa не ответила`
         : `Клиенты ${rubAudit(row.clients)} · Alfa ${rubAudit(row.alfaMoney)} · касса ${rubAudit(row.cash)}`;
+    const recOnCard = role === "all";
     return (
       <li
         key={id}
@@ -2000,17 +2029,15 @@ function AuditFillList({
         </div>
         <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
           №{row.cid}
-          {role ? ` · ${role}` : ""}
+          {roleWord ? ` · ${roleWord}` : ""}
           {` · ${money}`}
         </p>
-        {full ? null : <p className="mt-1 text-[0.78rem] leading-snug">{seg.rec}</p>}
-        {full || !rest.length ? null : <p className="mt-0.5 truncate text-[0.72rem] leading-snug text-muted">{rest.join(" · ")}</p>}
+        {full || !recOnCard ? null : <p className="mt-1 text-[0.78rem] leading-snug">{seg.rec}</p>}
         {shown ? (
           <div className="mt-3 border-t border-black/5 pt-3">
-            <p className="text-[0.78rem] leading-snug font-medium">{seg.rec}</p>
-            <p className="mt-1 text-[0.72rem] leading-snug text-muted">{money}</p>
-            {rest.length ? <p className="mt-1 text-[0.72rem] leading-snug text-muted">{rest.join(" · ")}</p> : null}
-            <p className="mt-1 text-[0.72rem] text-muted">{(row.groups || []).slice(0, 3).join(" · ") || "групп на карточке нет"}</p>
+            {recOnCard ? null : <p className="text-[0.78rem] leading-snug font-medium">{seg.rec}</p>}
+            {rest.length ? <p className="text-[0.72rem] leading-snug text-muted">{rest.join(" · ")}</p> : null}
+            <p className="text-[0.72rem] text-muted">{(row.groups || []).slice(0, 3).join(" · ") || "групп на карточке нет"}</p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">
               {withHint(
                 <button
@@ -2041,6 +2068,23 @@ function AuditFillList({
         onChange={(e) => setQuery(e.target.value)}
       />
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {AUDIT_ROLES.map((c) => {
+          const n = roleN(c.id);
+          const on = role === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", on ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+              onClick={() => setRole(c.id)}
+            >
+              {c.label}
+              {n ? ` · ${n}` : ""}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {AUDIT_REASON_CHIPS.filter((c) => c.id === "all" || reasonN(c.id) > 0).map((c) => {
           const n = c.id === "all" ? named.length : reasonN(c.id);
           const on = reason === c.id;
@@ -2056,14 +2100,14 @@ function AuditFillList({
             </button>
           );
         })}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.78rem]">
-        <span className="text-muted">На странице</span>
-        {([10, 20, 30, 100] as const).map((n) => (
-          <button key={n} type="button" className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => pickPageSize(n)}>
-            {n}
-          </button>
-        ))}
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[0.78rem]">
+          <span className="text-muted">На странице</span>
+          {([10, 20, 30, 100] as const).map((n) => (
+            <button key={n} type="button" className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => pickPageSize(n)}>
+              {n}
+            </button>
+          ))}
+        </span>
       </div>
       <div className="mt-3 grid items-stretch gap-3 lg:grid-cols-2">
         <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
@@ -2076,12 +2120,14 @@ function AuditFillList({
             <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto [overflow-anchor:none]">
               {listNeed.map((row, i) => {
                 const prev = i > 0 ? listNeed[i - 1] : null;
-                const g = auditSeg(row);
-                const prevId = prev ? auditSeg(prev).id : "";
-                const n = needRows.filter((x) => auditSeg(x).id === g.id).length;
+                const byRole = role === "all";
+                const g = byRole ? AUDIT_ROLE_HEAD[auditRole(row)] : auditSeg(row);
+                const gid = byRole ? auditRole(row) : auditSeg(row).id;
+                const prevId = prev ? (byRole ? auditRole(prev) : auditSeg(prev).id) : "";
+                const n = needRows.filter((x) => (byRole ? auditRole(x) : auditSeg(x).id) === gid).length;
                 return (
                   <Fragment key={row.cid}>
-                    {g.id !== prevId ? (
+                    {gid !== prevId ? (
                       <li className="list-none space-y-0.5 pt-2">
                         <p className="text-[0.78rem] font-semibold text-rose-900">
                           {g.label} · {n}
