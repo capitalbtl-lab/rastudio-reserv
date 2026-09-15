@@ -4,10 +4,13 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { dirname, join } from "node:path";
 
 /** Закон «История из Alfa»: только по одному, пакетом нельзя.
- *  Пауза 5 с. Если загрузка/выгрузка окна ≤ 31 день включительно — 2 с.
- *  Кнопка «месяц» в коде — recheckDays 32, это то же окно. */
+ *  «Перепроверить по одному»: 1 месяц — 2 с, 3 месяца — 3 с, 6 месяцев — 4 с.
+ *  Иначе (с 2015, медленный, левая волна) — 5 с.
+ *  Кнопка «месяц» в коде — recheckDays 32. */
 export const JOURNAL_ONE_GAP_MS = 5000;
 export const JOURNAL_WINDOW_GAP_MS = 2000;
+export const JOURNAL_QUARTER_GAP_MS = 3000;
+export const JOURNAL_HALF_GAP_MS = 4000;
 export const JOURNAL_WINDOW_DAYS = 31;
 export const PEOPLE_SLOW_MS = 10 * 60 * 1000;
 export const PEOPLE_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
@@ -481,7 +484,7 @@ export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number;
   return Math.max(0, Math.floor((t1 - t0) / 86400000) + 1);
 }
 
-/** Окно ≤ 31 день включительно. 32 — токен кнопки «месяц». */
+/** Окно «Перепроверить»: 32/≤31 → месяц, 92 → 3 мес, 182 → 6 мес. */
 export function jobWindowShort(periodDays: number): boolean {
   const n = Number(periodDays) || 0;
   if (n <= 0) return false;
@@ -490,7 +493,11 @@ export function jobWindowShort(periodDays: number): boolean {
 }
 
 export function jobGapMs(_mode?: JournalJobMode | "", periodDays?: number) {
-  return jobWindowShort(Number(periodDays) || 0) ? JOURNAL_WINDOW_GAP_MS : JOURNAL_ONE_GAP_MS;
+  const n = Number(periodDays) || 0;
+  if (n === 182 || (n > 93 && n <= 186)) return JOURNAL_HALF_GAP_MS;
+  if (n === 92 || (n > 32 && n <= 93)) return JOURNAL_QUARTER_GAP_MS;
+  if (n > 0 && (n <= JOURNAL_WINDOW_DAYS || n === 32)) return JOURNAL_WINDOW_GAP_MS;
+  return JOURNAL_ONE_GAP_MS;
 }
 
 export function jobGapOf(job?: { mode?: JournalJobMode | ""; recheck?: boolean; recheckDays?: number; dateFrom?: string }): number {
