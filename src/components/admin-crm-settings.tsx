@@ -4742,34 +4742,16 @@ export function AdminCrmSettings() {
                     seenCid.add(r.cid);
                     rows.push(asAuditRow(r, by.get(r.cid)));
                   }
-                  for (const h of hits) {
-                    if (seenCid.has(h.cid)) continue;
-                    const lead = (h.codes || []).includes("лид");
-                    const arch = (h.codes || []).includes("архив");
-                    rows.push({
-                      cid: h.cid,
-                      branchId: h.branchId,
-                      name: h.name,
-                      groups: [],
-                      clients: h.clients,
-                      alfaMoney: h.alfa,
-                      cash: h.cash,
-                      codes: h.codes,
-                      extra: h.extra,
-                      at: h.at,
-                      seen: true,
-                      alfaRole: lead ? "лид" : arch ? "архив" : undefined,
-                      status: arch ? "архив" : "",
-                      study: lead ? 0 : arch ? 2 : undefined,
-                      funnel: lead ? "1" : "",
-                    });
-                  }
                   const run = fillLoading?.kind === "audit";
-                  const scanned = journal?.lastAudit?.scanned || 0;
-                  const okN = journal?.lastAudit?.ok || 0;
-                  const holeN = journal?.lastAudit?.hole || 0;
-                  const showN = journal?.lastAudit?.show || 0;
-                  const total = live?.total || liveN || rows.length;
+                  const clientRows = rows.filter((r) => auditRole(r) === "клиент");
+                  const scanned = clientRows.filter((r) => r.seen).length;
+                  const okN = clientRows.filter((r) => rowMatched(r)).length;
+                  const holeN = clientRows.filter((r) => {
+                    const id = auditSeg(r).id;
+                    return id === "cash-hi" || id === "cash-lo" || id === "goods";
+                  }).length;
+                  const showN = clientRows.filter((r) => auditSeg(r).id === "show").length;
+                  const total = livePeople.length;
                   return (
                     <>
                       <p className="mt-3 text-sm">
