@@ -1953,11 +1953,16 @@ function AuditFillList({
     if (!q) return true;
     return r.name.toLowerCase().includes(q) || String(r.cid).includes(q) || (r.groups || []).some((g) => g.toLowerCase().includes(q));
   });
-  const reasonN = (id: string) => named.filter((r) => (role === "all" || auditRole(r) === role) && auditReasonHit(r, id)).length;
+  const inWork = (r: AuditUiRow) => {
+    const who = auditRole(r);
+    if (role === "all" && who === "архив") return false;
+    return role === "all" || who === role;
+  };
+  const reasonN = (id: string) => named.filter((r) => inWork(r) && auditReasonHit(r, id)).length;
   const roleN = (id: typeof role) => named.filter((r) => id === "all" || auditRole(r) === id).length;
-  const scoped = named.filter((r) => (role === "all" || auditRole(r) === role) && auditReasonHit(r, reason));
+  const scoped = named.filter((r) => inWork(r) && auditReasonHit(r, reason));
   const isPinned = (r: AuditUiRow) => String(r.cid) === open || r.cid === loadingCid;
-  const doneOf = (r: AuditUiRow) => auditRole(r) === "архив" || rowMatched(r);
+  const doneOf = (r: AuditUiRow) => (role === "архив" ? true : rowMatched(r));
   const failOf = (r: AuditUiRow) => Boolean(r.seen && auditFail(r.codes));
   const byName = (a: AuditUiRow, b: AuditUiRow) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid;
   const bySeg = (a: AuditUiRow, b: AuditUiRow) => {
@@ -2191,10 +2196,10 @@ function AuditFillList({
         </section>
         <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <h4 className="font-display text-[1.05rem] text-emerald-900">Совпало · {nDone}</h4>
+            <h4 className="font-display text-[1.05rem] text-emerald-900">{role === "архив" ? "Архив" : "Совпало"} · {nDone}</h4>
             {pager(safeDone, pagesDone, setPageDone)}
           </div>
-          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Клиенты = шапка Alfa = касса ±1 ₽. Трогать не нужно.</p>
+          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">{role === "архив" ? "В Альфе архив. Шапку не сверяем." : "Клиенты = шапка Alfa = касса ±1 ₽. Трогать не нужно."}</p>
           {listDone.length ? (
             <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto [overflow-anchor:none]">{listDone.map(renderPerson)}</ul>
           ) : (
