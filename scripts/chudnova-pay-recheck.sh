@@ -17,6 +17,16 @@ if [ "$mode" = "check" ]; then
     console.log("всего строк кассы Чудновой:", mine.length);
     console.log("летние номера:", letIds.length ? letIds.join(" ") : "нет");
     console.log("площадки:", branches.join(" ") || "нет");
+    try {
+      const j = JSON.parse(fs.readFileSync("storage/crm-journal-job.json", "utf8"));
+      console.log("очередь:", j.running ? "идёт" : "стоит", "n", j.n || 0, "/", j.total || 0);
+      console.log("сейчас:", j.cur || "-");
+      console.log("сообщение:", j.msg || "-");
+    } catch (e) {
+      console.log("очередь: нет файла");
+    }
+    const fill = (raw.payFill || {})["670"] || null;
+    console.log("курсор кассы:", fill ? JSON.stringify(fill) : "нет");
   '
   exit 0
 fi
