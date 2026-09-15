@@ -467,11 +467,9 @@ export function shouldRetryShortPeople(
 }
 
 export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number; dateFrom?: string }): number {
-  if (input?.recheck) {
-    const d = Number(input.recheckDays) || 0;
-    if (d === 92 || d === 182 || d === 1095 || d === 2555 || d === 4000) return d;
-    return 32;
-  }
+  const d = Number(input?.recheckDays) || 0;
+  if (d === 92 || d === 182 || d === 1095 || d === 2555 || d === 4000) return d;
+  if (input?.recheck) return 32;
   const from = String(input?.dateFrom || "").slice(0, 10);
   if (!from || from <= "2015-01-01") return 0;
   const t0 = Date.parse(`${from}T00:00:00Z`);

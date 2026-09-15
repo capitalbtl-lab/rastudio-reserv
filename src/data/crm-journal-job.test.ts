@@ -281,6 +281,10 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 182 }), 2000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 1095 }), 3000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 4000 }), 5000);
+    assert.equal(jobGapOf({ mode: "person", recheck: true, recheckDays: 4000 }), 5000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: false, recheckDays: 4000 }), 5000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: false, recheckDays: 1095 }), 3000);
+    assert.equal(jobGapOf({ mode: "person", recheck: true, recheckDays: 92 }), 2000);
     assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 92 }), 2000);
     assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 182 }), 2000);
     assert.equal(jobGapOf({ mode: "people", recheck: true, recheckDays: 32 }), 2000);
