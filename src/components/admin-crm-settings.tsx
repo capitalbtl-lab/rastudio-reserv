@@ -283,16 +283,47 @@ function stoppedLine(job: { n?: number; total?: number }) {
   return `Остановили · прошло ${n} из ${total}.`;
 }
 
-function ServerJobStrip({ job, note }: { job?: ServerJob | null; note?: string }) {
+function jobFitsTab(job: ServerJob | null | undefined, tab?: string): boolean {
+  if (!tab) return true;
+  const mode = String(job?.mode || "");
+  const kind = String(job?.kind || "");
+  if (mode === "catalog" || mode === "count") return tab === "students" || tab === "money";
+  if (mode === "audit" || kind === "audit") return tab === "audit";
+  if (kind === "balance" || mode === "balance") return tab === "money";
+  if (mode === "roster" || mode === "roster-recheck") return tab === "roster";
+  if (
+    mode === "groups" ||
+    mode === "groups-recheck" ||
+    mode === "group-one" ||
+    mode === "details" ||
+    mode === "life" ||
+    mode === "archives" ||
+    mode === "archivesPupils"
+  )
+    return tab === "groups";
+  if (
+    mode === "people" ||
+    mode === "people-recheck" ||
+    mode === "people-slow" ||
+    mode === "person" ||
+    mode === "probe" ||
+    kind === "students"
+  )
+    return tab === "students";
+  return false;
+}
+
+function ServerJobStrip({ job, note, tab }: { job?: ServerJob | null; note?: string; tab?: string }) {
   const stopped = Boolean(job?.stop);
   const run = Boolean(job?.running) && !stopped;
+  const mine = run || jobFitsTab(job, tab);
   const n = Number(job?.n) || 0;
   const total = Number(job?.total) || 0;
   const waits = Number(job?.waits) || 0;
   const cur = String(job?.cur || "").trim();
   const next = String(job?.next || "").trim();
-  const msg = stopped && job ? stoppedLine(job) : String(job?.msg || "").trim();
-  const noteText = String(note || "").trim();
+  const msg = !mine ? "" : stopped && job ? stoppedLine(job) : String(job?.msg || "").trim();
+  const noteText = mine ? String(note || "").trim() : "";
   const pct = total > 0 ? Math.min(100, Math.round((n / Math.max(total, 1)) * 100)) : run ? 12 : 0;
   const extra = [
     total ? `${n}/${total}` : n ? `прошло ${n}` : "",
@@ -1250,6 +1281,7 @@ function ScopePills({
   arch,
   hintLive,
   hintArch,
+  middle,
 }: {
   value: "live" | "archive";
   onChange: (v: "live" | "archive") => void;
@@ -1257,15 +1289,17 @@ function ScopePills({
   arch: string;
   hintLive: string;
   hintArch: string;
+  middle?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       {withHint(
         <button type="button" className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", value === "live" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => onChange("live")}>
           {live}
         </button>,
         hintLive,
       )}
+      {middle}
       {withHint(
         <button type="button" className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", value === "archive" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => onChange("archive")}>
           {arch}
@@ -3549,7 +3583,6 @@ export function AdminCrmSettings() {
           const schoolNeedLife = schoolRows.filter((r) => r.source !== "alfa").length;
           return (
             <div className="space-y-3">
-              {journal?.note && peopleStudy !== "2" && histTab !== "audit" ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
               {!journal ? (
                 <div className="flex flex-wrap items-center gap-2">
                   {journalLoading ? (
@@ -3621,7 +3654,7 @@ export function AdminCrmSettings() {
                         Состав прочитан {done.length} из {rows.length}
                         {need.length ? ` · требуют загрузки ${need.length}` : ""}. Сейчас ходят · {liveN}.
                       </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="mt-3">
                         <ScopePills
                           value={groupArchived ? "archive" : "live"}
                           onChange={(v) => setGroupArchived(v === "archive")}
@@ -3629,61 +3662,61 @@ export function AdminCrmSettings() {
                           arch={`Архивные группы · ${archGroupN}`}
                           hintLive={HINT.scopeLiveGroups}
                           hintArch={HINT.scopeArchGroups}
+                          middle={
+                            <>
+                              {withHint(
+                                <select
+                                  className="h-8 max-w-[14rem] rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
+                                  value={journalSchool}
+                                  disabled={busy}
+                                  onChange={(e) => pickJournalSchool(e.target.value)}
+                                  aria-label="Школа"
+                                >
+                                  <option value="">Все школы</option>
+                                  {(journal?.schools || []).map((s) => (
+                                    <option key={s.name} value={s.name}>
+                                      {s.name}
+                                    </option>
+                                  ))}
+                                </select>,
+                                HINT.school,
+                              )}
+                              {withHint(
+                                <label className="flex h-8 items-center gap-1.5 whitespace-nowrap text-[0.78rem]">
+                                  <input type="checkbox" checked={rosterLeads} onChange={(e) => setRosterLeads(e.target.checked)} />
+                                  лиды в этих группах
+                                </label>,
+                                HINT.rosterWho,
+                              )}
+                              {withHint(
+                                <label className="flex h-8 items-center gap-1.5 whitespace-nowrap text-[0.78rem]">
+                                  <input type="checkbox" checked={rosterArchLive} onChange={(e) => setRosterArchLive(e.target.checked)} />
+                                  архив в живой группе
+                                </label>,
+                                HINT.rosterWho,
+                              )}
+                              {withHint(
+                                <label className="flex h-8 items-center gap-1.5 whitespace-nowrap text-[0.78rem]">
+                                  был на занятии
+                                  <select
+                                    className="h-8 rounded-full bg-white px-2 text-[0.78rem] ring-1 ring-black/10"
+                                    value={rosterDays}
+                                    onChange={(e) => setRosterDays(Number(e.target.value) || 0)}
+                                  >
+                                    <option value={0}>не фильтровать</option>
+                                    <option value={15}>15 дней</option>
+                                    <option value={30}>30 дней</option>
+                                    <option value={150}>150 дней</option>
+                                  </select>
+                                </label>,
+                                HINT.rosterWho,
+                              )}
+                              <button type="button" className={BTN_GHOST_SM} disabled={busy} onClick={() => void saveRosterWho()}>
+                                Запомнить
+                              </button>
+                            </>
+                          }
                         />
-                      </div>
-                      <label className="mt-3 block text-sm font-semibold">
-                        <span className="inline-flex items-center gap-1">
-                          Только школа
-                          <HintI text={HINT.school} />
-                        </span>
-                        <select
-                          className="mt-1 h-9 w-full max-w-sm rounded-full bg-white px-3 text-sm font-medium ring-1 ring-black/8"
-                          value={journalSchool}
-                          disabled={busy}
-                          onChange={(e) => pickJournalSchool(e.target.value)}
-                        >
-                          <option value="">Все школы</option>
-                          {(journal?.schools || []).map((s) => (
-                            <option key={s.name} value={s.name}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.82rem]">
-                        {withHint(
-                          <label className="flex items-center gap-1.5">
-                            <input type="checkbox" checked={rosterLeads} onChange={(e) => setRosterLeads(e.target.checked)} />
-                            лиды в этих группах
-                          </label>,
-                          HINT.rosterWho,
-                        )}
-                        {withHint(
-                          <label className="flex items-center gap-1.5">
-                            <input type="checkbox" checked={rosterArchLive} onChange={(e) => setRosterArchLive(e.target.checked)} />
-                            архив в живой группе
-                          </label>,
-                          HINT.rosterWho,
-                        )}
-                        {withHint(
-                          <label className="flex items-center gap-1.5">
-                            был на занятии
-                            <select
-                              className="h-8 rounded-full bg-white px-2 text-[0.78rem] ring-1 ring-black/10"
-                              value={rosterDays}
-                              onChange={(e) => setRosterDays(Number(e.target.value) || 0)}
-                            >
-                              <option value={0}>не фильтровать</option>
-                              <option value={15}>15 дней</option>
-                              <option value={30}>30 дней</option>
-                              <option value={150}>150 дней</option>
-                            </select>
-                          </label>,
-                          HINT.rosterWho,
-                        )}
-                        <button type="button" className={BTN_GHOST} disabled={busy} onClick={() => void saveRosterWho()}>
-                          Запомнить
-                        </button>
                       </div>
                       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
                         {withHint(
@@ -3704,21 +3737,21 @@ export function AdminCrmSettings() {
                           </button>,
                           HINT.stop,
                         )}
-                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
+                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} tab={histTab} />
                       </div>
-                      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                        <div>
-                          <p className="font-semibold text-rose-800">Требуют загрузки состава · {need.length}</p>
-                          <ul className="mt-2 space-y-1 text-sm">
+                      <div className="mt-8">
+                        <p className="font-semibold text-rose-800">Требуют загрузки состава · {need.length}</p>
+                        {need.length ? (
+                          <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
                             {need.slice(0, 100).map((r) => (
-                              <li key={`${r.branchId}-${r.groupId}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-black/8">
-                                <span className="min-w-0">
+                              <li key={`${r.branchId}-${r.groupId}`} className="flex min-h-[3.25rem] items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-black/8">
+                                <span className="min-w-0 truncate">
                                   {r.name} <span className="text-muted">№{r.groupId}</span>
                                   {r.school ? <span className="text-muted"> · {r.school}</span> : null}
                                 </span>
                                 <button
                                   type="button"
-                                  className={BTN_LOAD_SM}
+                                  className={cn(BTN_LOAD_SM, "shrink-0")}
                                   disabled={busy}
                                   onClick={() => void startHistJob({ jobMode: "roster", groupId: r.groupId, branchId: r.branchId, name: r.name, jobItems: [{ groupId: r.groupId, branchId: r.branchId, name: r.name }] })}
                                 >
@@ -3727,27 +3760,29 @@ export function AdminCrmSettings() {
                               </li>
                             ))}
                           </ul>
-                        </div>
-                        <div>
-                          <p className="font-semibold text-emerald-800">Состав прочитан · {done.length}</p>
-                          <ul className="mt-2 space-y-1 text-sm">
-                            {done.slice(0, 100).map((r) => (
-                              <li key={`${r.branchId}-${r.groupId}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-black/8">
-                                <span className="min-w-0">
-                                  {r.name} <span className="text-muted">№{r.groupId}</span>
-                                </span>
-                                <button
-                                  type="button"
-                                  className={BTN_GHOST}
-                                  disabled={busy}
-                                  onClick={() => void startHistJob({ jobMode: "roster-recheck", recheck: true, groupId: r.groupId, branchId: r.branchId, name: r.name, jobItems: [{ groupId: r.groupId, branchId: r.branchId, name: r.name }] })}
-                                >
-                                  Перепроверить
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                        ) : (
+                          <p className="mt-1 text-sm text-muted">Пусто.</p>
+                        )}
+                      </div>
+                      <div className="mt-6">
+                        <p className="font-semibold text-emerald-800">Состав прочитан · {done.length}</p>
+                        <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                          {done.slice(0, 100).map((r) => (
+                            <li key={`${r.branchId}-${r.groupId}`} className="flex min-h-[3.25rem] items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-black/8">
+                              <span className="min-w-0 truncate">
+                                {r.name} <span className="text-muted">№{r.groupId}</span>
+                              </span>
+                              <button
+                                type="button"
+                                className={cn(BTN_GHOST_SM, "shrink-0")}
+                                disabled={busy}
+                                onClick={() => void startHistJob({ jobMode: "roster-recheck", recheck: true, groupId: r.groupId, branchId: r.branchId, name: r.name, jobItems: [{ groupId: r.groupId, branchId: r.branchId, name: r.name }] })}
+                              >
+                                Перепроверить
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                       {(() => {
                         const ug = p?.ungrouped;
@@ -3933,7 +3968,7 @@ export function AdminCrmSettings() {
                     </button>,
                     HINT.stop,
                   )}
-                  <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
+                  <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} tab={histTab} />
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {withHint(
@@ -4133,7 +4168,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
-                    <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note ? catalogProgressNote(journal.note) : ""} />
+                    <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note ? catalogProgressNote(journal.note) : ""} tab={histTab} />
                     </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
@@ -4212,7 +4247,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.stop,
                         )}
-                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
+                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} tab={histTab} />
                       </div>
                       <PeopleFillList
                         rows={side?.people || []}
@@ -4292,7 +4327,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
-                    <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note ? catalogProgressNote(journal.note) : ""} />
+                    <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note ? catalogProgressNote(journal.note) : ""} tab={histTab} />
                     </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
@@ -4354,7 +4389,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.stop,
                         )}
-                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
+                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} tab={histTab} />
                       </div>
                       <PeopleFillList
                         rows={side?.people || []}
@@ -4439,7 +4474,7 @@ export function AdminCrmSettings() {
                           </button>,
                           HINT.stop,
                         )}
-                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
+                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} tab={histTab} />
                       </div>
                       <AuditFillList
                         rows={rows}
