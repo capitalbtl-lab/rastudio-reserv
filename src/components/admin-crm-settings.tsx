@@ -322,8 +322,7 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 const CRM_SET_TABS = [
   { id: "people", label: "Люди и роли" },
   { id: "alfa", label: "Фон с AlfaCRM" },
-  { id: "historyAuto", label: "Пульт Истории" },
-  { id: "history", label: "История из Alfa" },
+  { id: "history", label: "Пульт синхронизации данных" },
   { id: "queue", label: "Очередь" },
   { id: "funnel", label: "Воронка" },
   { id: "cache", label: "Кэш сайта" },
@@ -2186,7 +2185,8 @@ export function AdminCrmSettings() {
       const h = localStorage.getItem("crm-history-tab") || "";
       if (s) setJournalSchool(s);
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
-      if (CRM_SET_TABS.some((x) => x.id === t)) setCrmTab(t as CrmSetTab);
+      const tab = t === "historyAuto" ? "history" : t;
+      if (CRM_SET_TABS.some((x) => x.id === tab)) setCrmTab(tab as CrmSetTab);
       if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit") setHistTab(h);
     } catch {
       /* */
@@ -3521,19 +3521,10 @@ export function AdminCrmSettings() {
       </>
       ) : null}
 
-      {crmTab === "historyAuto" ? (
-      <Card
-        title="Пульт Истории"
-        hint="Сервер сам нажимает те же кнопки, что в «История из Alfa». Без карточки расписания — молчит. С завода автомат выкл."
-      >
-        <HistoryPlanPanel policy={syncPolicy} job={journal?.job} busy={busy} onSave={(next) => void saveSyncPolicy(next)} />
-      </Card>
-      ) : null}
-
       {crmTab === "history" ? (
       <Card
-        title="Загрузить историю из Alfa"
-        hint="Кнопка только пишет очередь на диск. Грузит отдельный процесс, не сайт. Вкладку и страницу можно закрыть — F5 ничего не сбрасывает. ○ сверить · ~ оборвалось · ✓ сверено с Alfa."
+        title="Пульт синхронизации данных"
+        hint="История из Alfa: кнопки пишут очередь на диск, грузит отдельный процесс. Расписания сверху — сервер жмёт те же кнопки сам. Без карточки и без тумблера — молчит. Вкладку и страницу можно закрыть — F5 ничего не сбрасывает. ○ сверить · ~ оборвалось · ✓ сверено с Alfa."
       >
         {(() => {
           const offline = alfaMode === "offline";
@@ -3546,6 +3537,7 @@ export function AdminCrmSettings() {
           const schoolNeedLife = schoolRows.filter((r) => r.source !== "alfa").length;
           return (
             <div className="space-y-3">
+              <HistoryPlanPanel policy={syncPolicy} job={journal?.job} busy={busy} onSave={(next) => void saveSyncPolicy(next)} />
               {journal?.note && peopleStudy !== "2" && histTab !== "audit" ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
               {!journal ? (
                 <div className="flex flex-wrap items-center gap-2">

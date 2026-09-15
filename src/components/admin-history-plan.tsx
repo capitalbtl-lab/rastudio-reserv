@@ -325,7 +325,7 @@ export function HistoryPlanPanel({
       </div>
 
       {!policy.plan.length && !adding ? (
-        <p className="text-sm text-muted">Расписаний нет. Автомат молчит. Кнопки в «История из Alfa» как были.</p>
+        <p className="text-sm text-muted">Расписаний нет. Автомат молчит. Кнопки шагов ниже как были.</p>
       ) : null}
 
       {policy.plan.map((r) => (
