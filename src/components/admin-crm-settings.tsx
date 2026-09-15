@@ -283,28 +283,36 @@ function stoppedLine(job: { n?: number; total?: number }) {
   return `Остановили · прошло ${n} из ${total}.`;
 }
 
-function ServerJobStrip({ job }: { job?: ServerJob | null }) {
-  if (!job) return null;
-  const stopped = Boolean(job.stop);
-  const run = Boolean(job.running) && !stopped;
-  const n = Number(job.n) || 0;
-  const total = Number(job.total) || 0;
-  const waits = Number(job.waits) || 0;
-  const cur = String(job.cur || "").trim();
-  const msg = stopped ? stoppedLine(job) : String(job.msg || "").trim();
-  if (!run && !stopped && !cur && !msg) return null;
+function ServerJobStrip({ job, note }: { job?: ServerJob | null; note?: string }) {
+  const stopped = Boolean(job?.stop);
+  const run = Boolean(job?.running) && !stopped;
+  const n = Number(job?.n) || 0;
+  const total = Number(job?.total) || 0;
+  const waits = Number(job?.waits) || 0;
+  const cur = String(job?.cur || "").trim();
+  const next = String(job?.next || "").trim();
+  const msg = stopped && job ? stoppedLine(job) : String(job?.msg || "").trim();
+  const noteText = String(note || "").trim();
   const pct = total > 0 ? Math.min(100, Math.round((n / Math.max(total, 1)) * 100)) : run ? 12 : 0;
-  const next = String(job.next || "").trim();
+  const extra = [
+    total ? `${n}/${total}` : n ? `прошло ${n}` : "",
+    run && waits ? `пауза ${waits}/8` : "",
+    run && next && !cur.includes(next) ? `дальше ${next}` : "",
+    run && job?.workerSilent ? "процесс истории молчит, подхватываем" : "",
+    run && noteText && !cur.includes(noteText) && !noteText.includes(cur) ? noteText : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const title = run ? `На сервере: ${cur || "работаем"}` : msg || noteText || "Сервер свободен";
   return (
-    <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-black/10">
-      <p className="truncate text-sm font-semibold">{run ? `На сервере: ${cur || "работаем"}` : msg || "Сервер свободен"}</p>
-      <p className="mt-0.5 truncate text-[0.78rem] text-muted">
-        {total ? `${n}/${total}` : n ? `прошло ${n}` : run ? "очередь с диска" : ""}
-        {run && waits ? ` · пауза ${waits}/8` : ""}
-        {run && next && !cur.includes(next) ? ` · дальше ${next}` : ""}
-        {run && job.workerSilent ? " · процесс истории молчит, подхватываем" : ""}
-      </p>
-      {run ? <FillBar pct={pct} run={run} done={false} /> : null}
+    <div className="flex min-h-10 min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-full bg-black/5 px-4 py-1.5">
+      <p className={cn("truncate text-sm leading-none", run || msg ? "font-semibold" : noteText ? "" : "text-muted")}>{title}</p>
+      {run && extra ? <p className="truncate text-[0.72rem] leading-none text-muted">{extra}</p> : null}
+      {run ? (
+        <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-primary/15">
+          <div className="h-full rounded-full bg-primary ra-progress-run" style={{ width: `${pct}%` }} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -3592,8 +3600,6 @@ export function AdminCrmSettings() {
                 busy={busy}
                 onSave={(next) => void saveSyncPolicy(next)}
               />
-              <ServerJobStrip job={journal?.job as ServerJob | undefined} />
-
               {histTab === "roster" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="flex items-center gap-2 font-display text-[1.15rem]">
@@ -3679,7 +3685,7 @@ export function AdminCrmSettings() {
                           Запомнить
                         </button>
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
                         {withHint(
                           <button type="button" className={BTN_LOAD} disabled={busy && run} onClick={() => void loadRosterOne()}>
                             Загрузить по одному
@@ -3693,11 +3699,12 @@ export function AdminCrmSettings() {
                           HINT.rosterRecheck,
                         )}
                         {withHint(
-                          <button type="button" className={BTN_GHOST} disabled={!run} onClick={() => void runJournal({ kind: "jobStop" })}>
+                          <button type="button" className={cn(BTN_GHOST, "shrink-0")} disabled={!run} onClick={() => void runJournal({ kind: "jobStop" })}>
                             Стоп
                           </button>,
                           HINT.stop,
                         )}
+                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
                       </div>
                       <div className="mt-4 grid gap-4 lg:grid-cols-2">
                         <div>
@@ -3926,6 +3933,7 @@ export function AdminCrmSettings() {
                     </button>,
                     HINT.stop,
                   )}
+                  <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {withHint(
@@ -4125,7 +4133,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
-                    {journal?.note ? <p className="flex h-10 min-w-0 flex-1 items-center truncate rounded-full bg-black/5 px-4 text-sm">{catalogProgressNote(journal.note)}</p> : null}
+                    <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note ? catalogProgressNote(journal.note) : ""} />
                     </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
@@ -4145,8 +4153,7 @@ export function AdminCrmSettings() {
                   return (
                     <>
                       <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} />
-                      <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${cur}` : "\u00a0"}</p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
                         <BtnCluster tone="red">
                         {withHint(
                         <button
@@ -4205,6 +4212,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.stop,
                         )}
+                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
                       </div>
                       <PeopleFillList
                         rows={side?.people || []}
@@ -4284,7 +4292,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
-                    {journal?.note ? <p className="flex h-10 min-w-0 flex-1 items-center truncate rounded-full bg-black/5 px-4 text-sm">{catalogProgressNote(journal.note)}</p> : null}
+                    <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note ? catalogProgressNote(journal.note) : ""} />
                     </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
@@ -4304,8 +4312,7 @@ export function AdminCrmSettings() {
                   return (
                     <>
                       <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} />
-                      <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${cur}` : "\u00a0"}</p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
                         <BtnCluster tone="red">
                         {withHint(
                         <button
@@ -4347,6 +4354,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.stop,
                         )}
+                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
                       </div>
                       <PeopleFillList
                         rows={side?.people || []}
@@ -4431,11 +4439,7 @@ export function AdminCrmSettings() {
                           </button>,
                           HINT.stop,
                         )}
-                        {journal?.note && histTab === "audit" ? (
-                          <p className="flex h-10 min-w-0 flex-1 items-center truncate rounded-full bg-black/5 px-4 text-sm">{journal.note}</p>
-                        ) : (
-                          <p className="flex h-10 min-w-0 flex-1 items-center truncate px-4 text-sm text-muted">{run ? `Сейчас ${fillLoading?.label || ""}` : "\u00a0"}</p>
-                        )}
+                        <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note} />
                       </div>
                       <AuditFillList
                         rows={rows}
