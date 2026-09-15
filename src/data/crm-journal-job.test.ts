@@ -14,6 +14,8 @@ import {
   shouldRetryOpenRecheck,
   shouldRetryShortPeople,
   jobGapMs,
+  jobGapOf,
+  JOURNAL_WINDOW_GAP_MS,
   mergeJobPatch,
   parseJobItems,
   emptyJournalJob,
@@ -260,16 +262,26 @@ describe("фон истории из Alfa", () => {
     assert.equal(fillClear.fill, null);
   });
 
-  it("закон истории: только по одному, пауза 5 с", () => {
+  it("закон истории: один, окно ≤31 день — 2 с, иначе 5 с", () => {
     assert.equal(PEOPLE_JOB_GAP_MS, 5000);
     assert.equal(CATALOG_JOB_GAP_MS, 5000);
+    assert.equal(JOURNAL_WINDOW_GAP_MS, 2000);
     assert.equal(jobGapMs("people"), 5000);
     assert.equal(jobGapMs("people-recheck"), 5000);
+    assert.equal(jobGapMs("people-recheck", 31), 2000);
+    assert.equal(jobGapMs("people-recheck", 32), 2000);
+    assert.equal(jobGapMs("people-recheck", 92), 5000);
+    assert.equal(jobGapMs("people-recheck", 182), 5000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 32 }), 2000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 92 }), 5000);
+    assert.equal(jobGapOf({ mode: "people", recheck: false, dateFrom: "2015-01-01" }), 5000);
+    assert.equal(jobGapOf({ mode: "people-slow", recheck: false, dateFrom: "2015-01-01" }), 5000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: false, dateFrom: "2015-01-01" }), 5000);
     assert.equal(jobGapMs("groups"), 5000);
     assert.equal(jobGapMs("catalog"), 5000);
     assert.equal(jobGapMs("audit"), 5000);
     assert.equal(jobGapMs("roster"), 5000);
-    assert.equal(jobGapMs("roster-recheck"), 5000);
+    assert.equal(jobGapMs("roster-recheck", 32), 2000);
   });
 
   it("касса слева: fill.done не skip, complete без force — skip", () => {
@@ -359,7 +371,8 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /if \(waits > JOB_WAIT_CAP\)/);
     assert.match(core, /export function shouldRetryShortPeople/);
     assert.match(job, /не хватает, ещё этот/);
-    assert.match(job, /пауза 5 с/);
+    assert.match(job, /pauseTxt/);
+    assert.match(job, /jobGapOf/);
     assert.match(load, /lite: true/);
     assert.match(job, /if \(id && j.id !== id\) break/);
     assert.doesNotMatch(job, /enqueueExport/);
@@ -433,7 +446,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /mode === "details"/);
     assert.match(job, /mode === "roster"/);
     assert.match(job, /liveAdminGroups\(school\)/);
-    assert.match(job, /пауза 5 с · ещё ДЗ/);
+    assert.match(job, /ещё ДЗ/);
     assert.match(ui, /function peopleQueue/);
     assert.match(ui, /if \(kind === "students" && r.short && r.holeApproved\) return false/);
     assert.doesNotMatch(ui, /r.short && r.holeApproved\) return true/);

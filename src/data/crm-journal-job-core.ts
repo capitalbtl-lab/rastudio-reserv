@@ -3,8 +3,12 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-/** Закон «История из Alfa»: только по одному, пауза 5 с. Пакетом нельзя. */
+/** Закон «История из Alfa»: только по одному, пакетом нельзя.
+ *  Пауза 5 с. Если загрузка/выгрузка окна ≤ 31 день включительно — 2 с.
+ *  Кнопка «месяц» в коде — recheckDays 32, это то же окно. */
 export const JOURNAL_ONE_GAP_MS = 5000;
+export const JOURNAL_WINDOW_GAP_MS = 2000;
+export const JOURNAL_WINDOW_DAYS = 31;
 export const PEOPLE_SLOW_MS = 10 * 60 * 1000;
 export const PEOPLE_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 export const CATALOG_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
@@ -173,9 +177,9 @@ export function historyWorkerSilent(job = loadJournalJob(), ms = HISTORY_WORKER_
   return !Number.isFinite(age) || age > ms;
 }
 
-export function jobRetryGapMs(err?: string) {
+export function jobRetryGapMs(err?: string, periodDays?: number) {
   if (/429/i.test(String(err || ""))) return RECHECK_429_GAP_MS;
-  return JOURNAL_ONE_GAP_MS;
+  return jobGapMs("", periodDays);
 }
 
 export function shouldResumeStalledJob(job = loadJournalJob(), now = Date.now()) {
@@ -462,6 +466,38 @@ export function shouldRetryShortPeople(
   return (Number(res.student.seated) || 0) > 0 || (Number(res.student.dropped) || 0) > 0;
 }
 
-export function jobGapMs(_mode?: JournalJobMode | "") {
-  return JOURNAL_ONE_GAP_MS;
+export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number; dateFrom?: string }): number {
+  if (input?.recheck) {
+    const d = Number(input.recheckDays) || 0;
+    if (d === 92 || d === 182) return d;
+    return 32;
+  }
+  const from = String(input?.dateFrom || "").slice(0, 10);
+  if (!from || from <= "2015-01-01") return 0;
+  const t0 = Date.parse(`${from}T00:00:00Z`);
+  if (!Number.isFinite(t0)) return 0;
+  const now = new Date();
+  const t1 = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.max(0, Math.floor((t1 - t0) / 86400000) + 1);
+}
+
+/** Окно ≤ 31 день включительно. 32 — токен кнопки «месяц». */
+export function jobWindowShort(periodDays: number): boolean {
+  const n = Number(periodDays) || 0;
+  if (n <= 0) return false;
+  if (n <= JOURNAL_WINDOW_DAYS) return true;
+  return n === 32;
+}
+
+export function jobGapMs(_mode?: JournalJobMode | "", periodDays?: number) {
+  return jobWindowShort(Number(periodDays) || 0) ? JOURNAL_WINDOW_GAP_MS : JOURNAL_ONE_GAP_MS;
+}
+
+export function jobGapOf(job?: { mode?: JournalJobMode | ""; recheck?: boolean; recheckDays?: number; dateFrom?: string }): number {
+  return jobGapMs(job?.mode, jobPeriodDays(job));
+}
+
+export function jobGapLabel(ms: number): string {
+  const s = Math.max(1, Math.round((Number(ms) || JOURNAL_ONE_GAP_MS) / 1000));
+  return `пауза ${s} с`;
 }
