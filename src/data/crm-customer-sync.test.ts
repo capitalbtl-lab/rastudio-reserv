@@ -280,7 +280,7 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(chunk, /uniqueBranches\(branchId\)/);
     assert.match(chunk, /PAY_INBOUND_RUN/);
     assert.match(chunk, /pay_type_id: typeId/);
-    assert.match(chunk, /\[5, 6, 9\]/);
+    assert.match(chunk, /PAY_INBOUND_EXTRA_TYPES/);
     assert.match(chunk, /b === branches.length - 1 && lastShort/);
     assert.doesNotMatch(chunk, /lastShort && !overBudget\(\)\) done/);
     assert.match(chunk, /if \(!failed && b === branches.length - 1 && lastShort\) done = true/);

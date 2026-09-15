@@ -38,6 +38,7 @@ import {
   PAY_CUSTOMER_PAGE,
   PAY_INBOUND_RUN,
   PAY_INBOUND_BUDGET_MS,
+  PAY_INBOUND_EXTRA_TYPES,
   PAY_STORE_CAP,
   payAccountLabel,
   CASH_PAGE_SIZES,
@@ -748,6 +749,8 @@ export async function inboundCustomerPays(
   const pageSize = PAY_CUSTOMER_PAGE;
   const date_from = alfaPayIndexDate(opts?.dateFrom || "2015-01-01");
   const date_to = alfaPayIndexDate();
+  const extraResume = Boolean(!opts?.force && Number(cur?.extra) && !cur?.done);
+  if (!extraResume) {
   outer: for (let b = bidIdx; b < branches.length; b += 1) {
     const bid = branches[b];
     let p = b === bidIdx ? page : 0;
@@ -763,7 +766,6 @@ export async function inboundCustomerPays(
         break outer;
       }
       try {
-        console.warn(`pay inbound cid=${customerId} branch=${bid} page=${p}`);
         const json = await request(`/v2api/${bid}/pay/index`, {
           page: p,
           pageSize,
@@ -772,6 +774,7 @@ export async function inboundCustomerPays(
           date_to,
         }, token);
         const pack = crmUnwrapIndex(json);
+        console.warn(`pay inbound cid=${customerId} branch=${bid} page=${p} n=${pack.items.length} total=${pack.total ?? "?"}`);
         raw.push(...pack.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
         ran += 1;
         received += Number(pack.count != null ? pack.count : pack.items.length) || pack.items.length;
@@ -793,11 +796,28 @@ export async function inboundCustomerPays(
     }
     if (!failed && b === branches.length - 1 && lastShort) done = true;
   }
-  if (!failed && !overBudget()) {
-    for (const extraBid of branches) {
-      for (const typeId of [5, 6, 9]) {
-        if (ran >= maxRun || overBudget()) break;
+  }
+  const extraStart = Number(cur?.extra) || 0;
+  if (!failed && (done || extraResume) && !overBudget()) {
+    done = false;
+    const types = [...PAY_INBOUND_EXTRA_TYPES];
+    let typeIdx = extraResume ? types.findIndex((n) => n === extraStart) : 0;
+    if (typeIdx < 0) typeIdx = 0;
+    let extraBidIdx = extraResume ? Math.max(0, branches.indexOf(Number(cur?.bid) || 0)) : 0;
+    let extraFinished = true;
+    extraLoop: for (let ti = typeIdx; ti < types.length; ti += 1) {
+      const typeId = types[ti];
+      const b0 = ti === typeIdx ? extraBidIdx : 0;
+      for (let bi = b0; bi < branches.length; bi += 1) {
+        const extraBid = branches[bi];
+        if (ran >= maxRun || overBudget()) {
+          extraFinished = false;
+          store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid: extraBid, page: 0, extra: typeId } };
+          save(store, { keepAll: true });
+          break extraLoop;
+        }
         try {
+          console.warn(`pay inbound cid=${customerId} branch=${extraBid} type=${typeId}`);
           const extra = await request(
             `/v2api/${extraBid}/pay/index`,
             { page: 0, pageSize, customer_id: customerId, pay_type_id: typeId, date_from, date_to },
@@ -806,11 +826,13 @@ export async function inboundCustomerPays(
           const packT = crmUnwrapIndex(extra);
           raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || extraBid) || extraBid })));
           ran += 1;
+          console.warn(`pay inbound cid=${customerId} branch=${extraBid} type=${typeId} n=${packT.items.length}`);
         } catch {
           /* типы филиала — не валим весь прогон */
         }
       }
     }
+    if (!failed && extraFinished) done = true;
   }
   const known: number[] = [];
   try {

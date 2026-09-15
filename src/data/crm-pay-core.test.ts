@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, collapsePayRows, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, matchAlfaPayId, payNum, markRefundOfGoods, remainderClose, rowDelta, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, collapsePayRows, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, PAY_INBOUND_EXTRA_TYPES, matchAlfaPayId, payNum, markRefundOfGoods, remainderClose, rowDelta, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -233,7 +233,8 @@ describe("журнал денег", () => {
     assert.deepEqual(payFillAdvance({ bid: 1, page: 9 }, true), { bid: 2, page: 0 });
     assert.deepEqual(payFillAdvance({ bid: 4, page: 3 }, true), { bid: 4, page: 3, done: true });
     assert.equal(payFillAdvance({ bid: 4, page: 3, done: true }, false).done, true);
-    assert.equal(payFillOf({ bid: 2, page: 4 })?.page, 4);
+    assert.equal(payFillOf({ bid: 2, page: 4, extra: 2 })?.extra, 2);
+    assert.deepEqual(PAY_INBOUND_EXTRA_TYPES, [2, 3, 5, 6, 9]);
     assert.equal(payFillOf(null), undefined);
     assert.match(payFillNote({ bid: 3, page: 11 }), /филиал 3/);
     assert.equal(payFillNote({ bid: 4, page: 0, done: true }), "вся касса на диске");

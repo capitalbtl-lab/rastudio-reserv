@@ -20,10 +20,12 @@ export const PAY_INBOUND_PAGE = 50;
 export const PAY_CUSTOMER_PAGE = 500;
 export const PAY_INBOUND_RUN = 8;
 export const PAY_INBOUND_BUDGET_MS = 35000;
+/** Типы, которые Alfa не отдаёт в pay/index без pay_type_id. 2 — товар (лето). */
+export const PAY_INBOUND_EXTRA_TYPES = [2, 3, 5, 6, 9] as const;
 export const PAY_STORE_CAP = 40000;
 export const PAY_FILL_BRANCHES = [1, 2, 3, 4] as const;
 
-export type PayFillCursor = { bid: number; page: number; done?: boolean };
+export type PayFillCursor = { bid: number; page: number; done?: boolean; extra?: number; empty?: boolean };
 
 /** Базовый счет — без абонемента (ctt −1/0). Раздельный — с абонементом (ctt > 0). */
 export function payAccountLabel(cttId?: number | null) {
@@ -49,10 +51,17 @@ export function payFillStart(branches: readonly number[] = PAY_FILL_BRANCHES): P
 
 export function payFillOf(raw?: unknown): PayFillCursor | undefined {
   if (!raw || typeof raw !== "object") return undefined;
-  const o = raw as { bid?: unknown; page?: unknown; done?: unknown };
+  const o = raw as { bid?: unknown; page?: unknown; done?: unknown; extra?: unknown; empty?: unknown };
   const bid = Number(o.bid) || 0;
   if (!bid) return undefined;
-  return { bid, page: Math.max(0, Number(o.page) || 0), done: Boolean(o.done) || undefined };
+  const extra = Number(o.extra) || 0;
+  return {
+    bid,
+    page: Math.max(0, Number(o.page) || 0),
+    done: Boolean(o.done) || undefined,
+    ...(extra ? { extra } : {}),
+    ...(o.empty ? { empty: true } : {}),
+  };
 }
 
 /** Короткая страница — следующий филиал. После последнего — done. Ошибка вызывающий не двигает. */
