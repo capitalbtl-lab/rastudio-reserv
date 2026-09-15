@@ -25,8 +25,7 @@ export function moneyClose(a: number, b: number) {
 }
 
 export function auditOnRight(codes: AuditCode[]) {
-  if (!codes.includes("ok")) return false;
-  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "branch" && c !== "status" && c !== "corr-goods" && c !== "wo0");
+  return codes.includes("ok");
 }
 
 /** Живая шапка customer.balance, не rest абонемента. */
@@ -89,28 +88,14 @@ export function classifyAudit(p: {
     const empty = (Number(p.clients) || 0) === 0 && !p.paysComplete && p.lessonsDisk === 0 && !p.liveCtt;
     if (empty) {
       codes.push("snap");
-      return [...new Set(codes)];
+      return [...new Set(codes.filter((c) => c !== "ok"))];
     }
-    if (!p.paysComplete && !moneyClose(p.cash, p.alfa)) {
-      codes.push("snap");
+    if (!p.paysComplete) codes.push("snap");
+    if (!moneyClose(p.cash, p.alfa)) {
       if (goodsNet && moneyClose(p.cash - goodsNet, p.alfa)) codes.push("goods");
       else if (refundGoods && moneyClose(p.cash + refundGoods, p.alfa)) codes.push("refund-goods");
-      else if (p.cash > p.alfa + 1) {
-        codes.push("lessons");
-        codes.push("wo");
-      }
-      if (p.cash < p.alfa - 1) codes.push("pays");
-      return [...new Set(codes)];
     }
-    if (p.paysComplete && !moneyClose(p.cash, p.alfa)) {
-      if (!(p.liveCtt && moneyClose(p.clients, p.alfa))) {
-        codes.push("pays");
-        return [...new Set(codes.filter((c) => c !== "ok"))];
-      }
-    }
-    if (codes.includes("lessons")) return [...new Set(codes.filter((c) => c !== "ok"))];
-    if (!codes.includes("src") && !codes.includes("status") && !codes.includes("corr")) return codes.length ? ["ok", ...codes] : ["ok"];
-    return ["ok", ...codes];
+    return [...new Set(["ok", ...codes.filter((c) => c !== "pays" && c !== "wo")])];
   }
   if (!p.paysComplete) codes.push("snap");
   if (goodsNet && moneyClose(p.cash - goodsNet, p.alfa)) codes.push("goods");

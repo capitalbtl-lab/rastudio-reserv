@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage } from "@/data/crm-leads-stages";
 import { FUNNEL_AUTO_DEFAULT, type FunnelAuto } from "@/data/funnel-auto-core";
@@ -1152,8 +1152,24 @@ function patchHoleApproved(
 }
 
 function auditRight(codes?: string[]) {
-  if (!codes?.includes("ok")) return false;
-  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "snap" && c !== "branch" && c !== "status" && c !== "corr-goods" && c !== "wo0");
+  return Boolean(codes?.includes("ok"));
+}
+
+function auditFail(codes?: string[]) {
+  return Boolean(codes?.includes("нет ответа"));
+}
+
+function moneyCloseUi(a?: number, b?: number) {
+  return Math.abs((Number(a) || 0) - (Number(b) || 0)) <= 1;
+}
+
+function rowMatched(r: { seen?: boolean; codes?: string[]; clients?: number; alfaMoney?: number; cash?: number }) {
+  if (!r.seen || auditFail(r.codes)) return false;
+  if (auditRight(r.codes)) return true;
+  if (!moneyCloseUi(r.clients, r.alfaMoney)) return false;
+  const extras = (r.codes || []).filter((c) => c !== "snap" && c !== "dup" && c !== "branch");
+  const empty = Math.abs(Number(r.clients) || 0) <= 1 && Math.abs(Number(r.cash) || 0) <= 1 && extras.length === 0;
+  return !empty;
 }
 
 function rubAudit(n?: number) {
@@ -1761,19 +1777,24 @@ function AuditFillList({
     return r.name.toLowerCase().includes(q) || String(r.cid).includes(q) || (r.groups || []).some((g) => g.toLowerCase().includes(q));
   });
   const isPinned = (r: AuditUiRow) => String(r.cid) === open || r.cid === loadingCid;
-  const doneOf = (r: AuditUiRow) => Boolean(r.seen && auditRight(r.codes));
-  const needRows = orderActiveQueue(
-    scoped.filter((r) => !doneOf(r)),
-    (r) => r.cid === loadingCid,
-    () => true,
-    (a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid,
-  );
+  const doneOf = (r: AuditUiRow) => rowMatched(r);
+  const failOf = (r: AuditUiRow) => Boolean(r.seen && auditFail(r.codes));
+  const moneyOf = (r: AuditUiRow) => Boolean(r.seen && !failOf(r) && !doneOf(r));
+  const waitOf = (r: AuditUiRow) => !r.seen;
+  const byName = (a: AuditUiRow, b: AuditUiRow) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid;
+  const moneyRows = orderActiveQueue(scoped.filter(moneyOf), (r) => r.cid === loadingCid, () => true, byName);
+  const failRows = orderActiveQueue(scoped.filter(failOf), (r) => r.cid === loadingCid, () => true, byName);
+  const waitRows = orderActiveQueue(scoped.filter(waitOf), (r) => r.cid === loadingCid, () => true, byName);
+  const needRows = [...moneyRows, ...failRows, ...waitRows];
   const doneRows = orderActiveQueue(
     scoped.filter((r) => doneOf(r)),
     (r) => r.cid === loadingCid,
     () => false,
-    (a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid,
+    byName,
   );
+  const nMoney = moneyRows.length;
+  const nFail = failRows.length;
+  const nWait = waitRows.length;
   const nNeed = needRows.length;
   const nDone = doneRows.length;
   const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
@@ -1846,7 +1867,11 @@ function AuditFillList({
           </button>
         </div>
         <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
-          {row.seen ? `Клиенты ${rubAudit(row.clients)} · Alfa ${rubAudit(row.alfaMoney)} · касса ${rubAudit(row.cash)}` : "ещё не сверяли"}
+          {!row.seen
+            ? "ещё не сверяли"
+            : failOf(row)
+              ? `Клиенты ${rubAudit(row.clients)} · касса ${rubAudit(row.cash)} · Alfa не ответила`
+              : `Клиенты ${rubAudit(row.clients)} · Alfa ${rubAudit(row.alfaMoney)} · касса ${rubAudit(row.cash)}`}
         </p>
         {shown ? (
           <div className="mt-2">
@@ -1892,18 +1917,37 @@ function AuditFillList({
       <div className="mt-3 grid items-start gap-3 lg:grid-cols-2">
         <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="font-display text-[1.05rem] text-rose-900">Не совпало · {nNeed}</h4>
+            <h4 className="font-display text-[1.05rem] text-rose-900">Слева · {nNeed}</h4>
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">Не сверяли и те, у кого Клиенты ≠ Alfa. Справа только совпало.</p>
-          {listNeed.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listNeed.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Слева пусто — все сверенные совпали.</p>}
+          <p className="mt-1 text-[0.72rem] text-muted">
+            Цифры {nMoney} · нет ответа {nFail} · не сверяли {nWait}. Справа — Клиенты = шапка ±1 ₽.
+          </p>
+          {listNeed.length ? (
+            <ul className="mt-2 space-y-2 [overflow-anchor:none]">
+              {listNeed.map((row, i) => {
+                const prev = i > 0 ? listNeed[i - 1] : null;
+                const g = moneyOf(row) ? "money" : failOf(row) ? "fail" : "wait";
+                const prevG = prev ? (moneyOf(prev) ? "money" : failOf(prev) ? "fail" : "wait") : "";
+                const label = g === "money" ? `Цифры не сошлись · ${nMoney}` : g === "fail" ? `Нет ответа Alfa · ${nFail}` : `Ещё не сверяли · ${nWait}`;
+                return (
+                  <Fragment key={row.cid}>
+                    {g !== prevG ? <li className="list-none pt-1 text-[0.72rem] font-semibold text-rose-900/80">{label}</li> : null}
+                    {renderPerson(row)}
+                  </Fragment>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-muted">Слева пусто — все сверенные совпали.</p>
+          )}
         </section>
         <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="font-display text-[1.05rem] text-emerald-900">Совпало · {nDone}</h4>
             {pager(safeDone, pagesDone, setPageDone)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">Клиенты = Alfa ±1 ₽. Касса может отличаться при раздельном абонементе — тогда код на карточке, не зелёный.</p>
+          <p className="mt-1 text-[0.72rem] text-muted">Клиенты = Alfa ±1 ₽. Касса и товар могут отличаться — карточка всё равно здесь.</p>
           {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Пока никого не сверяли — справа пусто.</p>}
         </section>
       </div>

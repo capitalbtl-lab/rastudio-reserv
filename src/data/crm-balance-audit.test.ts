@@ -36,8 +36,8 @@ describe("шаг 4 сверка остатка", () => {
       repaired: false,
     });
     assert.ok(lessonHole.includes("lessons"));
-    assert.equal(lessonHole.includes("ok"), false);
-    assert.equal(auditOnRight(lessonHole), false);
+    assert.ok(lessonHole.includes("ok"));
+    assert.equal(auditOnRight(lessonHole), true);
   });
 
   it("шапка Alfa = customer.balance, не rest абонемента", () => {
@@ -76,7 +76,7 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(auditOnRight(codes), true);
   });
 
-  it("снимок 0 = шапка 0 при неполной кассе 2000 — не совпало", () => {
+  it("шапка сошлась при неполной кассе — справа, товар не дыра", () => {
     const codes = classifyAudit({
       alfaOk: true,
       clients: 0,
@@ -90,11 +90,14 @@ describe("шаг 4 сверка остатка", () => {
       liveCtt: true,
       repaired: false,
       badStatus: true,
+      goodsNet: 2000,
     });
-    assert.equal(codes.includes("ok"), false);
+    assert.ok(codes.includes("ok"));
     assert.ok(codes.includes("snap"));
-    assert.ok(codes.includes("lessons"));
-    assert.equal(auditOnRight(codes), false);
+    assert.ok(codes.includes("status"));
+    assert.ok(codes.includes("goods"));
+    assert.equal(codes.includes("lessons"), false);
+    assert.equal(auditOnRight(codes), true);
   });
 
   it("касса = шапка, Клиенты нет — formula, не pays", () => {
