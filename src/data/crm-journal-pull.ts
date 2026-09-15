@@ -1780,16 +1780,18 @@ export async function journalPull(opts: {
   }
 
   if (kind === "audit") {
-    const people = rankedStudentIds("1");
+    const people = rankedStudentIds("1").filter((p) => p.study === 1 && p.status !== "лид" && p.status !== "архив");
     const wanted = Number(opts.customerId) || 0;
-    const fromList = wanted ? people.find((p) => p.cid === wanted) : null;
+    const fromList = wanted ? rankedStudentIds("1").find((p) => p.cid === wanted) : null;
     const fallback = wanted
       ? { cid: wanted, branchId: Number(opts.branchId) || 1, study: 1 as const }
       : null;
     const idx = Number(store.lastAudit?.idx) || 0;
     const one = fromList || fallback || pickSlice(people, idx, 1).slice[0];
     if (!one) {
-      store.note = "Нет текущих учеников на диске.";
+      store.note = rankedStudentIds("1").length
+        ? "Лиды и архив не сверяем: шапки клиента в Alfa нет."
+        : "Нет текущих учеников на диске.";
       store.at = new Date().toISOString();
       saveStore(store);
       return { ok: false as const, error: store.note, more: false, ...snap() };

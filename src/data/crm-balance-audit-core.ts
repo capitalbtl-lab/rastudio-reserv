@@ -18,7 +18,9 @@ export type AuditCode =
   | "wo"
   | "wo0"
   | "unknown"
-  | "нет ответа";
+  | "нет ответа"
+  | "лид"
+  | "архив";
 
 export function moneyClose(a: number, b: number) {
   return Math.abs((Number(a) || 0) - (Number(b) || 0)) <= 1;

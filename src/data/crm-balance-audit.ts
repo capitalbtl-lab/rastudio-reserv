@@ -130,6 +130,16 @@ async function alfaShow(branch: number, cid: number) {
   };
 }
 
+async function diskAlfaRole(id: number): Promise<"лид" | "архив" | ""> {
+  const { findDossier } = await import("./dossiers");
+  const d = findDossier({ crmId: id });
+  const st = Number(d?.extras?.is_study);
+  const status = String(d?.status || "");
+  if (st === 0 || status === "лид") return "лид";
+  if (st === 2 || status === "архив") return "архив";
+  return "";
+}
+
 export async function auditOne(cid: number, branchId: number) {
   const id = Number(cid) || 0;
   const branch = Number(branchId) || 1;
@@ -166,6 +176,29 @@ export async function auditOne(cid: number, branchId: number) {
         repaired: false,
         at: new Date().toISOString(),
         extra: `диск: ${err}`,
+      } satisfies AuditHit,
+    };
+  }
+  const role = await diskAlfaRole(id);
+  if (role) {
+    let disk: Awaited<ReturnType<typeof diskAudit>> | null = null;
+    try {
+      disk = await diskAudit(id, branch);
+    } catch {
+      disk = null;
+    }
+    return {
+      hit: {
+        cid: id,
+        branchId: branch,
+        name: disk?.name || `клиент ${id}`,
+        clients: disk?.clients || 0,
+        alfa: 0,
+        cash: disk?.cash || 0,
+        codes: [role],
+        repaired: false,
+        at: new Date().toISOString(),
+        extra: role === "лид" ? "Лид в Альфе: шапки клиента нет." : "Архив в Альфе: как текущего не сверяем.",
       } satisfies AuditHit,
     };
   }

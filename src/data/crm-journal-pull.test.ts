@@ -202,8 +202,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /kind === "audit"/);
     assert.match(pull, /auditOne/);
     assert.match(pull, /fallback = wanted/);
+    assert.match(pull, /study === 1 && p.status !== "лид"/);
     assert.doesNotMatch(pull, /extras\.balance = String\(shown/);
     const audit = readFileSync(new URL("./crm-balance-audit.ts", import.meta.url), "utf8");
+    assert.match(audit, /diskAlfaRole/);
+    assert.match(audit, /Лид в Альфе: шапки клиента нет/);
     assert.doesNotMatch(audit, /enqueueExport/);
     assert.doesNotMatch(audit, /customer\.update/);
     assert.doesNotMatch(audit, /applyCrmCustomer/);

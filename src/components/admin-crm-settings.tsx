@@ -238,7 +238,7 @@ const HINT = {
   tabStudents: "Второй шаг: личный календарь. Ученики и лиды из живых групп шага 1. Красная рамка — загрузка и годы. Синяя рамка — перепроверка и месяцы. Жёлтая — в Alfa есть id, которых нет на диске. В Alfa не пишется.",
   tabGroups: "Третий шаг. Здесь качаются явки по группам: кто был на уроке, а не личный календарь человека. Сначала красная «по одному», потом список «годы» — это размер порции: квартал, полугодие или год. Архив групп и сроки жизни курса — отдельные кнопки ниже, их лучше нажать до массовой качки. Фильтр школы сужает очередь. В Alfa журнал не проводится. Без этого шага на сайте будут люди, но без отметок в группе. Тема и ДЗ грузятся уже в карточке группы, после явок.",
   tabMoney: "Четвёртый шаг — касса: платежи по id, не уроки, не остаток. Те же люди, что шаг 1–2: ученики и лиды из опрошенных групп. Красная рамка — загрузка и годы (Alfa режет date_from). Синяя — перепроверка и ±. Сумма vs шапка — шаг 5. В Alfa оплаты не создаёт.",
-  tabAudit: "Пятый шаг — сверка остатка. Совпало справа, только если Клиенты = шапка Alfa = касса ±1 ₽. Иначе сегмент слева и на карточке написано, что сделать: календарь, касса, товар не чинить, лида не сверять. В Alfa не пишет.",
+  tabAudit: "Пятый шаг — сверка остатка. Совпало справа, только если Клиенты = шапка Alfa = касса ±1 ₽. Лиды и архив не сверяем: у них нет шапки клиента. Остальным — сегмент слева и что сделать. В Alfa не пишет.",
   auditAll: "Красная кнопка проходит всех текущих по одному. Между людьми пауза пять секунд, в Alfa один запрос в полёте. Сравнивает число на карточке «Клиенты» с общим остатком шапки Alfa. Если не сошлось — догружает явки или оплаты только этого номера. Цифру из Alfa в кассу не записывает. Стоп прерывает после текущего.",
   auditRecheck: "Ещё раз сверяет только этого ученика с общим остатком шапки Alfa. Читает карточку, при расхождении добирает его журнал или кассу. Чужих не трогает, зелёные шаги 1 и 3 у остальных не сбрасывает. В Alfa ничего не сохраняет. Нужна, если человек слева с причиной или вы только что правили его кассу. После совпадения карточка уйдёт вправо, даже если есть непроведённые уроки с ценой. Если снова formula — это показ в «Клиентах», не его личная дыра.",
   scopeLive: "Показывает тех, кто сейчас ходит: люди в живых группах админки после состава шага 1. Не все is_study=1 из Alfa. Красная очередь и сверка идут только по этому списку, архивных не трогают. Цифра на кнопке — сколько таких людей в выборке. Переключение само ничего не качает и в Alfa не пишет. Если нужен бывший ученик, соседняя кнопка «Архивные клиенты». Можно спокойно прыгать туда-сюда, списки уже на диске. Для кассы и календаря это один и тот же переключатель.",
@@ -1196,22 +1196,24 @@ const AUDIT_WORD: Record<string, string> = {
   wo0: "Нулевые списания",
   unknown: "Не разобрали",
   "нет ответа": "Нет ответа Alfa",
+  лид: "Лид в Альфе",
+  архив: "Архив в Альфе",
 };
 
 type AuditSeg = { id: string; label: string; rec: string };
 
 function auditSeg(r: AuditSegIn): AuditSeg {
   const codes = r.codes || [];
+  if (r.alfaRole === "лид" || codes.includes("лид")) {
+    return { id: "lead", label: "Лид в Альфе", rec: "Это лид: шапки клиента в Alfa нет. Не чинить кассу. Сначала перевод в клиенты в Alfa, потом сверка." };
+  }
+  if (r.alfaRole === "архив" || codes.includes("архив")) {
+    return { id: "arch", label: "Архив в Альфе", rec: "Карточка в архиве. Как текущего не сверять. Либо вернуть в ученики в Alfa." };
+  }
   if (!r.seen) {
     return { id: "wait", label: "Не сверяли", rec: "Сверить всех текущих или на карточке «Перепроверить»." };
   }
   if (auditFail(codes)) {
-    if (r.alfaRole === "лид") {
-      return { id: "lead", label: "Лид в Альфе", rec: "Это лид: шапки клиента в Alfa нет. Не чинить кассу. Сначала перевод в клиенты в Alfa, потом сверка." };
-    }
-    if (r.alfaRole === "архив") {
-      return { id: "arch", label: "Архив в Альфе", rec: "Карточка в архиве. Как текущего не сверять. Либо вернуть в ученики в Alfa." };
-    }
     return { id: "fail", label: "Нет ответа Alfa", rec: "Клиент есть, Alfa не ответила. «Перепроверить». Если снова тишина — обрыв или 429, не бан." };
   }
   if (rowMatched(r)) {
@@ -2031,7 +2033,7 @@ function AuditFillList({
     );
   }
   return (
-    <div className="mt-3">
+    <div className="mt-3 [overflow-anchor:none]">
       <input
         className="h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10"
         placeholder="Найти ученика…"
@@ -2063,15 +2065,15 @@ function AuditFillList({
           </button>
         ))}
       </div>
-      <div className="mt-3 grid items-start gap-3 lg:grid-cols-2">
-        <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
-          <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-3 grid items-stretch gap-3 lg:grid-cols-2">
+        <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <h4 className="font-display text-[1.05rem] text-rose-900">Слева · {nNeed}</h4>
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">Сегмент и что сделать — на карточке. Справа только когда Клиенты = шапка = касса.</p>
+          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Сегмент и что сделать — на карточке. Справа только когда Клиенты = шапка = касса.</p>
           {listNeed.length ? (
-            <ul className="mt-2 space-y-2 [overflow-anchor:none]">
+            <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto [overflow-anchor:none]">
               {listNeed.map((row, i) => {
                 const prev = i > 0 ? listNeed[i - 1] : null;
                 const g = auditSeg(row);
@@ -2093,16 +2095,20 @@ function AuditFillList({
               })}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-muted">Слева пусто — все сверенные совпали.</p>
+            <p className="mt-3 text-sm text-muted">{reason === "ok" ? "В этом фильтре слева никого." : reason === "all" ? "Слева пусто — все сверенные совпали." : "В этом сегменте никого нет."}</p>
           )}
         </section>
-        <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
-          <div className="flex flex-wrap items-center gap-2">
+        <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <h4 className="font-display text-[1.05rem] text-emerald-900">Совпало · {nDone}</h4>
             {pager(safeDone, pagesDone, setPageDone)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">Клиенты = шапка Alfa = касса ±1 ₽. Трогать не нужно.</p>
-          {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Пока никого не сверяли — справа пусто.</p>}
+          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Клиенты = шапка Alfa = касса ±1 ₽. Трогать не нужно.</p>
+          {listDone.length ? (
+            <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto [overflow-anchor:none]">{listDone.map(renderPerson)}</ul>
+          ) : (
+            <p className="mt-3 text-sm text-muted">{reason !== "all" && reason !== "ok" ? "В этом фильтре совпавших нет." : "Пока никого не сверяли — справа пусто."}</p>
+          )}
         </section>
       </div>
     </div>
