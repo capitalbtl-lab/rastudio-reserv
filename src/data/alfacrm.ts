@@ -103,6 +103,7 @@ let cache: TokenCache | null = null;
 let lastAt = 0;
 let gate: Promise<void> = Promise.resolve();
 function gapMs() {
+  /** Пауза HTTP-запроса, не пауза «по одному». Закон между людьми — jobGapOf. */
   const rps = Number(process.env.ALFACRM_RPS || 0);
   if (Number.isFinite(rps) && rps > 0) return Math.max(200, Math.round(1000 / rps));
   return 400;

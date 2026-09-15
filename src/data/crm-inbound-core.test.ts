@@ -273,6 +273,7 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.equal(clampRecheckDays(2555), 2555);
     assert.equal(clampRecheckDays(4000), 4000);
     assert.equal(clampRecheckDays(7), 7);
+    assert.equal(clampRecheckDays(14), 14);
     assert.equal(clampRecheckDays(8), 32);
     const now = new Date(2026, 8, 14);
     assert.equal(recheckWindowYmd(4000, now).from, "2015-01-01");

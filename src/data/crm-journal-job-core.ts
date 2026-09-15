@@ -3,10 +3,15 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-/** Закон «История из Alfa»: только по одному, пакетом нельзя.
- *  «Перепроверить по одному»: ±месяц / ±три / ±шесть — 2 с; 3 года — 3 с.
- *  7 лет и с начала · 2015 — 5 с. Левая волна и красная качка с 2015 — 5 с. */
+/**
+ * Закон пауз Alfa (История + Фон). Между людьми / группами, не между страницами одного.
+ * Красная «Загрузить по одному»: всегда 5 с (2015 / 7 лет / 3 года / 1 год). Быстрее нельзя.
+ * Синяя «Перепроверить по одному»:
+ *   ≤ 2 недели — 1 с; месяц — 2 с; 3 мес — 3 с; 6 мес — 4 с;
+ *   3 года / 7 лет / с начала · 2015 — 5 с.
+ */
 export const JOURNAL_ONE_GAP_MS = 5000;
+export const JOURNAL_FORTNIGHT_GAP_MS = 1000;
 export const JOURNAL_WINDOW_GAP_MS = 2000;
 export const JOURNAL_QUARTER_GAP_MS = 3000;
 export const JOURNAL_HALF_GAP_MS = 4000;
@@ -495,7 +500,7 @@ export function shouldRetryShortPeople(
 
 export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number; dateFrom?: string; dateTo?: string }): number {
   const d = Number(input?.recheckDays) || 0;
-  if (d === 92 || d === 182 || d === 1095 || d === 2555 || d === 4000) return d;
+  if (d === 7 || d === 14 || d === 92 || d === 182 || d === 1095 || d === 2555 || d === 4000) return d;
   if (input?.recheck) return 32;
   const from = String(input?.dateFrom || "").slice(0, 10);
   if (!from || from <= "2015-01-01") return 0;
@@ -506,16 +511,19 @@ export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number;
   return Math.max(0, Math.floor((t1 - t0) / 86400000) + 1);
 }
 
-/** Окно синей: 32/92/182 → 2 с. 3 года → 3 с. 7 лет и 2015 → 5 с. */
+/** Синяя таблица по окну. Красная сюда не ходит — jobGapOf режет. */
 export function jobGapMs(_mode?: JournalJobMode | "", periodDays?: number) {
   const n = Number(periodDays) || 0;
-  if (n === 1095) return JOURNAL_QUARTER_GAP_MS;
-  if (n === 32 || n === 92 || n === 182 || (n > 0 && n <= 186)) return JOURNAL_WINDOW_GAP_MS;
+  if (n > 0 && n <= 14) return JOURNAL_FORTNIGHT_GAP_MS;
+  if (n === 32 || (n > 14 && n < 60)) return JOURNAL_WINDOW_GAP_MS;
+  if (n === 92 || (n >= 60 && n < 140)) return JOURNAL_QUARTER_GAP_MS;
+  if (n === 182 || (n >= 140 && n < 400)) return JOURNAL_HALF_GAP_MS;
   return JOURNAL_ONE_GAP_MS;
 }
 
 export function jobGapOf(job?: { mode?: JournalJobMode | ""; recheck?: boolean; recheckDays?: number; dateFrom?: string; dateTo?: string }): number {
-  return jobGapMs(job?.mode, jobPeriodDays(job));
+  if (!job?.recheck) return JOURNAL_ONE_GAP_MS;
+  return jobGapMs(job.mode, jobPeriodDays(job));
 }
 
 export function jobGapLabel(ms: number): string {

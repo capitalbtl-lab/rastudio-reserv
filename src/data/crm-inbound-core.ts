@@ -198,9 +198,11 @@ export function pruneCalendarToAlfaIds<T extends { lessonId?: number; date?: str
   });
 }
 
-export type RecheckDays = 7 | 32 | 92 | 182 | 1095 | 2555 | 4000;
+export type RecheckDays = 7 | 14 | 32 | 92 | 182 | 1095 | 2555 | 4000;
 
 export const RECHECK_DAY_OPTS = [
+  { days: 7 as const, label: "± неделя" },
+  { days: 14 as const, label: "± 2 недели" },
   { days: 32 as const, label: "± месяц" },
   { days: 92 as const, label: "± три" },
   { days: 182 as const, label: "± шесть" },
@@ -211,7 +213,7 @@ export const RECHECK_DAY_OPTS = [
 
 export function clampRecheckDays(raw: unknown): RecheckDays {
   const n = Number(raw) || 0;
-  if (n === 7 || n === 92 || n === 182 || n === 1095 || n === 2555 || n === 4000) return n;
+  if (n === 7 || n === 14 || n === 92 || n === 182 || n === 1095 || n === 2555 || n === 4000) return n;
   return 32;
 }
 

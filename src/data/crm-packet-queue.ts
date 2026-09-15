@@ -355,7 +355,7 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
   return { ...res, fromCache: false, total: Number(res.total) || total };
 }
 
-/** Фон: один пакет за раз, без пачки на галочке. Журнал тоже идёт — иначе очередь копит journal и не разбирает. */
+/** Фон: один пакет за раз. Тик 20 с ≥ красной паузы 5 с. Журнал тоже идёт — иначе очередь копит journal и не разбирает. */
 export function startAlfaIdleTick() {
   if (process.env.NODE_ENV === "test") return;
   if (g.__raAlfaIdle) return;

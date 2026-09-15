@@ -21,6 +21,7 @@ export const AUTO_PIPE: HistoryPlanMode[] = ["people", "groups", "balance", "aud
 
 export const PLAN_RECHECK_OPTS = [
   { days: 7 as const, label: "± неделя" },
+  { days: 14 as const, label: "± 2 недели" },
   { days: 32 as const, label: "± месяц" },
   { days: 92 as const, label: "± три" },
   { days: 182 as const, label: "± шесть" },
