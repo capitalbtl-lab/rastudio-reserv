@@ -1172,6 +1172,68 @@ function rowMatched(r: { seen?: boolean; codes?: string[]; clients?: number; alf
   return !empty;
 }
 
+const AUDIT_WORD: Record<string, string> = {
+  ok: "Совпало",
+  lessons: "Занятия не сошлись",
+  pays: "Оплаты не сошлись",
+  snap: "Касса не дочитана",
+  src: "Журнал ≠ календарь",
+  ctt: "Спутали с абонементом",
+  formula: "Показ в Клиентах",
+  status: "Урок ещё не проведён",
+  dup: "Дубли занятий",
+  branch: "Другой филиал",
+  goods: "Товар в кассе",
+  "refund-goods": "Возврат товара",
+  corr: "Нет корректировки",
+  "corr-goods": "Корректировка как товар",
+  wo: "Списаний больше шапки",
+  wo0: "Нулевые списания",
+  unknown: "Не разобрали",
+  "нет ответа": "Нет ответа Alfa",
+};
+
+const AUDIT_REASON_CHIPS: { id: string; label: string }[] = [
+  { id: "all", label: "Все" },
+  { id: "wait", label: "Не сверяли" },
+  { id: "fail", label: "Нет ответа Alfa" },
+  { id: "money", label: "Цифры не сошлись" },
+  { id: "formula", label: "Показ в Клиентах" },
+  { id: "src", label: "Журнал ≠ календарь" },
+  { id: "snap", label: "Касса не дочитана" },
+  { id: "goods", label: "Товар в кассе" },
+  { id: "pays", label: "Оплаты не сошлись" },
+  { id: "lessons", label: "Занятия не сошлись" },
+  { id: "ctt", label: "Спутали с абонементом" },
+  { id: "status", label: "Урок ещё не проведён" },
+  { id: "ok", label: "Совпало" },
+];
+
+function auditCodeWords(codes?: string[]) {
+  return [...new Set((codes || []).filter((c) => c && c !== "ok").map((c) => AUDIT_WORD[c] || c))];
+}
+
+function auditBadgeWords(r: { seen?: boolean; codes?: string[]; clients?: number; alfaMoney?: number; cash?: number }) {
+  if (!r.seen) return ["Не сверяли"];
+  if (auditFail(r.codes)) return ["Нет ответа Alfa"];
+  if (rowMatched(r)) {
+    const extra = auditCodeWords(r.codes).filter((w) => w !== "Совпало");
+    return extra.length ? ["Совпало", ...extra] : ["Совпало"];
+  }
+  const words = auditCodeWords(r.codes);
+  return words.length ? words : ["Цифры не сошлись"];
+}
+
+function auditReasonHit(r: { seen?: boolean; codes?: string[]; clients?: number; alfaMoney?: number; cash?: number }, id: string) {
+  if (id === "all") return true;
+  if (id === "wait") return !r.seen;
+  if (id === "fail") return Boolean(r.seen && auditFail(r.codes));
+  if (id === "ok") return rowMatched(r);
+  if (id === "money") return Boolean(r.seen && !auditFail(r.codes) && !rowMatched(r));
+  if (id === "goods") return Boolean(r.codes?.includes("goods") || r.codes?.includes("refund-goods"));
+  return Boolean(r.codes?.includes(id));
+}
+
 function rubAudit(n?: number) {
   return `${Math.round(Number(n) || 0)} ₽`;
 }
@@ -1768,14 +1830,17 @@ function AuditFillList({
 }) {
   const [open, setOpen] = useState("");
   const [query, setQuery] = useState("");
+  const [reason, setReason] = useState("all");
   const [pageSize, setPageSize] = useState(20);
   const [pageNeed, setPageNeed] = useState(0);
   const [pageDone, setPageDone] = useState(0);
   const q = query.trim().toLowerCase();
-  const scoped = rows.filter((r) => {
+  const named = rows.filter((r) => {
     if (!q) return true;
     return r.name.toLowerCase().includes(q) || String(r.cid).includes(q) || (r.groups || []).some((g) => g.toLowerCase().includes(q));
   });
+  const reasonN = (id: string) => named.filter((r) => auditReasonHit(r, id)).length;
+  const scoped = named.filter((r) => auditReasonHit(r, reason));
   const isPinned = (r: AuditUiRow) => String(r.cid) === open || r.cid === loadingCid;
   const doneOf = (r: AuditUiRow) => rowMatched(r);
   const failOf = (r: AuditUiRow) => Boolean(r.seen && auditFail(r.codes));
@@ -1806,7 +1871,7 @@ function AuditFillList({
   useEffect(() => {
     setPageNeed(0);
     setPageDone(0);
-  }, [q, pageSize]);
+  }, [q, pageSize, reason]);
   useEffect(() => {
     setPageNeed(0);
     setPageDone(0);
@@ -1839,7 +1904,8 @@ function AuditFillList({
     const full = doneOf(row);
     const active = loadingCid === row.cid;
     const shown = open === id;
-    const codes = (row.codes || []).join(" · ");
+    const words = auditBadgeWords(row);
+    const extraWords = auditCodeWords(row.codes).join(" · ");
     return (
       <li key={id} className={cn("rounded-2xl p-3 ring-1", !row.seen ? "bg-white ring-black/8" : full ? "bg-white ring-emerald-300" : "bg-amber-50 ring-amber-400")}>
         <div className="flex items-center gap-2">
@@ -1847,14 +1913,18 @@ function AuditFillList({
             {row.name}
           </button>
           <span className="shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums">№{row.cid}</span>
-          <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-            {!row.seen ? (
-              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">не сверяли</span>
-            ) : full ? (
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">совпало</span>
-            ) : (
-              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">{codes || "не совпало"}</span>
-            )}
+          <span className="flex min-w-0 max-w-[18rem] shrink flex-wrap items-center justify-end gap-1">
+            {words.map((w) => (
+              <span
+                key={w}
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[0.72rem] font-semibold",
+                  w === "Совпало" ? "bg-emerald-100 text-emerald-900" : !row.seen || w === "Нет ответа Alfa" ? "bg-rose-100 text-rose-900" : "bg-amber-200 text-amber-950",
+                )}
+              >
+                {w}
+              </span>
+            ))}
           </span>
           <button
             type="button"
@@ -1875,7 +1945,8 @@ function AuditFillList({
         </p>
         {shown ? (
           <div className="mt-2">
-            <p className="text-[0.78rem] font-semibold">{row.extra || codes || "\u00a0"}</p>
+            <p className="text-[0.78rem] font-semibold">{row.extra?.replace(/\s*·\s*(ok|lessons|pays|snap|src|ctt|formula|status|dup|branch|goods|refund-goods|corr|corr-goods|wo0?|unknown|нет ответа)(, ?)?/gi, "").trim() || extraWords || "\u00a0"}</p>
+            {extraWords ? <p className="mt-1 text-[0.72rem] text-muted">{extraWords}</p> : null}
             <p className="mt-1 text-[0.72rem] text-muted">{(row.groups || []).slice(0, 3).join(" · ") || "групп на карточке нет"}</p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">
               {withHint(
@@ -1906,6 +1977,23 @@ function AuditFillList({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {AUDIT_REASON_CHIPS.filter((c) => c.id === "all" || reasonN(c.id) > 0).map((c) => {
+          const n = c.id === "all" ? named.length : reasonN(c.id);
+          const on = reason === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", on ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+              onClick={() => setReason(c.id)}
+            >
+              {c.label}
+              {n ? ` · ${n}` : ""}
+            </button>
+          );
+        })}
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.78rem]">
         <span className="text-muted">На странице</span>
         {([10, 20, 30, 100] as const).map((n) => (
