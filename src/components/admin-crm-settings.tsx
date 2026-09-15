@@ -1167,6 +1167,7 @@ type AuditSegIn = {
   alfaMoney?: number;
   cash?: number;
   alfaRole?: string;
+  extra?: string;
 };
 
 function rowMatched(r: AuditSegIn) {
@@ -1287,9 +1288,12 @@ const AUDIT_ROLE_HEAD: Record<"клиент" | "лид" | "архив", { label:
 };
 
 function auditRole(r: AuditSegIn): "лид" | "клиент" | "архив" {
-  if (r.alfaRole === "лид" || r.alfaRole === "архив" || r.alfaRole === "клиент") return r.alfaRole;
-  if ((r.codes || []).includes("лид")) return "лид";
-  if ((r.codes || []).includes("архив")) return "архив";
+  const codes = r.codes || [];
+  const extra = String(r.extra || "");
+  if (codes.includes("лид") || /Лид в Альфе/.test(extra)) return "лид";
+  if (codes.includes("архив") || /Архив в Альфе/.test(extra)) return "архив";
+  if (r.alfaRole === "лид") return "лид";
+  if (r.alfaRole === "архив") return "архив";
   return "клиент";
 }
 
@@ -2080,15 +2084,14 @@ function AuditFillList({
               className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", on ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
               onClick={() => setRole(c.id)}
             >
-              {c.label}
-              {n ? ` · ${n}` : ""}
+              {c.label} · {n}
             </button>
           );
         })}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {AUDIT_REASON_CHIPS.filter((c) => c.id === "all" || reasonN(c.id) > 0).map((c) => {
-          const n = c.id === "all" ? named.length : reasonN(c.id);
+          const n = reasonN(c.id);
           const on = reason === c.id;
           return (
             <button
@@ -2097,8 +2100,7 @@ function AuditFillList({
               className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", on ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
               onClick={() => setReason(c.id)}
             >
-              {c.label}
-              {n ? ` · ${n}` : ""}
+              {c.label} · {n}
             </button>
           );
         })}
@@ -2143,7 +2145,15 @@ function AuditFillList({
               })}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-muted">{reason === "ok" ? "В этом фильтре слева никого." : reason === "all" ? "Слева пусто — все сверенные совпали." : "В этом сегменте никого нет."}</p>
+            <p className="mt-3 text-sm text-muted">
+              {role !== "all"
+                ? `В роли «${AUDIT_ROLE_HEAD[role].label}» слева никого.`
+                : reason === "ok"
+                  ? "В этом фильтре слева никого."
+                  : reason === "all"
+                    ? "Слева пусто — все сверенные совпали."
+                    : "В этом сегменте никого нет."}
+            </p>
           )}
         </section>
         <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
@@ -2155,7 +2165,13 @@ function AuditFillList({
           {listDone.length ? (
             <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto [overflow-anchor:none]">{listDone.map(renderPerson)}</ul>
           ) : (
-            <p className="mt-3 text-sm text-muted">{reason !== "all" && reason !== "ok" ? "В этом фильтре совпавших нет." : "Пока никого не сверяли — справа пусто."}</p>
+            <p className="mt-3 text-sm text-muted">
+              {role !== "all"
+                ? `В роли «${AUDIT_ROLE_HEAD[role].label}» совпавших нет.`
+                : reason !== "all" && reason !== "ok"
+                  ? "В этом фильтре совпавших нет."
+                  : "Пока никого не сверяли — справа пусто."}
+            </p>
           )}
         </section>
       </div>
@@ -4688,7 +4704,7 @@ export function AdminCrmSettings() {
                       extra: h?.extra,
                       at: h?.at,
                       seen: Boolean(h),
-                      alfaRole: r.alfaRole,
+                      alfaRole: (h?.codes || []).includes("лид") ? "лид" : (h?.codes || []).includes("архив") ? "архив" : r.alfaRole,
                     };
                   });
                   const run = fillLoading?.kind === "audit";

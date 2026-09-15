@@ -286,6 +286,9 @@ describe("шаг 4 сверка остатка", () => {
     assert.match(src, /stampCustomerSync/);
     assert.match(src, /payCustomerFilled/);
     assert.match(src, /alfaHeaderOf/);
+    assert.match(src, /is_study: study/);
+    assert.match(src, /shown\.study/);
+    assert.match(src, /alfaStudy === 0 \|\| alfaStudy === 2/);
     assert.doesNotMatch(src, /isPayJournalComplete/);
     assert.doesNotMatch(src, /live \? rest/);
     assert.match(src, /for \(let i = 0; i < 4/);

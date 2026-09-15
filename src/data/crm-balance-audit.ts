@@ -104,7 +104,26 @@ async function alfaShow(branch: number, cid: number) {
       continue;
     }
   }
-  if (!found) return { ok: false as const, alfa: 0, cttRest: 0, liveCtt: false, headerOk: false, branch: used, switched, token: t, request };
+  if (!found) {
+    for (const bid of branches) {
+      for (const study of [0, 2, 1] as const) {
+        try {
+          const json = await request(`/v2api/${bid}/customer/index`, { page: 0, pageSize: 10, id: cid, is_study: study }, t);
+          const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === cid);
+          if (hit) {
+            found = hit;
+            used = bid;
+            switched = bid !== (Number(branch) || 1);
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+      if (found) break;
+    }
+  }
+  if (!found) return { ok: false as const, alfa: 0, cttRest: 0, liveCtt: false, headerOk: false, branch: used, switched, token: t, request, study: 0 };
   let rest = 0;
   let live = 0;
   try {
@@ -127,6 +146,7 @@ async function alfaShow(branch: number, cid: number) {
     switched,
     token: t,
     request,
+    study: Number(found.is_study),
   };
 }
 
@@ -209,6 +229,24 @@ export async function auditOne(cid: number, branchId: number) {
     };
   }
   const shown = await alfaShow(branch, id);
+  const alfaStudy = Number(shown.study);
+  if (shown.ok && (alfaStudy === 0 || alfaStudy === 2)) {
+    const role = alfaStudy === 0 ? "лид" : "архив";
+    return {
+      hit: {
+        cid: id,
+        branchId: shown.branch || branch,
+        name: first.name || `клиент ${id}`,
+        clients: first.clients || 0,
+        alfa: 0,
+        cash: first.cash || 0,
+        codes: [role],
+        repaired: false,
+        at: new Date().toISOString(),
+        extra: role === "лид" ? "Лид в Альфе: шапки клиента нет." : "Архив в Альфе: как текущего не сверяем.",
+      } satisfies AuditHit,
+    };
+  }
   if (shouldStampAlfaHeader({
     alfaOk: shown.ok,
     headerOk: Boolean(shown.ok && shown.headerOk),
