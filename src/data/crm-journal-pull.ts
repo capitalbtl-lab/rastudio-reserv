@@ -1,4 +1,4 @@
-/** Ручная догрузка журнала. Закон: по одному, пауза 5 с, пакетом нельзя. */
+/** Ручная догрузка журнала. Закон: по одному, пакетом нельзя. Красная 5 с; синяя — таблица пауз. */
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -19,7 +19,7 @@ import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady } from "./crm-inbound-core";
-import { alfaStudyRole } from "./crm-person-role";
+import { dossierAuditRole } from "./crm-person-role";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -887,7 +887,7 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
     const d = findDossier({ crmId: p.cid });
     const funnel = String(d?.extras?.crm_funnel || "");
     const leadStatus = Number(d?.extras?.lead_status_id) || 0;
-    const alfaRole = alfaStudyRole({ is_study: p.study, status: p.status, removed: p.removed, crm_funnel: funnel, lead_status_id: leadStatus });
+    const alfaRole = dossierAuditRole({ is_study: p.study, status: p.status, removed: p.removed, crm_funnel: funnel, lead_status_id: leadStatus });
     return {
       cid: p.cid,
       branchId: p.branchId,
@@ -1788,7 +1788,18 @@ export async function journalPull(opts: {
   }
 
   if (kind === "audit") {
-    const people = rankedStudentIds("1").filter((p) => alfaStudyRole({ is_study: p.study, status: p.status, removed: p.removed }) === "клиент");
+    const people = rankedStudentIds("1").filter((p) => {
+      const d = findDossier({ crmId: p.cid });
+      return (
+        dossierAuditRole({
+          is_study: p.study,
+          status: p.status,
+          removed: p.removed,
+          crm_funnel: d?.extras?.crm_funnel,
+          lead_status_id: d?.extras?.lead_status_id,
+        }) === "клиент"
+      );
+    });
     const wanted = Number(opts.customerId) || 0;
     const fromList = wanted ? rankedStudentIds("1").find((p) => p.cid === wanted) : null;
     const fallback = wanted

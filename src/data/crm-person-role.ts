@@ -29,12 +29,22 @@ export function personRole(it: PersonRoleInput): PersonRole {
   return "удалён";
 }
 
+/** Лид / клиент / архив для сверки. Как вкладка Клиенты, не хвост status.
+ *  is_study=0 — лид (новый, в группе, или бывший клиент).
+ *  crm_funnel=1 — на доске CRM, даже если is_study ещё 1 (кроме архива).
+ *  is_study=1 без воронки — ученик (Чуднова в «Ожидает старта»).
+ *  is_study=2 — архив, в том числе лид в архиве. */
+export function dossierAuditRole(it: PersonRoleInput): "лид" | "клиент" | "архив" {
+  const r = personRole(it);
+  if (r === "архив") return "архив";
+  if (r === "лид") return "лид";
+  if (String(it.crm_funnel || "") === "1") return "лид";
+  return "клиент";
+}
+
 /** Лид / клиент / архив для сверки. is_study=1 не лид, даже если status ещё «лид». */
 export function alfaStudyRole(it: PersonRoleInput): "лид" | "клиент" | "архив" {
-  const r = personRole(it);
-  if (r === "лид") return "лид";
-  if (r === "архив") return "архив";
-  return "клиент";
+  return dossierAuditRole(it);
 }
 
 /** Лид на диске, которого надо перепроверить в Alfa: не клиент is_study=1. */

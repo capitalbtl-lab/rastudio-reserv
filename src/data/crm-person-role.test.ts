@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { customerPullCandidate, personIsStudy, personRole, personSaveFields, alfaStudyRole } from "./crm-person-role.ts";
+import { customerPullCandidate, personIsStudy, personRole, personSaveFields, alfaStudyRole, dossierAuditRole } from "./crm-person-role.ts";
 
 describe("роль человека: один экран", () => {
   it("is_study режет три корзины", () => {
@@ -24,6 +24,15 @@ describe("роль человека: один экран", () => {
     assert.equal(alfaStudyRole({ is_study: 2, status: "лид" }), "архив");
     assert.equal(alfaStudyRole({ is_study: 0 }), "лид");
     assert.equal(alfaStudyRole({ is_study: 2 }), "архив");
+  });
+
+  it("сверка как Клиенты: воронка CRM — лид, архив сильнее, ученик без воронки не лид", () => {
+    assert.equal(dossierAuditRole({ is_study: 1, crm_funnel: "1" }), "лид");
+    assert.equal(personRole({ is_study: 1, crm_funnel: "1" }), "учится");
+    assert.equal(dossierAuditRole({ is_study: 1, crm_funnel: "0", status: "лид" }), "клиент");
+    assert.equal(dossierAuditRole({ is_study: 0 }), "лид");
+    assert.equal(dossierAuditRole({ is_study: 2, crm_funnel: "1" }), "архив");
+    assert.equal(dossierAuditRole({ is_study: "", crm_funnel: "1" }), "лид");
   });
 
   it("лид без is_study=1 — кандидат на подгрузку клиентов", () => {

@@ -152,9 +152,9 @@ async function alfaShow(branch: number, cid: number) {
 
 async function diskAlfaRole(id: number): Promise<"лид" | "архив" | ""> {
   const { findDossier } = await import("./dossiers");
-  const { alfaStudyRole } = await import("./crm-person-role");
+  const { dossierAuditRole } = await import("./crm-person-role");
   const d = findDossier({ crmId: id });
-  const role = alfaStudyRole({
+  const role = dossierAuditRole({
     is_study: d?.extras?.is_study,
     removed: d?.extras?.removed,
     lead_status_id: d?.extras?.lead_status_id,

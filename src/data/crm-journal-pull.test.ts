@@ -206,11 +206,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /return "нет"/);
     assert.match(ui, /В роли/);
     assert.match(pull, /leadStatus/);
-    assert.match(pull, /const alfaRole = alfaStudyRole/);
+    assert.match(pull, /dossierAuditRole/);
     assert.match(pull, /kind === "audit"/);
     assert.match(pull, /auditOne/);
     assert.match(pull, /fallback = wanted/);
-    assert.match(pull, /alfaStudyRole\(\{ is_study: p\.study, status: p\.status, removed: p\.removed \}\) === "клиент"/);
+    assert.match(pull, /dossierAuditRole/);
     assert.doesNotMatch(pull, /p\.study === 1 && p\.status !== "лид"/);
     assert.doesNotMatch(pull, /extras\.balance = String\(shown/);
     const audit = readFileSync(new URL("./crm-balance-audit.ts", import.meta.url), "utf8");
@@ -251,6 +251,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /RecheckDaysSelect/);
     assert.match(ui, /RECHECK_DAY_OPTS/);
     const daysCore = readFileSync(new URL("./crm-inbound-core.ts", import.meta.url), "utf8");
+    assert.match(daysCore, /± 2 недели/);
     assert.match(daysCore, /за 3 года/);
     assert.match(daysCore, /за 7 лет/);
     assert.match(daysCore, /с начала · 2015/);
