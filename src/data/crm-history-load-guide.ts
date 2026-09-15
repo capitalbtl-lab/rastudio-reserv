@@ -293,6 +293,7 @@ export const STEP_LOAD: Record<HistLoadTab, LoadGuide> = {
           "items[]: id, customerId, branchId, date, amount, kind — строка платежа",
           "cttId, tariffId, payItemId, payAccountId, locationId, managerId, payMethod, groupId, deleted",
           "payFill — курсор: филиал, страница, done (дочитали), empty (честно пусто)",
+          "pay/index: customer_id + date_from/date_to в теле, pageSize 500, стоп по total/count",
           "complete[] — сумма сошлась, это для шага 5; очередь шага 4 смотрит scanned/empty",
         ],
       },

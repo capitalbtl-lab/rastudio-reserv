@@ -1422,7 +1422,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const { inboundCustomerPays, paysOf, payCustomerFilled } = await import("./crm-pay");
     const forcePay = Boolean(recheck) && !payFillPending(cid);
     try {
-      await inboundCustomerPays(request, t, branchId, cid, { force: forcePay });
+      await inboundCustomerPays(request, t, branchId, cid, { force: forcePay, dateFrom: from });
     } catch (e) {
       payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
     }

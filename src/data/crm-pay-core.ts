@@ -16,8 +16,10 @@ export const PAY_POLL_WINDOW_MS = 60 * 60 * 1000;
 export const PAY_POLL_LOOKBACK_DAYS = 3;
 export const CASH_PAGE_SIZES = [3, 50, 100, 500] as const;
 export const PAY_INBOUND_PAGE = 50;
-export const PAY_INBOUND_RUN = 4;
-export const PAY_INBOUND_BUDGET_MS = 20000;
+/** customer/index кассы: Alfa max 500, иначе 50 страниц и очередь не отдаёт вправо. */
+export const PAY_CUSTOMER_PAGE = 500;
+export const PAY_INBOUND_RUN = 8;
+export const PAY_INBOUND_BUDGET_MS = 35000;
 export const PAY_STORE_CAP = 40000;
 export const PAY_FILL_BRANCHES = [1, 2, 3, 4] as const;
 

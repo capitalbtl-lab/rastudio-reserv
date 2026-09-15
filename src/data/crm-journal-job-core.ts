@@ -296,9 +296,7 @@ export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance
 }
 
 export function peopleNeedCashLoad(row: PeopleJobRow) {
-  if (row.pays) return false;
-  if (row.paysScanned && ((Number(row.cashRows) || 0) > 0 || row.paysEmpty)) return false;
-  return true;
+  return !peopleJobFinished(row, "balance");
 }
 
 export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balance", recheck: boolean) {

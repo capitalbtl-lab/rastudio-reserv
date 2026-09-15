@@ -1050,9 +1050,7 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
 }
 
 function peopleNeedCashLoad(row: PeopleRow) {
-  if (row.pays) return false;
-  if (row.paysScanned && ((Number(row.cashRows) || 0) > 0 || row.paysEmpty)) return false;
-  return true;
+  return !peopleFinished(row, "balance");
 }
 
 function peopleFinished(row: PeopleRow, kind: "students" | "balance") {

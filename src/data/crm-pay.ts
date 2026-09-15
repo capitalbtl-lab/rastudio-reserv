@@ -35,6 +35,7 @@ import {
   isOpeningRow,
   PAY_POLL_MAX_PER_HOUR,
   PAY_INBOUND_PAGE,
+  PAY_CUSTOMER_PAGE,
   PAY_INBOUND_RUN,
   PAY_INBOUND_BUDGET_MS,
   PAY_STORE_CAP,
@@ -706,7 +707,7 @@ export async function inboundCustomerPays(
   token: string,
   branchId: number,
   customerId: number,
-  opts?: { force?: boolean },
+  opts?: { force?: boolean; dateFrom?: string },
 ) {
   if (pendingExportIds(["pay.create"]).has(customerId) && !opts?.force && payCustomerFilled(customerId)) return paysOf(customerId);
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
@@ -738,11 +739,16 @@ export async function inboundCustomerPays(
   const maxRun = PAY_INBOUND_RUN;
   const started = Date.now();
   const overBudget = () => Date.now() - started > PAY_INBOUND_BUDGET_MS;
+  const pageSize = PAY_CUSTOMER_PAGE;
+  const date_from = alfaPayIndexDate(opts?.dateFrom || "2015-01-01");
+  const date_to = alfaPayIndexDate();
   outer: for (let b = bidIdx; b < branches.length; b += 1) {
     const bid = branches[b];
     let p = b === bidIdx ? page : 0;
     fillBid = bid;
     fillPage = p;
+    let received = 0;
+    let total = 0;
     for (;;) {
       if (ran >= maxRun || overBudget()) {
         done = false;
@@ -751,12 +757,20 @@ export async function inboundCustomerPays(
         break outer;
       }
       try {
-        const json = await request(`/v2api/${bid}/pay/index`, { page: p, pageSize: PAY_INBOUND_PAGE, customer_id: customerId }, token);
+        const json = await request(`/v2api/${bid}/pay/index`, {
+          page: p,
+          pageSize,
+          customer_id: customerId,
+          date_from,
+          date_to,
+        }, token);
         const pack = crmUnwrapIndex(json);
         raw.push(...pack.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
         ran += 1;
-        lastShort = pack.items.length < PAY_INBOUND_PAGE;
+        received += Number(pack.count != null ? pack.count : pack.items.length) || pack.items.length;
+        if (Number(pack.total) > total) total = Number(pack.total);
         const mine = pack.items.filter((it) => payCustomerIdOf(it, 0) === customerId).length;
+        lastShort = !pack.items.length || (total > 0 ? received >= total : pack.items.length < pageSize);
         if (!mine && pack.items.length) lastShort = true;
         fillBid = bid;
         fillPage = p;
@@ -766,7 +780,7 @@ export async function inboundCustomerPays(
               try {
                 const extra = await request(
                   `/v2api/${bid}/pay/index`,
-                  { page: 0, pageSize: PAY_INBOUND_PAGE, customer_id: customerId, pay_type_id: typeId },
+                  { page: 0, pageSize, customer_id: customerId, pay_type_id: typeId, date_from, date_to },
                   token,
                 );
                 const packT = crmUnwrapIndex(extra);
@@ -805,7 +819,7 @@ export async function inboundCustomerPays(
         try {
           const json = await request(
             `/v2api/${branchId}/pay/index`,
-            { page: p, pageSize: PAY_INBOUND_PAGE, customer_id: customerId, ctt_id: ctt },
+            { page: p, pageSize: PAY_CUSTOMER_PAGE, customer_id: customerId, ctt_id: ctt },
             token,
           );
           const pack = crmUnwrapIndex(json);
