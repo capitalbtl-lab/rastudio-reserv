@@ -29,7 +29,6 @@ export const KERNEL_FILES = [
   "src/data/crm-packet-queue.ts",
   "src/data/crm-packet-queue-core.ts",
   "src/data/crm-inbound-core.ts",
-  "src/data/crm-night-groups.ts",
   "src/data/crm-pay-core.ts",
   "src/data/crm-alfa-link-core.ts",
   "src/data/dossiers.ts",

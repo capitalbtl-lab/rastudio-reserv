@@ -12,7 +12,7 @@ function fileOf() {
   return join(process.cwd(), "storage", "crm-packet-queue.json");
 }
 
-const g = globalThis as { __raCrmQueueBusy?: boolean; __raCrmLastKind?: string; __raNightGroups?: boolean; __raAlfaIdle?: ReturnType<typeof setInterval> };
+const g = globalThis as { __raCrmQueueBusy?: boolean; __raCrmLastKind?: string; __raAlfaIdle?: ReturnType<typeof setInterval> };
 
 function loadQueue(): CrmQueueState {
   try {
@@ -187,7 +187,6 @@ export async function tickCrmQueue(take = 3, opts?: { skipJournal?: boolean }) {
       fromCache: true,
     };
   }
-  if (g.__raNightGroups) return { ok: true as const, busy: true, done: false, ids: [] as number[], next: 0, total: 0, extra: "ночной inbound групп" };
   if (g.__raCrmQueueBusy) return { ok: true as const, busy: true, done: false, ids: [] as number[], next: 0, total: 0, extra: "пакет уже идёт" };
   g.__raCrmQueueBusy = true;
   try {
@@ -368,7 +367,7 @@ export function startAlfaIdleTick() {
 
 async function idleAlfaTick() {
   if (!alfaLinkedNow()) return;
-  if (g.__raCrmQueueBusy || g.__raNightGroups) return;
+  if (g.__raCrmQueueBusy) return;
   kickBackground();
   const q = loadQueue();
   if (!q.packets.length) {

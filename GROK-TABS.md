@@ -15,7 +15,7 @@
 Ядро (только вкладка A): см. `src/data/kernel.ts` (`KERNEL_FILES`).
 Не расширять список и не переименовывать ключи без этой вкладки.
 `src/data/ids.ts`, `crm-disk-rules.ts`, `crm-local-id.ts`, очередь Alfa, `dossiers*.ts`, карты course/tariff, схема `Brain` в `agent-config.ts`.
-Ночной inbound групп: `src/data/crm-night-groups.ts`, 04:00 Europe/Moscow, diff по `branchId+groupId`.
+Каталог групп: `refreshCrmSchedule` → диск. Кнопка «загрузить группы» в Админке. Ночного процесса `rastudio-night-groups` нет. История — первый загрузчик (каталог из АльфаСРМ — когда шаг 1 его возьмёт).
 Касса-процесс: вкладка F. Один `crm-pays.json`. Очередь `pay.create` / `pay.delete`. Автоопрос **10/час (~6 мин)**: `pay/index` филиалы **1–4**, дата/id ≥ штампа, `pageSize` 50. Не обход всех `customerId`. Карточка «Обновить» одного клиента — **не** в лимите. Авто + кнопка D вместе ≤ 10/час.
 
 ---
@@ -165,8 +165,8 @@ agent-client-desk, agent-identify, каналы, обучение, гайды.
 Вкладка F — модуль синхронизации: диск ↔ Alfa.
 Можно: crm-pay.ts, crm-pay-alfa.ts, scripts/crm-pay-poll.mjs,
 crm-sync-policy*, crm-journal-job*, crm-journal-pull.ts, crm-history-load.ts,
-crm-roster.ts, crm-night-groups.ts (ночь каталога), docs/tz-sync-center/,
-scripts/crm-history-worker.mjs, scripts/crm-night-groups.mjs.
+crm-roster.ts, docs/tz-sync-center/,
+scripts/crm-history-worker.mjs.
 Очередь: только pay.create / pay.delete и tick после записи. Ядро очереди
 (crm-export-queue-core, KERNEL_FILES) не расширять без A.
 Нельзя: деплой; тексты сайта; home-editor; сценарии Ольги; формы записи на сайте;

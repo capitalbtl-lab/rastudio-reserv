@@ -12,10 +12,6 @@ import {
   canPruneCalendarFill,
   uniquePositiveIds,
   canCloseLessonCensus,
-  nightGroupDiff,
-  nightOnSiteReason,
-  nightLockBusy,
-  groupProlonged,
   mergeInboundSiteFields,
   inboundFillClosed,
   keepAlfaProbe,
@@ -31,7 +27,6 @@ import {
   journalIdsReady,
   censusSeatLessonId,
 } from "./crm-inbound-core.ts";
-import { slotActiveToday, slotOnPublicSchedule, mergeStatusPublish } from "./group-status.ts";
 
 describe("вход из Alfa", () => {
   it("очередь старше входа", () => {
@@ -202,89 +197,6 @@ describe("вход из Alfa", () => {
     assert.equal(censusSeatLessonId({ id: 3, date: "", lesson_date: "" }), 0);
     assert.equal(censusSeatLessonId({ id: 4, date: "2026-01-01", lesson_date: "" }), 4);
     assert.equal(censusSeatLessonId({ id: 0, date: "2026-01-01" }), 0);
-  });
-});
-
-describe("ночной diff групп", () => {
-  const today = "2026-09-07";
-  const pub = mergeStatusPublish(null);
-
-  it("новая живая — added, архив 3 и смены не в добор", () => {
-    const hits = nightGroupDiff({
-      today,
-      disk: [{ branchId: 1, groupId: 10, statusId: 2, bDate: "2026-01-01", eDate: "2026-12-31" }],
-      incoming: [
-        { branchId: 1, groupId: 10, statusId: 2, bDate: "2026-01-01", eDate: "2026-12-31", name: "старая" },
-        { branchId: 1, groupId: 20, statusId: 2, bDate: "2026-09-01", eDate: "2026-12-31", name: "новая" },
-        { branchId: 1, groupId: 30, statusId: 3, bDate: "2025-01-01", eDate: "2026-06-01", name: "архив" },
-        { branchId: 4, groupId: 40, statusId: 7, name: "смена" },
-      ],
-    });
-    assert.deepEqual(
-      hits.map((h) => `${h.kind}:${h.groupId}`),
-      ["added:20"],
-    );
-  });
-
-  it("сняли с архива — revived по prev, не по имени", () => {
-    const hits = nightGroupDiff({
-      today,
-      disk: [],
-      prev: [{ branchId: 2, groupId: 580, statusId: 3 }],
-      incoming: [{ branchId: 2, groupId: 580, statusId: 2, bDate: "2026-09-01", eDate: "2026-12-31", name: "Роботы" }],
-    });
-    assert.equal(hits.length, 1);
-    assert.equal(hits[0].kind, "revived");
-    assert.equal(hits[0].groupId, 580);
-    assert.equal(hits[0].branchId, 2);
-  });
-
-  it("продлили eDate или снова сегодня действует — prolonged; те же даты — нет", () => {
-    const disk = { branchId: 1, groupId: 11, statusId: 2, bDate: "2026-01-01", eDate: "2026-09-01" };
-    assert.equal(groupProlonged(disk, { ...disk, eDate: "2026-12-31" }, today), true);
-    assert.equal(groupProlonged(disk, { ...disk, eDate: "2026-12-01" }, today), true);
-    const liveDisk = { branchId: 1, groupId: 12, statusId: 2, bDate: "2026-01-01", eDate: "2026-12-31" };
-    assert.equal(groupProlonged(liveDisk, liveDisk, today), false);
-    const hits = nightGroupDiff({
-      today,
-      disk: [disk, liveDisk],
-      incoming: [
-        { ...disk, eDate: "2026-12-31", name: "a" },
-        { ...liveDisk, name: "b" },
-      ],
-    });
-    assert.equal(hits.length, 1);
-    assert.equal(hits[0].kind, "prolonged");
-    assert.equal(hits[0].groupId, 11);
-  });
-
-  it("живые без смены дат не в добор, даже если состав учеников менялся", () => {
-    const hits = nightGroupDiff({
-      today,
-      disk: [{ branchId: 1, groupId: 9, statusId: 4, bDate: "2026-01-01", eDate: "2026-12-31" }],
-      incoming: [{ branchId: 1, groupId: 9, statusId: 4, bDate: "2026-01-01", eDate: "2026-12-31", name: "та же" }],
-    });
-    assert.equal(hits.length, 0);
-  });
-
-  it("витрина: срок и reason без угадывания курса", () => {
-    const slot = { statusId: 2, priority: 1, courseId: "/art-studio-5-6", bDate: "2026-01-01", eDate: "2026-12-31" };
-    assert.equal(slotActiveToday(slot, today), true);
-    assert.equal(slotOnPublicSchedule(slot, pub), true);
-    assert.equal(nightOnSiteReason(slot, pub).reason, "yes");
-    assert.equal(nightOnSiteReason({ ...slot, eDate: "2026-09-01" }, pub).reason, "срок кончился");
-    assert.equal(nightOnSiteReason({ ...slot, priority: 0 }, pub).reason, "priority=0");
-    assert.equal(nightOnSiteReason({ ...slot, courseId: "13", path: "" }, pub).reason, "no courseId");
-    assert.equal(nightOnSiteReason({ ...slot, statusId: 3 }, pub).reason, "архив");
-    assert.equal(nightOnSiteReason({ ...slot, statusId: 5 }, pub).reason, "statusPublish.schedule=false");
-    assert.equal(slotOnPublicSchedule({ ...slot, eDate: "2026-09-01" }, pub), false);
-  });
-
-  it("замок: живой pid — busy, мёртвый и просроченный — нет", () => {
-    const now = Date.parse("2026-09-07T01:00:00Z");
-    assert.equal(nightLockBusy({ pid: 7, at: "2026-09-07T00:50:00Z" }, now, () => true), true);
-    assert.equal(nightLockBusy({ pid: 7, at: "2026-09-07T00:50:00Z" }, now, () => false), false);
-    assert.equal(nightLockBusy({ pid: 7, at: "2026-09-06T20:00:00Z" }, now, () => true), false);
   });
 });
 

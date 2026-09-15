@@ -83,22 +83,6 @@ module.exports = {
       },
     },
     {
-      name: "rastudio-night-groups",
-      script: "scripts/crm-night-groups.mjs",
-      interpreter: "node",
-      interpreter_args: "--experimental-strip-types --import ./scripts/ts-ext-register.mjs",
-      instances: 1,
-      exec_mode: "fork",
-      autorestart: false,
-      cron_restart: "0 4 * * *",
-      watch: false,
-      env: {
-        TZ: "Europe/Moscow",
-        NODE_ENV: "production",
-        ...loadEnvFile(),
-      },
-    },
-    {
       name: "rastudio-pay-poll",
       script: "scripts/crm-pay-poll.mjs",
       interpreter: "node",

@@ -184,7 +184,7 @@ if ! pm2 describe rastudio-deploy 2>/dev/null | grep -q "status.*online"; then
   pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio-deploy >/dev/null 2>&1 || true
 fi
 pm2 restart rastudio-history --update-env >/dev/null 2>&1 || pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio-history >/dev/null 2>&1 || true
-for app in rastudio-night-groups rastudio-pay-poll; do
+for app in rastudio-pay-poll; do
   if ! pm2 describe "$app" >/dev/null 2>&1; then
     pm2 start "$ROOT/ecosystem.config.cjs" --only "$app"
   fi
