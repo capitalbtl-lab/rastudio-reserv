@@ -19,6 +19,7 @@ import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady } from "./crm-inbound-core";
+import { alfaStudyRole } from "./crm-person-role";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -883,7 +884,7 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
     const dups = lessonsStampExtra(sync);
     const journal = lessonsJournalReady(sync);
     const pays = payCustomerFilled(p.cid);
-    const alfaRole = p.study === 0 || p.status === "лид" ? "лид" : p.study === 2 || p.status === "архив" ? "архив" : "клиент";
+    const alfaRole = alfaStudyRole({ is_study: p.study, status: p.status, removed: p.removed });
     return {
       cid: p.cid,
       branchId: p.branchId,
@@ -1780,7 +1781,7 @@ export async function journalPull(opts: {
   }
 
   if (kind === "audit") {
-    const people = rankedStudentIds("1").filter((p) => p.study === 1 && p.status !== "лид" && p.status !== "архив");
+    const people = rankedStudentIds("1").filter((p) => alfaStudyRole({ is_study: p.study, status: p.status, removed: p.removed }) === "клиент");
     const wanted = Number(opts.customerId) || 0;
     const fromList = wanted ? rankedStudentIds("1").find((p) => p.cid === wanted) : null;
     const fallback = wanted

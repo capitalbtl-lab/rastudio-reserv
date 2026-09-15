@@ -29,6 +29,14 @@ export function personRole(it: PersonRoleInput): PersonRole {
   return "удалён";
 }
 
+/** Лид / клиент / архив для сверки. is_study=1 не лид, даже если status ещё «лид». */
+export function alfaStudyRole(it: PersonRoleInput): "лид" | "клиент" | "архив" {
+  const r = personRole(it);
+  if (r === "лид") return "лид";
+  if (r === "архив") return "архив";
+  return "клиент";
+}
+
 /** Лид на диске, которого надо перепроверить в Alfa: не клиент is_study=1. */
 export function customerPullCandidate(d: { crmId?: number; status?: string; extras?: { is_study?: string } }) {
   if (!Number(d.crmId)) return false;

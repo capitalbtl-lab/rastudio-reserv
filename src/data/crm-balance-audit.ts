@@ -132,11 +132,17 @@ async function alfaShow(branch: number, cid: number) {
 
 async function diskAlfaRole(id: number): Promise<"лид" | "архив" | ""> {
   const { findDossier } = await import("./dossiers");
+  const { alfaStudyRole } = await import("./crm-person-role");
   const d = findDossier({ crmId: id });
-  const st = Number(d?.extras?.is_study);
-  const status = String(d?.status || "");
-  if (st === 0 || status === "лид") return "лид";
-  if (st === 2 || status === "архив") return "архив";
+  const role = alfaStudyRole({
+    is_study: d?.extras?.is_study,
+    removed: d?.extras?.removed,
+    lead_status_id: d?.extras?.lead_status_id,
+    crm_funnel: d?.extras?.crm_funnel,
+    status: d?.status,
+  });
+  if (role === "лид") return "лид";
+  if (role === "архив") return "архив";
   return "";
 }
 

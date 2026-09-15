@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { customerPullCandidate, personIsStudy, personRole, personSaveFields } from "./crm-person-role.ts";
+import { customerPullCandidate, personIsStudy, personRole, personSaveFields, alfaStudyRole } from "./crm-person-role.ts";
 
 describe("роль человека: один экран", () => {
   it("is_study режет три корзины", () => {
@@ -15,6 +15,15 @@ describe("роль человека: один экран", () => {
     assert.equal(personRole({ is_study: 1, lead_status_id: 1 }), "учится");
     assert.equal(personRole({ is_study: 1, lead_status_id: 0 }), "учится");
     assert.equal(personRole({ is_study: 1, lead_status_id: null }), "учится");
+  });
+
+  it("сверка: is_study, не старый status", () => {
+    assert.equal(alfaStudyRole({ is_study: 1, status: "лид" }), "клиент");
+    assert.equal(alfaStudyRole({ is_study: 1, status: "архив" }), "клиент");
+    assert.equal(alfaStudyRole({ is_study: 0, status: "учится" }), "лид");
+    assert.equal(alfaStudyRole({ is_study: 2, status: "лид" }), "архив");
+    assert.equal(alfaStudyRole({ is_study: 0 }), "лид");
+    assert.equal(alfaStudyRole({ is_study: 2 }), "архив");
   });
 
   it("лид без is_study=1 — кандидат на подгрузку клиентов", () => {

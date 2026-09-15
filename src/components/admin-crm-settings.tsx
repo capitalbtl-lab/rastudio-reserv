@@ -1204,10 +1204,11 @@ type AuditSeg = { id: string; label: string; rec: string };
 
 function auditSeg(r: AuditSegIn): AuditSeg {
   const codes = r.codes || [];
-  if (r.alfaRole === "лид" || codes.includes("лид")) {
+  const who = auditRole(r);
+  if (who === "лид") {
     return { id: "lead", label: "Лид в Альфе", rec: "Это лид: шапки клиента в Alfa нет. Не чинить кассу. Сначала перевод в клиенты в Alfa, потом сверка." };
   }
-  if (r.alfaRole === "архив" || codes.includes("архив")) {
+  if (who === "архив") {
     return { id: "arch", label: "Архив в Альфе", rec: "Карточка в архиве. Как текущего не сверять. Либо вернуть в ученики в Alfa." };
   }
   if (!r.seen) {
@@ -1286,8 +1287,9 @@ const AUDIT_ROLE_HEAD: Record<"клиент" | "лид" | "архив", { label:
 };
 
 function auditRole(r: AuditSegIn): "лид" | "клиент" | "архив" {
-  if (r.alfaRole === "лид" || (r.codes || []).includes("лид")) return "лид";
-  if (r.alfaRole === "архив" || (r.codes || []).includes("архив")) return "архив";
+  if (r.alfaRole === "лид" || r.alfaRole === "архив" || r.alfaRole === "клиент") return r.alfaRole;
+  if ((r.codes || []).includes("лид")) return "лид";
+  if ((r.codes || []).includes("архив")) return "архив";
   return "клиент";
 }
 

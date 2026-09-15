@@ -202,10 +202,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /AUDIT_ROLES/);
     assert.match(ui, /Все роли/);
     assert.match(ui, /function auditRole/);
+    assert.match(ui, /r\.alfaRole === "лид" \|\| r\.alfaRole === "архив" \|\| r\.alfaRole === "клиент"/);
+    assert.match(pull, /const alfaRole = alfaStudyRole/);
     assert.match(pull, /kind === "audit"/);
     assert.match(pull, /auditOne/);
     assert.match(pull, /fallback = wanted/);
-    assert.match(pull, /study === 1 && p.status !== "лид"/);
+    assert.match(pull, /alfaStudyRole\(\{ is_study: p\.study, status: p\.status, removed: p\.removed \}\) === "клиент"/);
+    assert.doesNotMatch(pull, /p\.study === 1 && p\.status !== "лид"/);
     assert.doesNotMatch(pull, /extras\.balance = String\(shown/);
     const audit = readFileSync(new URL("./crm-balance-audit.ts", import.meta.url), "utf8");
     assert.match(audit, /diskAlfaRole/);
