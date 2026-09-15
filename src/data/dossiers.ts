@@ -995,9 +995,10 @@ export async function stampLiveTariffsFromBranches() {
   return { ids: liveTariffIdsFromStore(), live: live.size, scanned, branches: branches.length };
 }
 
+/** Состав групп: cgi/index по одному group_id (дока Alfa). Закон студии: одна группа за тик, пакетом нельзя. */
 export async function overlayMembershipChunk(
   offset = 0,
-  take = 8,
+  take = 1,
   only?: { groupId: number; branchId: number; name: string; taken?: number }[],
   opts?: { forceCgi?: boolean; skipTariffs?: boolean },
 ) {
@@ -1010,9 +1011,9 @@ export async function overlayMembershipChunk(
   const groups = overlayAdminGroups();
   const stampCursor = !only;
   const total = stampCursor ? groups.length : only!.length;
-  const size = Math.max(1, Math.min(10, Number(take) || 8));
+  const size = 1;
   const from = stampCursor ? Math.max(0, Number(offset) || 0) : 0;
-  const slice = only || groups.slice(from, from + size);
+  const slice = (only || groups.slice(from, from + size)).slice(0, 1);
   const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0);
   const slotOf = (branchId: number, groupId: number) =>
     slots.find((s) => s.groupId === groupId && s.branchId === branchId) || slots.find((s) => s.groupId === groupId);
@@ -1233,7 +1234,7 @@ export async function overlayMembershipChunk(
 export async function overlayMembershipFromCrm() {
   const { enqueueCrmOverlay, tickCrmQueue } = await import("./crm-packet-queue");
   enqueueCrmOverlay(true);
-  const last = await tickCrmQueue(3);
+  const last = await tickCrmQueue(1);
   const ids = last.ids || [];
   return { ok: true as const, people: 0, withGroups: 0, live: last.live || ids.length, scanned: Number((last as { scanned?: number }).scanned) || 0, ids };
 }
@@ -1999,7 +2000,7 @@ export async function syncSliceFromCrm(opts: { branchId: number; isStudy?: numbe
   return { ok: true as const, count: n, nextPage: page, hasMore, total: store.items.length, counts, lastCrmSync: store.lastCrmSync };
 }
 
-export async function syncMembershipsSlice(offset = 0, take = 8) {
+export async function syncMembershipsSlice(offset = 0, take = 1) {
   const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0 && isAdminGroup(s.statusId));
   const seen = new Set<string>();
   const groups: { id: number; branchId: number; name: string; school: string; subjectId: number; courseId: string }[] = [];
@@ -2427,7 +2428,7 @@ export async function handleAdminDossiers(data: DossiersReq) {
     }
     if (data.action === "syncMembers") {
       try {
-        const res = await syncMembershipsSlice(Number(data.offset) || 0, 8);
+        const res = await syncMembershipsSlice(Number(data.offset) || 0, 1);
         return { ...res, ok: true as const };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось сверить состав групп." };

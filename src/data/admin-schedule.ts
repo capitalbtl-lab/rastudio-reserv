@@ -2992,7 +2992,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (force) {
         void import("./crm-packet-queue").then((q) => {
           q.enqueueCrmOverlay(true);
-          void q.tickCrmQueue(3);
+          void q.tickCrmQueue(1);
         });
       }
       return {
@@ -3066,7 +3066,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "crmQueueTick") {
       const q = await import("./crm-packet-queue");
       const exp = await import("./crm-export-queue");
-      const res = await q.ensureAndTick({ force: Boolean(data.force), take: 3 });
+      const res = await q.ensureAndTick({ force: Boolean(data.force), take: 1 });
       const out = await exp.tickExportQueue(3);
       const snap = q.crmQueueSnapshot();
       return {

@@ -29,6 +29,21 @@ describe("импорт лидов не валит кабинет", () => {
     assert.equal(/overlayMembershipFromCrm/.test(leadBlock), false);
   });
 
+  it("состав групп — одна за тик, не пакет 3/8", () => {
+    const src = readFileSync(join(dir, "dossiers.ts"), "utf8");
+    const q = readFileSync(join(dir, "crm-packet-queue.ts"), "utf8");
+    const sch = readFileSync(join(dir, "admin-schedule.ts"), "utf8");
+    assert.match(src, /export async function overlayMembershipChunk\(\s*offset = 0,\s*take = 1,/);
+    assert.match(src, /const size = 1;/);
+    assert.match(src, /tickCrmQueue\(1\)/);
+    assert.match(src, /syncMembershipsSlice\(Number\(data\.offset\) \|\| 0, 1\)/);
+    assert.match(q, /export async function tickCrmQueue\(take = 1/);
+    assert.match(q, /inboundJournalChunk\(offset, 1\)/);
+    assert.doesNotMatch(q, /tickCrmQueue\(take = 3/);
+    assert.doesNotMatch(sch, /tickCrmQueue\(3\)/);
+    assert.match(sch, /ensureAndTick\(\{ force: Boolean\(data\.force\), take: 1 \}\)/);
+  });
+
   it("upsert без persist не вызывает saveStore", () => {
     const src = readFileSync(join(dir, "dossiers.ts"), "utf8");
     const at = src.indexOf("export function upsertDossier");

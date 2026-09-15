@@ -171,7 +171,7 @@ export async function runCustomersPacket(branchId: number, ids: number[]) {
   return { ok: true as const, done: false, ids: all, live: all.length, liveInPacket: liveN, extra: `проверка ${ids.length} учеников, живых в пакете ${liveN}`, next: 0, total: 0, scanned: ids.length };
 }
 
-export async function tickCrmQueue(take = 3, opts?: { skipJournal?: boolean }) {
+export async function tickCrmQueue(take = 1, opts?: { skipJournal?: boolean }) {
   if (!alfaLinkedNow()) {
     const { liveTariffIdsFromStore } = await import("./dossiers");
     const ids = liveTariffIdsFromStore();
@@ -210,7 +210,7 @@ export async function tickCrmQueue(take = 3, opts?: { skipJournal?: boolean }) {
     } else if (picked.kind === "journal") {
       const { inboundJournalChunk } = await import("./crm-journal-inbound");
       const offset = Math.max(0, picked.offset || 0);
-      res = await inboundJournalChunk(offset, 2);
+      res = await inboundJournalChunk(offset, 1);
       if (!res.done) {
         const nq = loadQueue();
         nq.packets = mergeCrmPacket(
@@ -355,7 +355,7 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
   return { ...res, fromCache: false, total: Number(res.total) || total };
 }
 
-/** Фон: один пакет за раз. Тик 20 с ≥ красной паузы 5 с. Журнал тоже идёт — иначе очередь копит journal и не разбирает. */
+/** Фон: одна группа за тик. Тик 20 с ≥ красной паузы 5 с. Журнал тоже по одной. */
 export function startAlfaIdleTick() {
   if (process.env.NODE_ENV === "test") return;
   if (g.__raAlfaIdle) return;
