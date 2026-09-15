@@ -127,9 +127,10 @@ describe("штамп входа ученика", () => {
     assert.match(sync, /journalHoleApprovedAt\?: string/);
     assert.match(sync, /if \(patch.journalHoleApprovedAt === ""\) delete next.journalHoleApprovedAt/);
     assert.match(sync, /if \(patch.lessonsRecheckAt === ""\) delete next.lessonsRecheckAt/);
-    assert.match(pull, /"holeApprove" \| "holeApproveClear" \| "lessonsReset"/);
+    assert.match(pull, /"holeApprove" \| "holeApproveClear" \| "lessonsReset" \| "paysReset"/);
     assert.match(pull, /kind === "holeApprove" \|\| kind === "holeApproveClear"/);
     assert.match(pull, /kind === "lessonsReset"/);
+    assert.match(pull, /kind === "paysReset"/);
     assert.match(pull, /journalHoleApprovedAt: on \? new Date\(\)\.toISOString\(\) : ""/);
     assert.match(pull, /holeApproved: Boolean\(sync.journalHoleApprovedAt\)/);
     const markAt = pull.indexOf("const mark = ");
@@ -172,6 +173,34 @@ describe("штамп входа ученика", () => {
     assert.match(pull, /resetAt: reset0/);
     assert.match(inbound, /skipped: "reset"/);
     assert.doesNotMatch(reset, /качаем с нуля/);
+  });
+
+  it("сброс кассы: строки с диска, complete и курсор, без Alfa в том же клике", () => {
+    const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
+    const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
+    const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
+    const sync = readFileSync(new URL("./crm-customer-sync.ts", import.meta.url), "utf8");
+    const fnAt = pay.indexOf("export function resetStudentPayDisk");
+    const fn = pay.slice(fnAt, fnAt + 900);
+    assert.match(fn, /holdPayIds\(\)/);
+    assert.match(fn, /markPayJournalIncomplete\(id\)/);
+    assert.match(fn, /clearPayFill\(id\)/);
+    assert.match(fn, /paysAt: ""/);
+    assert.match(fn, /paysRecheckAt: ""/);
+    assert.match(fn, /paysResetAt:/);
+    assert.doesNotMatch(fn, /token\(|request\(|v2api/);
+    assert.match(sync, /paysResetAt\?: string/);
+    assert.match(sync, /if \(patch.paysAt === ""\) delete next.paysAt/);
+    assert.match(sync, /if \(patch.paysResetAt === ""\) delete next.paysResetAt/);
+    const resetAt = pull.indexOf('kind === "paysReset"');
+    const reset = pull.slice(resetAt, resetAt + 1200);
+    assert.match(reset, /resetStudentPayDisk\(cid\)/);
+    assert.doesNotMatch(reset, /inboundCustomerPays/);
+    assert.doesNotMatch(reset, /pullOneStudent/);
+    assert.match(ui, /kind: "paysReset"/);
+    assert.match(ui, /HINT\.resetPay/);
+    assert.match(ui, /resetPersonPay\(row\)/);
+    assert.match(pay, /resetGone/);
   });
 
   it("замок ученика: два cid сразу, файл, свой pid не блокирует", () => {

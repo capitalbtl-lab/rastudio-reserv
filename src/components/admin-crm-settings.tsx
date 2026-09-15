@@ -215,6 +215,7 @@ const HINT = {
   stop: "Стоп останавливает текущую очередь. Текущий человек или группа допишет свой запрос, а следующий уже не стартует. Уже записанное на диск не откатывается — это не «отмена», а пауза. После стопа красную можно нажать снова: пойдёт со следующих, кто ещё слева. Если кнопка серая, сейчас никто не грузится. В Alfa ничего не удаляет и не сохраняет. Можно спокойно отойти и продолжить позже.",
   fullHist: "Только жёлтая. Та же красная качка, что «Добрать», но всегда с 1 января 2015 — список в красной рамке не читает. После шага колонка смотрит набор id. Не синяя. В Alfa не пишет.",
   resetHist: "Только жёлтая. Стирает занятия этого ученика с нашего диска и ставит счёт Alfa в 0. Качку сама не стартует — дальше «Добрать». Старое число на карточке не держим. Свои неотправленные уроки и очередь на Alfa не трогает. Группу и кассу не трогает. В Alfa ничего не пишет.",
+  resetPay: "Стирает платежи этого ученика с нашего диска, снимает «касса загружена» и курсор страниц. Качку сама не стартует — дальше «Загрузить кассу». Свои неотправленные платежи и очередь pay.create/delete не трогает. Календарь не трогает. В Alfa ничего не пишет.",
   loadCal: "Красная качка этой карточки. Окно лет — список в красной рамке, не синяя. Сверяет набор номеров, дописывает дырки. Старая жёлтая — лучше «Загрузить всю историю» (всегда 2015). После шага колонка по id. В Alfa не пишет.",
   hole: "Галка у жёлтой: в Alfa есть номера уроков, которых нет на диске. Не качает и журнал не закрывает. Пускает к шагам 3–5 с жёлтым «Одобрен». Снять только вручную. У кого набор id сошёлся, галки нет.",
   loadOneGroups: "Красная кнопка идёт по группам слева по одной, как «по одному» у учеников. Только та колонка, что открыта: «Сейчас идут» или «Архивные». Берёт выбранную порцию — квартал, полугодие или год — и читает явки из Alfa на диск. Следующая группа не стартует, пока эта порция не закрылась. Стоп прерывает очередь после текущей. В Alfa расписание не меняется. Если школа выбрана в фильтре, очередь только по ней. Это шаг 3: групповые явки, не личный календарь и не касса.",
@@ -1572,6 +1573,23 @@ function PeopleFillList({
                 HINT.resetHist,
               )
             : null}
+          {kind === "balance" && onResetHistory
+            ? withHint(
+                <button
+                  type="button"
+                  disabled={busy && !active}
+                  className={BTN_GHOST_SM}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!confirm(`№${row.cid}: стереть платежи с диска и снять «касса загружена»? Качку не стартуем — потом «Загрузить кассу».`)) return;
+                    onResetHistory(row);
+                  }}
+                >
+                  С нуля
+                </button>,
+                HINT.resetPay,
+              )
+            : null}
           {approved && onHole
             ? withHint(
                 <button
@@ -2794,6 +2812,58 @@ export function AdminCrmSettings() {
       });
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Не сбросили диск");
+      return;
+    }
+  }
+
+  async function resetPersonPay(row: PeopleRow) {
+    if (!row.cid) return;
+    try {
+      const res = (await adminSchedule({
+        data: {
+          token: token(),
+          action: "journalPull",
+          kind: "paysReset",
+          customerId: row.cid,
+          branchId: row.branchId,
+        } as never,
+      })) as { ok?: boolean; extra?: string; error?: string; student?: { cashRows?: number; pays?: number } };
+      if (res?.ok === false) {
+        setMsg(res.error || res.extra || "Не сбросили кассу");
+        return;
+      }
+      if (res?.extra) setMsg(res.extra);
+      const key = peopleStudy === "2" ? "archive" : "live";
+      setJournal((cur) => {
+        if (!cur) return cur;
+        const side = cur.progress?.[key];
+        if (!side) return cur;
+        return {
+          ...cur,
+          progress: {
+            ...cur.progress,
+            [key]: {
+              ...side,
+              people: (side.people || []).map((p) =>
+                p.cid === row.cid
+                  ? {
+                      ...p,
+                      pays: false,
+                      paysOk: false,
+                      paysScanned: false,
+                      paysEmpty: false,
+                      paysMore: false,
+                      paysRechecked: false,
+                      cashRows: Number(res?.student?.cashRows) || 0,
+                    }
+                  : p,
+              ),
+            },
+          },
+        };
+      });
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Не сбросили кассу");
       return;
     }
   }
@@ -4235,6 +4305,7 @@ export function AdminCrmSettings() {
                         windowSel={<RecheckDaysSelect value={moneyRecheckDays} disabled={busy} onChange={setMoneyRecheckDays} small />}
                         onLoad={(row) => void loadPerson(row, "balance", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "balance", peopleStudy, true)}
+                        onResetHistory={(row) => void resetPersonPay(row)}
                         onStop={() => {
                           requestStop();
                         }}

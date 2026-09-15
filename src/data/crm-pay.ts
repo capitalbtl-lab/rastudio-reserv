@@ -55,6 +55,7 @@ import {
   type PayFillCursor,
 } from "./crm-pay-core";
 import { pendingExportIds } from "./crm-export-queue";
+import { stampCustomerSync, customerSyncOf } from "./crm-customer-sync";
 import { logAdmin } from "./admin-settings";
 import { ledgerMoney, uniqueBranches, payCttIdOf, writeoffSumOf } from "./crm-ledger-core";
 import { displayPersonName, isPhoneLike } from "./client-display";
@@ -263,6 +264,23 @@ export function clearPayFill(customerId: number) {
   if (!store.payFill?.[String(id)]) return;
   delete store.payFill[String(id)];
   save(store, { keepAll: true });
+}
+
+/** Шаг 4 «С нуля»: платежи с диска, complete и курсор. Очередь pay.* не трогает. Alfa не ходим. */
+export function resetStudentPayDisk(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return { ok: false as const, n: 0 };
+  const hold = holdPayIds();
+  const kept = paysOf(id).filter((x) => hold.has(Number(x.id)) || Number(x.id) < 0);
+  replaceCustomerPays(id, kept, { keepAll: true });
+  markPayJournalIncomplete(id);
+  clearPayFill(id);
+  stampCustomerSync(id, {
+    paysAt: "",
+    paysRecheckAt: "",
+    paysResetAt: new Date().toISOString(),
+  });
+  return { ok: true as const, n: kept.length };
 }
 
 /** Касса дочитана этим id (complete[]). Строка «остаток на диске» сюда не входит. */
@@ -718,6 +736,8 @@ export async function inboundCustomerPays(
   if (pendingExportIds(["pay.create"]).has(customerId) && !opts?.force && payCustomerFilled(customerId)) return paysOf(customerId);
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   if (opts?.force) markPayJournalIncomplete(customerId);
+  const reset0 = String(customerSyncOf(customerId).paysResetAt || "");
+  const resetGone = () => String(customerSyncOf(customerId).paysResetAt || "") !== reset0;
   const store = load();
   const branches = uniqueBranches(branchId);
   const raw: Record<string, unknown>[] = [];
@@ -756,10 +776,12 @@ export async function inboundCustomerPays(
     let received = 0;
     let total = 0;
     for (;;) {
-      if (ran >= maxRun || overBudget()) {
+      if (ran >= maxRun || overBudget() || resetGone()) {
         done = false;
+        if (!resetGone()) {
         store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid, page: p } };
         save(store, { keepAll: true });
+        }
         break outer;
       }
       try {
@@ -805,10 +827,12 @@ export async function inboundCustomerPays(
       const b0 = ti === typeIdx ? extraBidIdx : 0;
       for (let bi = b0; bi < branches.length; bi += 1) {
         const extraBid = branches[bi];
-        if (ran >= maxRun || overBudget()) {
+        if (ran >= maxRun || overBudget() || resetGone()) {
           extraFinished = false;
+          if (!resetGone()) {
           store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid: extraBid, page: 0, extra: typeId } };
           save(store, { keepAll: true });
+          }
           break extraLoop;
         }
         try {
@@ -863,6 +887,7 @@ export async function inboundCustomerPays(
       }
     }
   }
+  if (resetGone()) return paysOf(customerId);
   const pulled = raw
     .map((it) => {
       const explicit = payCustomerIdOf(it, 0);

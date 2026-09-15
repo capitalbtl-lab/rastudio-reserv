@@ -26,6 +26,8 @@ export type CustomerSyncStamp = {
   journalHoleApprovedAt?: string;
   /** Явный «С нуля». Живая качка с этим штампом не пишет счёт обратно. */
   lessonsResetAt?: string;
+  /** Явный «С нуля» кассы. Живой inboundPays с этим штампом не пишет строки обратно. */
+  paysResetAt?: string;
   /** Сколько занятий Alfa отдаёт по customer_id (сверка с диском). */
   lessonsAlfa?: number;
   lessonsAlfaAt?: string;
@@ -96,9 +98,11 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
   const next: CustomerSyncStamp = { ...prev, ...patch };
   if (patch.lessonFill === undefined && "lessonFill" in patch) delete next.lessonFill;
   if (patch.paysRecheckAt === "") delete next.paysRecheckAt;
+  if (patch.paysAt === "") delete next.paysAt;
   if (patch.lessonsRecheckAt === "") delete next.lessonsRecheckAt;
   if (patch.journalHoleApprovedAt === "") delete next.journalHoleApprovedAt;
   if (patch.lessonsResetAt === "") delete next.lessonsResetAt;
+  if (patch.paysResetAt === "") delete next.paysResetAt;
   if ("lessonsWindowDays" in patch && !(Number(patch.lessonsWindowDays) > 0)) delete next.lessonsWindowDays;
   if (patch.lessonsAlfaAt === "") {
     delete next.lessonsAlfaAt;

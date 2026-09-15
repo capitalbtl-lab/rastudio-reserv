@@ -20,7 +20,7 @@ import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, recheckWindowYmd, windowNewLessonIds, windowGoneLessonIds, windowAlfaKeep, journalIdsReady } from "./crm-inbound-core";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -1594,6 +1594,29 @@ export async function journalPull(opts: {
         dups: false,
         done: false,
         holeApproved: Boolean(sync.journalHoleApprovedAt),
+      },
+      ...litePullState(),
+    };
+  }
+  if (kind === "paysReset") {
+    const cid = Number(opts.customerId) || 0;
+    if (!cid) return { ok: false as const, error: "нет customerId", more: false, ...litePullState() };
+    const { resetStudentPayDisk, paysOf } = await import("./crm-pay");
+    const hit = resetStudentPayDisk(cid);
+    const left = paysOf(cid).filter((x) => !x.deleted).length;
+    return {
+      ok: hit.ok,
+      extra: `№${cid}: касса с диска снята · ${left} своих · дальше «Загрузить кассу»`,
+      more: false,
+      student: {
+        cid,
+        pays: 0,
+        paysOk: false,
+        paysScanned: false,
+        paysEmpty: false,
+        paysMore: false,
+        cashRows: left,
+        done: false,
       },
       ...litePullState(),
     };
