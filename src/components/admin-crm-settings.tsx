@@ -13,6 +13,7 @@ import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_PIPE_CH, ALFA_SYNC_DE
 import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-periods";
 import { keepAlfa, peopleLessonsLine, peopleStudentAction, peopleStudentBadge, peopleStudentHint, PEOPLE_PACK } from "@/data/crm-people-line";
 import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
+import { RECHECK_DAY_OPTS, clampRecheckDays, type RecheckDays } from "@/data/crm-inbound-core";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
   let n = from?.parentElement || null;
@@ -209,7 +210,7 @@ const HINT = {
   probe: "Перепись уникальных номеров занятий по филиалам 1–4 с 2015. Не качает строки. Не смотрит списки в красной и синей рамках. Пустой ответ Alfa не обнуляет счёт. Набор id разный — жёлтая. Сошлись — вправо. В Alfa не пишет.",
   recheckCal: "Синяя этой карточки. Окно — список в синей рамке сверху (± месяц / ± три / ± шесть), не красная рамка. Сравнивает номера уроков в окне. Новые дописывает, ушедшие в окне снимает. Старше окна не трогает. Свои уроки и очередь не снимает. В Alfa не пишет.",
   recheckOnePeople: "Сначала правый столбец, окно ±. Если слева остались жёлтые — добирает их (не окно). Кто добрался — снова справа тем же окном. Пауза 5 с. Стоп после текущего. В Alfa не пишет.",
-  recheckWindow: "Только синие кнопки в этой рамке: массовая «Перепроверить по одному» и «Перепроверить» на зелёной карточке. Окно в обе стороны от сегодня: ± месяц ≈ 32 дня, ± три ≈ 92, ± шесть ≈ 182 — по дате урока. Будущие запланированные в окне входят. Старше и дальше окна не ищем. Красная рамка это окно не читает. В Alfa не пишет.",
+  recheckWindow: "Только синие кнопки в этой рамке: массовая «Перепроверить по одному» и «Перепроверить» на карточке справа. ± месяц / ± три / ± шесть — обе стороны от сегодня. «За 3 года», «за 7 лет», «с начала · 2015» — назад от сегодня плюс месяц вперёд (запланированные). Старше выбранного окна не ищем и с диска не стираем. Красная рамка это окно не читает. В Alfa не пишет.",
   slowFill: "Все слева: розовые (счёт ещё не спрашивали) и жёлтые. Не читает ни годы, ни месяцы сверху. Сам идёт месяц за месяцем назад до 2015, до 10 минут на человека, курсор не сбрасывает. Потом пауза 5 с. Кто добрался — вправо. С галкой и правых не берёт. Вкладку можно закрыть. В Alfa не пишет.",
   stop: "Стоп останавливает текущую очередь. Текущий человек или группа допишет свой запрос, а следующий уже не стартует. Уже записанное на диск не откатывается — это не «отмена», а пауза. После стопа красную можно нажать снова: пойдёт со следующих, кто ещё слева. Если кнопка серая, сейчас никто не грузится. В Alfa ничего не удаляет и не сохраняет. Можно спокойно отойти и продолжить позже.",
   fullHist: "Только жёлтая. Та же красная качка, что «Добрать», но всегда с 1 января 2015 — список в красной рамке не читает. После шага колонка смотрит набор id. Не синяя. В Alfa не пишет.",
@@ -391,9 +392,9 @@ function RecheckDaysSelect({
   small,
   tag = "",
 }: {
-  value: 32 | 92 | 182;
+  value: RecheckDays;
   disabled?: boolean;
-  onChange: (n: 32 | 92 | 182) => void;
+  onChange: (n: RecheckDays) => void;
   small?: boolean;
   tag?: string;
 }) {
@@ -404,11 +405,13 @@ function RecheckDaysSelect({
         className="bg-transparent font-semibold outline-none"
         value={value}
         disabled={disabled}
-        onChange={(e) => onChange((Number(e.target.value) === 92 || Number(e.target.value) === 182 ? Number(e.target.value) : 32) as 32 | 92 | 182)}
+        onChange={(e) => onChange(clampRecheckDays(e.target.value))}
       >
-        <option value={32}>± месяц</option>
-        <option value={92}>± три</option>
-        <option value={182}>± шесть</option>
+        {RECHECK_DAY_OPTS.map((o) => (
+          <option key={o.days} value={o.days}>
+            {o.label}
+          </option>
+        ))}
       </select>
     </label>,
     HINT.recheckWindow,
@@ -2114,9 +2117,9 @@ export function AdminCrmSettings() {
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [peopleFromId, setPeopleFromId] = useState<(typeof PEOPLE_FROM_OPTS)[number]["id"]>("2015");
-  const [peopleRecheckDays, setPeopleRecheckDays] = useState<32 | 92 | 182>(32);
-  const [groupsRecheckDays, setGroupsRecheckDays] = useState<32 | 92 | 182>(32);
-  const [moneyRecheckDays, setMoneyRecheckDays] = useState<32 | 92 | 182>(32);
+  const [peopleRecheckDays, setPeopleRecheckDays] = useState<RecheckDays>(32);
+  const [groupsRecheckDays, setGroupsRecheckDays] = useState<RecheckDays>(32);
+  const [moneyRecheckDays, setMoneyRecheckDays] = useState<RecheckDays>(32);
   const [moneyFromId, setMoneyFromId] = useState<(typeof PEOPLE_FROM_OPTS)[number]["id"]>("2015");
   const [archAgeFrom, setArchAgeFrom] = useState("");
   const [archAgeTo, setArchAgeTo] = useState("");

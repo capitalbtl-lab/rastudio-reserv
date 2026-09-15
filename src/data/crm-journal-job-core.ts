@@ -470,7 +470,7 @@ export function shouldRetryShortPeople(
 export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number; dateFrom?: string }): number {
   if (input?.recheck) {
     const d = Number(input.recheckDays) || 0;
-    if (d === 92 || d === 182) return d;
+    if (d === 92 || d === 182 || d === 1095 || d === 2555 || d === 4000) return d;
     return 32;
   }
   const from = String(input?.dateFrom || "").slice(0, 10);

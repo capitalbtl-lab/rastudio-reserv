@@ -18,7 +18,7 @@ import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlap
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
-import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, windowNewLessonIds, windowGoneLessonIds, windowAlfaKeep, journalIdsReady } from "./crm-inbound-core";
+import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, recheckWindowYmd, windowNewLessonIds, windowGoneLessonIds, windowAlfaKeep, journalIdsReady } from "./crm-inbound-core";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -1086,15 +1086,6 @@ function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch
   return next;
 }
 
-function shiftDaysYmd(fromDays: number, toDays: number) {
-  const one = (n: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + n);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-  return { from: one(fromDays), to: one(toDays) };
-}
-
 async function pullOneGroup(
   g: JournalPullGroup,
   period: { key: string; from: string; to: string; label: string; keys?: string[] },
@@ -1103,7 +1094,7 @@ async function pullOneGroup(
 ) {
   const beforeCard = loadGroupCard(g.branchId, g.groupId);
   const days = clampRecheckDays(recheckDays);
-  const win = recheck ? shiftDaysYmd(-days, days) : { from: period.from, to: period.to };
+  const win = recheck ? recheckWindowYmd(days) : { from: period.from, to: period.to };
   const beforeAll = (beforeCard?.calendar || []).length;
   const beforeWin = (beforeCard?.calendar || []).filter((l) => inPeriod(l.date, win.from, win.to)).length;
   const { inboundJournalGroup } = await import("./crm-journal-inbound");
@@ -1421,8 +1412,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const t = await token();
     const { inboundCustomerPays, paysOf, payCustomerFilled } = await import("./crm-pay");
     const forcePay = Boolean(recheck) && !payFillPending(cid);
+    const payFrom = recheck ? recheckWindowYmd(recheckDays).from : from;
     try {
-      await inboundCustomerPays(request, t, branchId, cid, { force: forcePay, dateFrom: from });
+      await inboundCustomerPays(request, t, branchId, cid, { force: forcePay, dateFrom: payFrom });
     } catch (e) {
       payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
     }

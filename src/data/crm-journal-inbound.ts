@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, lessonsSetGap, groupWindowGone, idsChecksum, journalIdsReady } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, recheckWindowYmd, lessonsSetGap, groupWindowGone, idsChecksum, journalIdsReady } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -81,8 +81,7 @@ export function lessonSeatForCustomer(item: Record<string, unknown>, customerId:
 }
 
 export function recheckCensusWindow(_sync: Parameters<typeof wasLessonGreen>[0], days?: unknown) {
-  const n = clampRecheckDays(days);
-  return { from: ymd(ruShift(-n)), to: ymd(ruShift(n)) };
+  return recheckWindowYmd(days);
 }
 
 export function recheckCensusDateFrom(sync: Parameters<typeof wasLessonGreen>[0], days?: unknown) {
@@ -214,8 +213,9 @@ export async function inboundJournalGroup(
   };
   const recheck = Boolean(opts?.recheck);
   const days = clampRecheckDays(opts?.recheckDays);
-  const dateFrom = recheck ? ruShift(-days) : opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
-  const dateTo = recheck ? ruShift(days) : opts?.dateTo || ruShift(90);
+  const winRecheck = recheck ? recheckWindowYmd(days) : null;
+  const dateFrom = winRecheck ? winRecheck.from : opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
+  const dateTo = winRecheck ? winRecheck.to : opts?.dateTo || ruShift(90);
   const winFrom = ymd(dateFrom);
   const winTo = ymd(dateTo);
   const inWin = (l: GroupCalLesson) => {

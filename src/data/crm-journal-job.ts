@@ -3,6 +3,7 @@
 import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } from "./crm-journal-pull.ts";
 import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
+import { clampRecheckDays } from "./crm-inbound-core.ts";
 import {
   emptyJournalJob,
   jobGapOf,
@@ -454,7 +455,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     study,
     recheck,
     dateFrom: String(opts.dateFrom || "").trim() || "2015-01-01",
-    recheckDays: opts.recheckDays === 92 || opts.recheckDays === 182 ? opts.recheckDays : 32,
+    recheckDays: clampRecheckDays(opts.recheckDays),
     grain: opts.grain === "half" || opts.grain === "year" ? opts.grain : "quarter",
     school: String(opts.school || opts.filter || ""),
     groupId: Number(opts.groupId) || Number(first?.groupId) || 0,
@@ -473,7 +474,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
       const pause = pauseTxt({
         mode,
         recheck,
-        recheckDays: opts.recheckDays === 92 || opts.recheckDays === 182 ? opts.recheckDays : 32,
+        recheckDays: clampRecheckDays(opts.recheckDays),
         dateFrom: String(opts.dateFrom || "").trim() || "2015-01-01",
       });
       if (mode === "people-slow") return `${first?.name}: медленный добор, до 10 мин. Курсор не сбрасываем.`;
@@ -482,7 +483,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
           ...emptyJournalJob(),
           mode,
           recheck,
-          recheckDays: opts.recheckDays === 92 || opts.recheckDays === 182 ? opts.recheckDays : 32,
+          recheckDays: clampRecheckDays(opts.recheckDays),
           dateFrom: String(opts.dateFrom || "").trim() || "2015-01-01",
         });
       }

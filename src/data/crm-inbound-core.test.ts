@@ -21,6 +21,7 @@ import {
   keepAlfaProbe,
   bumpAlfaFromLanded,
   clampRecheckDays,
+  recheckWindowYmd,
   windowNewLessonIds,
   windowGoneLessonIds,
   windowAlfaKeep,
@@ -341,7 +342,16 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.equal(clampRecheckDays(undefined), 32);
     assert.equal(clampRecheckDays(92), 92);
     assert.equal(clampRecheckDays(182), 182);
+    assert.equal(clampRecheckDays(1095), 1095);
+    assert.equal(clampRecheckDays(2555), 2555);
+    assert.equal(clampRecheckDays(4000), 4000);
     assert.equal(clampRecheckDays(7), 32);
+    const now = new Date(2026, 8, 14);
+    assert.equal(recheckWindowYmd(4000, now).from, "2015-01-01");
+    assert.equal(recheckWindowYmd(1095, now).from, "2023-09-14");
+    assert.equal(recheckWindowYmd(2555, now).from, "2019-09-14");
+    assert.equal(recheckWindowYmd(32, now).from, "2026-08-13");
+    assert.equal(recheckWindowYmd(32, now).to, "2026-10-16");
     assert.deepEqual(windowNewLessonIds([1, 2, 11], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), [11]);
     assert.deepEqual(windowGoneLessonIds([1, 2, 3], [1, 2]), [3]);
     assert.equal(windowAlfaKeep(10, 1, 0), 11);

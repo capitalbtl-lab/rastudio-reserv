@@ -67,7 +67,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /groupWindowGone/);
     assert.match(inbound, /fanOutLessonWriteoffs\(seatedNew\)/);
     assert.match(inbound, /const pageSize = 500/);
-    assert.match(inbound, /recheck \? ruShift\(days\)/);
+    assert.match(inbound, /recheckWindowYmd/);
     assert.match(inbound, /recheckCensusWindow/);
     assert.match(inbound, /journalIdsReady/);
     assert.match(inbound, /idsChecksum/);
@@ -234,6 +234,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Перепроверить по одному/);
     assert.match(ui, /HINT\.recheckOnePeople/);
     assert.match(ui, /RecheckDaysSelect/);
+    assert.match(ui, /RECHECK_DAY_OPTS/);
+    const daysCore = readFileSync(new URL("./crm-inbound-core.ts", import.meta.url), "utf8");
+    assert.match(daysCore, /за 3 года/);
+    assert.match(daysCore, /за 7 лет/);
+    assert.match(daysCore, /с начала · 2015/);
     assert.match(ui, /HINT\.recheckWindow/);
     assert.match(ui, /HINT\.recheckOneGroups/);
     assert.match(ui, /HINT\.recheckOneMoney/);
