@@ -206,6 +206,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /if \(r.seen && auditFail\(codes\)\) return "лид"/);
     assert.doesNotMatch(ui, /return "нет"/);
     assert.match(ui, /for \(const h of hits\)/);
+    assert.match(ui, /archPeople/);
+    assert.match(ui, /asAuditRow\(r, by.get\(r.cid\)\)/);
+    assert.match(ui, /auditRole\(r\) === "архив" \|\| rowMatched\(r\)/);
     assert.match(ui, /В роли/);
     assert.match(pull, /leadStatus/);
     assert.match(pull, /dossierAuditRole/);

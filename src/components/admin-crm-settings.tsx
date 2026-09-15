@@ -1898,6 +1898,31 @@ type AuditUiRow = {
   leadStatus?: number;
 };
 
+function asAuditRow(
+  r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number },
+  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string },
+): AuditUiRow {
+  const codes = h?.codes;
+  return {
+    cid: r.cid,
+    branchId: r.branchId,
+    name: r.name,
+    groups: r.groups || [],
+    clients: h?.clients,
+    alfaMoney: h?.alfa,
+    cash: h?.cash,
+    codes,
+    extra: h?.extra,
+    at: h?.at,
+    seen: Boolean(h),
+    alfaRole: (codes || []).includes("лид") ? "лид" : (codes || []).includes("архив") ? "архив" : r.alfaRole,
+    status: r.status,
+    study: r.study,
+    funnel: r.funnel,
+    leadStatus: r.leadStatus,
+  };
+}
+
 function alfaRoleLabel(role?: string) {
   if (role === "лид") return "лид в Альфе";
   if (role === "архив") return "архив в Альфе";
@@ -1932,7 +1957,7 @@ function AuditFillList({
   const roleN = (id: typeof role) => named.filter((r) => id === "all" || auditRole(r) === id).length;
   const scoped = named.filter((r) => (role === "all" || auditRole(r) === role) && auditReasonHit(r, reason));
   const isPinned = (r: AuditUiRow) => String(r.cid) === open || r.cid === loadingCid;
-  const doneOf = (r: AuditUiRow) => rowMatched(r);
+  const doneOf = (r: AuditUiRow) => auditRole(r) === "архив" || rowMatched(r);
   const failOf = (r: AuditUiRow) => Boolean(r.seen && auditFail(r.codes));
   const byName = (a: AuditUiRow, b: AuditUiRow) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid;
   const bySeg = (a: AuditUiRow, b: AuditUiRow) => {
@@ -4696,32 +4721,21 @@ export function AdminCrmSettings() {
                 <p className="mt-1 text-sm text-muted">Все текущие. Alfa = общий остаток шапки, не rest абонемента. Совпало — справа, даже с непроведёнными. Цифру Alfa в файл не ставим.</p>
                 {(() => {
                   const live = p?.live;
+                  const archPeople = p?.archive?.people || [];
                   const hits = journal?.lastAudit?.rows || [];
                   const by = new Map(hits.map((h) => [h.cid, h]));
                   const livePeople = live?.people || [];
                   const seenCid = new Set<number>();
-                  const rows: AuditUiRow[] = livePeople.map((r) => {
+                  const rows: AuditUiRow[] = [];
+                  for (const r of livePeople) {
                     seenCid.add(r.cid);
-                    const h = by.get(r.cid);
-                    return {
-                      cid: r.cid,
-                      branchId: r.branchId,
-                      name: r.name,
-                      groups: r.groups || [],
-                      clients: h?.clients,
-                      alfaMoney: h?.alfa,
-                      cash: h?.cash,
-                      codes: h?.codes,
-                      extra: h?.extra,
-                      at: h?.at,
-                      seen: Boolean(h),
-                      alfaRole: (h?.codes || []).includes("лид") ? "лид" : (h?.codes || []).includes("архив") ? "архив" : r.alfaRole,
-                      status: r.status,
-                      study: r.study,
-                      funnel: r.funnel,
-                      leadStatus: r.leadStatus,
-                    };
-                  });
+                    rows.push(asAuditRow(r, by.get(r.cid)));
+                  }
+                  for (const r of archPeople) {
+                    if (seenCid.has(r.cid)) continue;
+                    seenCid.add(r.cid);
+                    rows.push(asAuditRow(r, by.get(r.cid)));
+                  }
                   for (const h of hits) {
                     if (seenCid.has(h.cid)) continue;
                     const lead = (h.codes || []).includes("лид");
