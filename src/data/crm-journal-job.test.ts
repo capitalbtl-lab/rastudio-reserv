@@ -263,7 +263,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(fillClear.fill, null);
   });
 
-  it("закон истории: один; перепроверка месяц 2 с / 3 мес 3 с / 6 мес 4 с", () => {
+  it("закон истории: один; месяц/3/6 — 2 с; 3 года — 3 с; 2015 — 5 с", () => {
     assert.equal(PEOPLE_JOB_GAP_MS, 5000);
     assert.equal(CATALOG_JOB_GAP_MS, 5000);
     assert.equal(JOURNAL_WINDOW_GAP_MS, 2000);
@@ -271,15 +271,20 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapMs("people-recheck"), 5000);
     assert.equal(jobGapMs("people-recheck", 31), 2000);
     assert.equal(jobGapMs("people-recheck", 32), 2000);
-    assert.equal(jobGapMs("people-recheck", 92), 3000);
-    assert.equal(jobGapMs("people-recheck", 182), 4000);
+    assert.equal(jobGapMs("people-recheck", 92), 2000);
+    assert.equal(jobGapMs("people-recheck", 182), 2000);
+    assert.equal(jobGapMs("people-recheck", 1095), 3000);
+    assert.equal(jobGapMs("people-recheck", 2555), 5000);
+    assert.equal(jobGapMs("people-recheck", 4000), 5000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 32 }), 2000);
-    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 92 }), 3000);
-    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 182 }), 4000);
-    assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 92 }), 3000);
-    assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 182 }), 4000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 92 }), 2000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 182 }), 2000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 1095 }), 3000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 4000 }), 5000);
+    assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 92 }), 2000);
+    assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 182 }), 2000);
     assert.equal(jobGapOf({ mode: "people", recheck: true, recheckDays: 32 }), 2000);
-    assert.equal(jobGapOf({ mode: "people", recheck: true, recheckDays: 92 }), 3000);
+    assert.equal(jobGapOf({ mode: "people", recheck: true, recheckDays: 92 }), 2000);
     assert.equal(jobGapOf({ mode: "roster-recheck", recheck: true, recheckDays: 32 }), 2000);
     assert.equal(jobGapOf({ mode: "people", recheck: false, dateFrom: "2015-01-01" }), 5000);
     assert.equal(jobGapOf({ mode: "people-slow", recheck: false, dateFrom: "2015-01-01" }), 5000);
@@ -289,6 +294,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapMs("audit"), 5000);
     assert.equal(jobGapMs("roster"), 5000);
     assert.equal(jobGapMs("roster-recheck", 32), 2000);
+    assert.match(readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8"), /moreCash[\s\S]{0,900}live\.recheck \? jobGapOf\(live\) : 0/);
   });
 
   it("касса слева: fill.done не skip, complete без force — skip", () => {
@@ -331,7 +337,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /kickHistoryTick/);
     assert.match(job, /const moreCash = pullKind === "balance" && Boolean\(res.student\?\.paysMore\)/);
     assert.doesNotMatch(job, /moreCash = pullKind === "balance" && !live.recheck/);
-    assert.match(job, /if \(moreCash\) \{[\s\S]*?return \{ done: false, gap: 0 \}/);
+    assert.match(job, /if \(moreCash\) \{[\s\S]*?return \{ done: false, gap: live.recheck \? jobGapOf\(live\) : 0 \}/);
     assert.match(job, /if \(!isHistoryWorker\(\)\) return/);
     assert.match(job, /resumeJournalJobFromDisk/);
     assert.match(job, /resumeStalledRecheck/);
