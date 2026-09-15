@@ -445,7 +445,9 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /pauseTxt/);
     assert.match(job, /jobGapOf/);
     assert.match(load, /lite: true/);
-    assert.match(job, /if \(id && j.id !== id\) break/);
+    assert.match(job, /function continueAutoPipe/);
+    assert.match(job, /pipe: Array.isArray\(opts.pipe\)/);
+    assert.match(core, /pipe: \[\]/);
     assert.doesNotMatch(job, /enqueueExport/);
     assert.doesNotMatch(core, /enqueueExport/);
     assert.match(core, /renameSync/);

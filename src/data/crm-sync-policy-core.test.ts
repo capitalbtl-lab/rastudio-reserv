@@ -36,6 +36,8 @@ describe("пульт Истории", () => {
     assert.doesNotMatch(src, /s20\.online/);
     assert.doesNotMatch(src, /alfacrm/);
     assert.match(src, /Europe\/Moscow/);
+    assert.match(src, /id: "auto"/);
+    assert.match(src, /AUTO_PIPE/);
   });
 
   it("завод — автомат выкл, план пуст", () => {
@@ -108,6 +110,15 @@ describe("пульт Истории", () => {
     assert.equal(job.mode, "people-recheck");
     assert.equal(job.recheck, true);
     assert.equal(job.recheckDays, 7);
+  });
+
+  it("автомат в слот жмёт шаги 1–5", () => {
+    const r = scheduleOf({ id: "a", mode: "auto", when: { kind: "daily" }, at: "04:00", dateFromId: "1" });
+    assert.equal(r.mode, "auto");
+    const job = planRuleToJob(r, msk(2026, 8, 15, 12, 0));
+    assert.equal(job.mode, "roster");
+    assert.deepEqual(job.pipe, ["people", "groups", "balance", "audit"]);
+    assert.match(job.dateFrom, /^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("касса идёт тем же people + kind balance", () => {

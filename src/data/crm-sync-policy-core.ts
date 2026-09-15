@@ -1,6 +1,7 @@
 /** Пульт автомата Истории. Без fs, без Alfa. */
 
 export const HISTORY_PLAN_MODES = [
+  { id: "auto", label: "Автомат · шаги 1–5", recheck: false, step: "roster" },
   { id: "roster", label: "Шаг 1 · загрузить состав", recheck: false, step: "roster" },
   { id: "roster-recheck", label: "Шаг 1 · перепроверить состав", recheck: true, step: "roster" },
   { id: "people", label: "Шаг 2 · загрузить календарь", recheck: false, step: "students" },
@@ -14,6 +15,9 @@ export const HISTORY_PLAN_MODES = [
 ] as const;
 
 export type HistoryPlanMode = (typeof HISTORY_PLAN_MODES)[number]["id"];
+
+/** После состава: календарь → группы → касса → сверка. */
+export const AUTO_PIPE: HistoryPlanMode[] = ["people", "groups", "balance", "audit"];
 
 export const PLAN_RECHECK_OPTS = [
   { days: 7 as const, label: "± неделя" },
@@ -148,7 +152,7 @@ export function planModeOf(raw: unknown): HistoryPlanMode {
 }
 
 export function planModeMeta(mode: string) {
-  return HISTORY_PLAN_MODES.find((m) => m.id === mode) || HISTORY_PLAN_MODES[4];
+  return HISTORY_PLAN_MODES.find((m) => m.id === mode) || HISTORY_PLAN_MODES.find((m) => m.id === "people-recheck") || HISTORY_PLAN_MODES[0];
 }
 
 function uniqDays(raw: unknown): number[] {
@@ -245,6 +249,18 @@ export function planDateFrom(id: string, now = new Date()): string {
 }
 
 export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
+  if (rule.mode === "auto") {
+    return {
+      mode: "roster" as const,
+      kind: "roster",
+      study: rule.study,
+      recheck: false,
+      recheckDays: 32,
+      dateFrom: planDateFrom(rule.dateFromId, now),
+      archived: rule.study === "2",
+      pipe: [...AUTO_PIPE],
+    };
+  }
   const meta = planModeMeta(rule.mode);
   const balance = rule.mode === "balance";
   const needFrom = rule.mode === "people" || rule.mode === "people-slow" || rule.mode === "balance";
@@ -256,6 +272,7 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
     recheckDays: meta.recheck ? rule.recheckDays : 32,
     dateFrom: needFrom ? planDateFrom(rule.dateFromId, now) : "",
     archived: rule.study === "2",
+    pipe: [] as HistoryPlanMode[],
   };
 }
 
@@ -539,7 +556,7 @@ export function whenLabel(when: HistoryWhen): string {
 export function emptyDraft(): Omit<HistorySchedule, "id" | "dueAt" | "lastFiredAt" | "lastJobId" | "lastSkip"> {
   return {
     on: true,
-    mode: "people-recheck",
+    mode: "auto",
     when: { kind: "daily" },
     at: "04:00",
     recheckDays: 7,

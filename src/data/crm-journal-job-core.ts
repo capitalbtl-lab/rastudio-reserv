@@ -107,6 +107,7 @@ export type JournalJob = {
   wave: RecheckWave;
   follow: JournalJobItem[];
   archived: boolean;
+  pipe: string[];
 };
 
 export function emptyJournalJob(): JournalJob {
@@ -142,6 +143,7 @@ export function emptyJournalJob(): JournalJob {
     wave: "",
     follow: [],
     archived: false,
+    pipe: [],
   };
 }
 
@@ -154,8 +156,9 @@ export function loadJournalJob(): JournalJob {
     if (!existsSync(fileOf())) return emptyJournalJob();
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<JournalJob>;
     const follow = Array.isArray(raw.follow) ? raw.follow : [];
+    const pipe = Array.isArray(raw.pipe) ? raw.pipe.map((x) => String(x || "")).filter(Boolean) : [];
     const wave: RecheckWave = raw.wave === "right" || raw.wave === "left" || raw.wave === "right2" ? raw.wave : "";
-    return { ...emptyJournalJob(), ...raw, items: Array.isArray(raw.items) ? raw.items : [], follow, wave, archived: Boolean(raw.archived) };
+    return { ...emptyJournalJob(), ...raw, items: Array.isArray(raw.items) ? raw.items : [], follow, pipe, wave, archived: Boolean(raw.archived) };
   } catch {
     return emptyJournalJob();
   }

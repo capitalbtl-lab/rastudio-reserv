@@ -5,7 +5,7 @@ import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
 import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd } from "./crm-inbound-core.ts";
 import { loadSyncPolicy, saveSyncPolicy } from "./crm-sync-policy.ts";
-import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, stampPlanFired, stampPlanSkip } from "./crm-sync-policy-core.ts";
+import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, scheduleOf, stampPlanFired, stampPlanSkip } from "./crm-sync-policy-core.ts";
 import {
   emptyJournalJob,
   jobGapOf,
@@ -182,6 +182,7 @@ export type StartJournalJobOpts = {
   periodLabel?: string;
   items?: JournalJobItem[];
   archived?: boolean;
+  pipe?: string[];
 };
 
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
@@ -439,15 +440,20 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     recheck = nxt.recheck;
   }
   if (!items.length && !loopPullKind(mode)) {
-    return saveJournalJob({
+    const saved = saveJournalJob({
       ...emptyJournalJob(),
       id: `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       mode,
       kind,
       study,
+      dateFrom: String(opts.dateFrom || ""),
+      archived,
+      pipe: Array.isArray(opts.pipe) ? opts.pipe.map(String).filter(Boolean) : [],
       msg: emptyMsg(mode, recheck),
       lastAt: nowIso(),
     });
+    continueAutoPipe(saved);
+    return loadJournalJob();
   }
   const first = items[0];
   const days = clampRecheckDays(opts.recheckDays);
@@ -505,10 +511,45 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     wave,
     follow,
     archived,
+    pipe: Array.isArray(opts.pipe) ? opts.pipe.map(String).filter(Boolean) : [],
   };
   saveJournalJob(job);
   kickHistoryTick();
   return job;
+}
+
+function pipeShouldContinue(job: JournalJob) {
+  if (job.stop) return false;
+  if (!(job.pipe || []).length) return false;
+  const msg = String(job.msg || "");
+  if (/Alfa не ответила|нет входа|429|502|Сбой фоновой/i.test(msg)) return false;
+  return true;
+}
+
+function continueAutoPipe(job: JournalJob) {
+  if (!pipeShouldContinue(job)) return;
+  const rest = job.pipe.map(String).filter(Boolean);
+  const next = rest[0];
+  if (!next) return;
+  const rule = scheduleOf({
+    id: "pipe",
+    mode: next,
+    study: job.study,
+    dateFromId: "2015",
+    at: "04:00",
+    when: { kind: "daily" },
+  });
+  const opts = planRuleToJob(rule, new Date());
+  startJournalJob({
+    mode: opts.mode as JournalJobMode,
+    kind: opts.kind,
+    study: job.study,
+    recheck: opts.recheck,
+    recheckDays: opts.recheckDays,
+    dateFrom: job.dateFrom || opts.dateFrom,
+    archived: job.archived,
+    pipe: rest.slice(1),
+  });
 }
 
 export function stopJournalJob() {
@@ -551,6 +592,7 @@ export function tickHistoryPlan(now = new Date()) {
     recheckDays: opts.recheckDays,
     dateFrom: opts.dateFrom,
     archived: opts.archived,
+    pipe: opts.pipe,
   });
   const dec = planFireDecision(before, started);
   const live = loadSyncPolicy();
@@ -1033,6 +1075,8 @@ async function tickJob() {
       if (step.done) {
         const end = loadJournalJob();
         if (end.id === id && end.running) patch({ id, running: false, cur: "", fill: null, msg: step.msg || end.msg });
+        const done = loadJournalJob();
+        if (done.id === id && !done.stop) continueAutoPipe(done);
         break;
       }
       if (step.gap) await sleepGap(step.gap, id);

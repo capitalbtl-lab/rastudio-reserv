@@ -244,7 +244,7 @@ function DraftForm({
             ))}
           </div>
         </>
-      ) : mode === "people" || mode === "people-slow" || mode === "balance" ? (
+      ) : mode === "auto" || mode === "people" || mode === "people-slow" || mode === "balance" ? (
         <>
           <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Годы (красная качка)</p>
           <div className="mt-1 flex flex-wrap gap-1.5">
@@ -289,7 +289,7 @@ function DraftForm({
           Сохранить расписание
         </button>
       </div>
-      <p className="mt-2 text-[0.75rem] text-muted">Пока тумблер «Автомат» выкл — карточка лежит и не стартует.</p>
+      <p className="mt-2 text-[0.75rem] text-muted">Пока тумблер «Автомат» выкл — карточка лежит и не стартует. Режим «Автомат · шаги 1–5» в слот жмёт состав → календарь → группы → кассу → сверку.</p>
     </div>
   );
 }
@@ -408,7 +408,7 @@ export function HistoryPlanPanel({
               <span className="h-7 rounded-full bg-sky-50 px-2.5 text-[0.72rem] font-semibold leading-7">
                 {PLAN_RECHECK_OPTS.find((o) => o.days === r.recheckDays)?.label || `± ${r.recheckDays}`}
               </span>
-            ) : r.mode === "people" || r.mode === "people-slow" || r.mode === "balance" ? (
+            ) : r.mode === "auto" || r.mode === "people" || r.mode === "people-slow" || r.mode === "balance" ? (
               <span className="h-7 rounded-full bg-sky-50 px-2.5 text-[0.72rem] font-semibold leading-7">
                 {PLAN_FROM_OPTS.find((o) => o.id === r.dateFromId)?.label || r.dateFromId}
               </span>
@@ -487,7 +487,7 @@ export function HistoryPlanModal({
             <p id="history-plan-title" className="font-display text-[1.2rem] leading-tight">
               Пульт синхронизации
             </p>
-            <p className="mt-1 text-[0.82rem] text-muted">Сервер жмёт те же кнопки шагов сам. Без карточки и без тумблера — молчит.</p>
+            <p className="mt-1 text-[0.82rem] text-muted">Сервер жмёт те же кнопки шагов сам. Режим «Автомат · шаги 1–5» — очередь 1→5 в один слот. Без карточки и без тумблера — молчит.</p>
           </div>
           <button
             type="button"
