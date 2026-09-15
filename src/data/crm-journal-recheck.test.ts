@@ -149,7 +149,7 @@ describe("перепроверка журнала", () => {
     assert.match(pullLock, /row\.blocked/);
     assert.match(pullLock, /homeOnly: false/);
     assert.match(pullLock, /if \(!recheck\) \{/);
-    assert.match(pullLock, /first\.ok && !weak && disk >= alfaGate && !extra0/);
+    assert.match(pullLock, /first\.ok && !weak && \(setsClosed \|\| \(!seenReady && disk >= alfaGate && !extra0\)\)/);
     assert.match(pullLock, /keepAlfaProbe/);
     assert.doesNotMatch(pullLock, /lessonsAlfaAt: ""/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");

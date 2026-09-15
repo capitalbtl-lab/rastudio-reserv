@@ -343,7 +343,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(core, /export function keepAlfaProbe/);
     assert.match(core, /export function censusSeatLessonId/);
     assert.match(core, /if \(!probedOk\) return \{ write: false, alfa: k, probed: k > 0 \}/);
-    assert.match(core, /if \(k > 0 && a < k\) return \{ write: false, alfa: k, probed: true \}/);
+    assert.match(core, /return \{ write: true, alfa: a, probed: true \}/);
+    assert.doesNotMatch(core, /if \(k > 0 && a < k\) return \{ write: false, alfa: k, probed: true \}/);
     assert.match(pull, /keepAlfaProbe\(keep, alfaRaw, probed.ok, Boolean\(probed.ok\)\)/);
     assert.match(pull, /lessonsSeenIds: ids/);
     assert.match(pull, /setsClosed \|\| \(!seenReady && disk >= alfaGate && !extra0\)/);
@@ -399,17 +400,16 @@ describe("ручной журнал с Alfa", () => {
     assert.match(miss, /if \(liveFail && !found\)/);
     assert.doesNotMatch(miss, /foreign = true/);
     assert.doesNotMatch(inbound, /setTimeout\(\(\) => \{\s*void inboundCustomerLessons/);
-    function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, census = false) {
+    function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, _census = false) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;
       if (!probedOk) return { write: false, alfa: k, probed: k > 0 };
-      if (census) return { write: true, alfa: a, probed: true };
-      if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
       return { write: true, alfa: a, probed: true };
     }
     assert.deepEqual(keepAlfaProbe(286, 0, false), { write: false, alfa: 286, probed: true });
-    assert.deepEqual(keepAlfaProbe(286, 200, true), { write: false, alfa: 286, probed: true });
+    assert.deepEqual(keepAlfaProbe(286, 200, true), { write: true, alfa: 200, probed: true });
     assert.deepEqual(keepAlfaProbe(286, 200, true, true), { write: true, alfa: 200, probed: true });
+    assert.deepEqual(keepAlfaProbe(11, 13, true), { write: true, alfa: 13, probed: true });
     assert.deepEqual(keepAlfaProbe(286, 286, true), { write: true, alfa: 286, probed: true });
     assert.deepEqual(keepAlfaProbe(0, 50, true), { write: true, alfa: 50, probed: true });
     assert.deepEqual(keepAlfaProbe(0, 0, false), { write: false, alfa: 0, probed: false });
@@ -431,7 +431,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /recheckCensusWindow\(sync0, recheckDays\)/);
     assert.doesNotMatch(inbound, /if \(!wasLessonGreen\(sync\)\) return \{ from: ""/);
     assert.match(rec, /windowNewLessonIds/);
-    assert.match(rec, /windowAlfaKeep/);
+    assert.match(rec, /windowAlfaLive/);
+    assert.match(rec, /recheckWindowFull\(windowFrom\)/);
     assert.match(rec, /новые\.length && !holeApproved/);
     assert.match(rec, /mark\(disk, Number\(customerSyncOf\(cid\)\.lessonsAlfa\) \|\| liveAlfa, true\)/);
     assert.match(rec, /inboundMissingUntilSeated/);

@@ -18,7 +18,7 @@ import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlap
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
-import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, recheckWindowYmd, windowNewLessonIds, windowGoneLessonIds, windowAlfaKeep, journalIdsReady } from "./crm-inbound-core";
+import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, recheckWindowYmd, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, recheckWindowFull, journalIdsReady } from "./crm-inbound-core";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -1360,7 +1360,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       const haveAfter = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
       const gone = windowFrom ? windowGoneLessonIds(haveBefore, haveAfter) : [];
       const keep0 = Number(customerSyncOf(cid).lessonsAlfa) || 0;
-      let liveAlfa = windowFrom ? (holeApproved ? keep0 : windowAlfaKeep(keep0, новые.length, gone.length)) : applied.alfa;
+      const fullWin = recheckWindowFull(windowFrom);
+      let liveAlfa = windowFrom ? (holeApproved ? keep0 : windowAlfaLive(keep0, census.ids.length, новые.length, gone.length, fullWin)) : applied.alfa;
       if (windowFrom && !holeApproved) {
         stampCustomerSync(cid, { lessonsAlfa: liveAlfa, lessonsAlfaAt: atOf() });
       }
@@ -1374,16 +1375,16 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         const phantom = windowNewLessonIds(gap.dropped || [], []);
         const dropNew = новые.filter((id) => phantom.includes(id)).length;
         if (dropNew) {
-          liveAlfa = windowAlfaKeep(keep0, новые.length - dropNew, gone.length);
+          liveAlfa = windowAlfaLive(keep0, census.ids.length, новые.length - dropNew, gone.length, fullWin);
           stampCustomerSync(cid, { lessonsAlfa: liveAlfa, lessonsAlfaAt: atOf() });
         }
         const seatedHave = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
         const seen0 = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
-        const seenNext = uniquePositiveIds([...seen0.filter((id) => !gone.includes(id)), ...новые.filter((id) => seatedHave.includes(id) || !phantom.includes(id))]);
+        const seenNext = uniquePositiveIds([...seen0.filter((id) => !gone.includes(id)), ...census.ids.filter((id) => seatedHave.includes(id) || !phantom.includes(id))]);
         stampCustomerSync(cid, { lessonsSeenIds: seenNext });
       } else if (windowFrom && !holeApproved) {
         const seen0 = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
-        stampCustomerSync(cid, { lessonsSeenIds: uniquePositiveIds([...seen0.filter((id) => !gone.includes(id)), ...новые]) });
+        stampCustomerSync(cid, { lessonsSeenIds: uniquePositiveIds([...seen0.filter((id) => !gone.includes(id)), ...census.ids]) });
       } else if (!windowFrom) {
       const alfaN = applied.alfa;
       const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));

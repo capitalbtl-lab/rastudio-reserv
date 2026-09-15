@@ -21,6 +21,8 @@ import {
   windowNewLessonIds,
   windowGoneLessonIds,
   windowAlfaKeep,
+  windowAlfaLive,
+  recheckWindowFull,
   lessonsSetGap,
   groupWindowGone,
   idsChecksum,
@@ -182,9 +184,14 @@ describe("вход из Alfa", () => {
     assert.equal(inboundFillClosed(771, 771, true, true), false);
     assert.equal(inboundFillClosed(338, 339, true, false), false);
     assert.equal(inboundFillClosed(0, 0, true, false), true);
-    assert.equal(keepAlfaProbe(286, 254, true).write, false);
+    assert.equal(keepAlfaProbe(286, 254, true).write, true);
+    assert.equal(keepAlfaProbe(286, 254, true).alfa, 254);
     assert.equal(keepAlfaProbe(286, 254, true, true).write, true);
     assert.equal(keepAlfaProbe(286, 254, true, true).alfa, 254);
+    assert.equal(keepAlfaProbe(11, 13, true).write, true);
+    assert.equal(keepAlfaProbe(11, 13, true).alfa, 13);
+    assert.equal(keepAlfaProbe(286, 0, false).write, false);
+    assert.equal(keepAlfaProbe(286, 0, false).alfa, 286);
     assert.equal(bumpAlfaFromLanded(312, 2), 312);
     assert.equal(bumpAlfaFromLanded(312, 0), 312);
     assert.equal(bumpAlfaFromLanded(0, 2), 0);
@@ -277,6 +284,13 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.equal(windowAlfaKeep(10, 0, 1), 9);
     assert.equal(windowAlfaKeep(10, 80, 0), 90);
     assert.notEqual(windowAlfaKeep(10, 1, 0), 4);
+    assert.equal(windowAlfaLive(11, 13, 0, 0, false), 13);
+    assert.equal(windowAlfaLive(11, 4, 0, 0, false), 11);
+    assert.equal(windowAlfaLive(286, 20, 0, 0, false), 286);
+    assert.equal(windowAlfaLive(11, 13, 0, 0, true), 13);
+    assert.equal(windowAlfaLive(286, 250, 0, 0, true), 250);
+    assert.equal(recheckWindowFull("2015-01-01"), true);
+    assert.equal(recheckWindowFull("2026-08-14"), false);
     const gap = lessonsSetGap([1, 3], [1, 2], []);
     assert.deepEqual(gap.hole, [2]);
     assert.deepEqual(gap.extra, [3]);
@@ -330,7 +344,8 @@ describe("inbound не сбрасывает курс сайта", () => {
     );
     const noId = pruneCalendarToAlfaIds([{ lessonId: 0, date: "2026-09-01" }, { lessonId: 5, date: "2026-09-01" }], [5], [], [], "2026-08-01", "2026-10-01");
     assert.equal(noId.some((x) => !x.lessonId), true);
-    assert.equal(keepAlfaProbe(286, 250, true).write, false);
+    assert.equal(keepAlfaProbe(286, 250, true).write, true);
+    assert.equal(keepAlfaProbe(286, 250, true).alfa, 250);
   });
 });
 

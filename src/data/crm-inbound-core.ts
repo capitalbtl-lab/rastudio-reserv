@@ -5,13 +5,11 @@ export function inboundTake(opts: { pending?: boolean }) {
   return opts.pending ? ("skip" as const) : ("alfa" as const);
 }
 
-/** Сорванная проба не трогает счёт. Неполная (окно) не занижает. Полная перепись (census) — правда Alfa, можно снизить. */
-export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, census = false) {
+/** Молчание не трогает счёт. Живая перепись пишет как есть — keep не держит старое. */
+export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, _census = false) {
   const k = Number(keep) || 0;
   const a = Number(alfa) || 0;
   if (!probedOk) return { write: false, alfa: k, probed: k > 0 };
-  if (census) return { write: true, alfa: a, probed: true };
-  if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
   return { write: true, alfa: a, probed: true };
 }
 
@@ -268,6 +266,18 @@ export function windowGoneLessonIds(haveBefore: Iterable<number>, haveAfter: Ite
 
 export function windowAlfaKeep(keep: number, newN: number, goneN: number) {
   return Math.max(0, (Number(keep) || 0) + Math.max(0, Number(newN) || 0) - Math.max(0, Number(goneN) || 0));
+}
+
+/** Полная перепись (2015) — длина как есть. Окно ±месяц не подменяет полный счёт меньшим куском. Живое больше keep — писать. */
+export function windowAlfaLive(keep: number, censusN: number, newN: number, goneN: number, full: boolean) {
+  const c = Math.max(0, Number(censusN) || 0);
+  if (full) return c;
+  return Math.max(c, windowAlfaKeep(keep, newN, goneN));
+}
+
+export function recheckWindowFull(from?: string) {
+  const s = String(from || "").trim();
+  return !s || s <= "2015-01-01";
 }
 
 /** Дырки и лишние по lessonId. protect — hold и id с group-card. */
