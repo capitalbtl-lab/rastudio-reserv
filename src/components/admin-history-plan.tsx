@@ -248,7 +248,7 @@ function DraftForm({
         <>
           <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Годы (красная качка)</p>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            {PLAN_FROM_OPTS.map((o) => (
+            {(study === "2" ? PLAN_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PLAN_FROM_OPTS).map((o) => (
               <Chip key={o.id} on={fromId === o.id} onClick={() => setFromId(o.id)}>
                 {o.label}
               </Chip>
@@ -261,7 +261,10 @@ function DraftForm({
         <Chip on={study === "1"} onClick={() => setStudy("1")}>
           Сейчас ходят
         </Chip>
-        <Chip on={study === "2"} onClick={() => setStudy("2")}>
+        <Chip on={study === "2"} onClick={() => {
+          setStudy("2");
+          if (fromId !== "1" && fromId !== "2") setFromId("1");
+        }}>
           Архив
         </Chip>
       </div>
@@ -280,7 +283,7 @@ function DraftForm({
               when: when(),
               at,
               recheckDays,
-              dateFromId: fromId,
+              dateFromId: study === "2" && fromId !== "1" && fromId !== "2" ? "1" : fromId,
               study,
               label,
             })

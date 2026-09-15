@@ -137,6 +137,15 @@ describe("пульт Истории", () => {
     assert.equal(job.dateFrom, "2025-09-15");
   });
 
+  it("архив пульта не качает с 2015 — год или два", () => {
+    const r = scheduleOf({ id: "a", mode: "people", study: "2", when: { kind: "daily" }, at: "04:00", dateFromId: "2015" });
+    const job = planRuleToJob(r, msk(2026, 8, 15, 12, 0));
+    assert.equal(job.study, "2");
+    assert.equal(job.dateFrom, "2025-09-15");
+    const two = scheduleOf({ id: "b", mode: "people", study: "2", when: { kind: "daily" }, at: "04:00", dateFromId: "2" });
+    assert.equal(planRuleToJob(two, msk(2026, 8, 15, 12, 0)).dateFrom, "2024-09-15");
+  });
+
   it("сохранение с экрана не затирает due воркера", () => {
     const disk = policyOf({
       planEnabled: true,

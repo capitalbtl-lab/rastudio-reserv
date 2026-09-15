@@ -34,6 +34,7 @@ export const PLAN_FROM_OPTS = [
   { id: "2015", label: "с начала · 2015" },
   { id: "7", label: "7 лет" },
   { id: "3", label: "3 года" },
+  { id: "2", label: "2 года" },
   { id: "1", label: "1 год" },
 ] as const;
 
@@ -242,14 +243,20 @@ export function canSavePolicy(p: CrmSyncPolicy): { ok: true } | { ok: false; err
 
 export function planDateFrom(id: string, now = new Date()): string {
   if (id === "2015") return "2015-01-01";
-  const years = id === "1" ? 1 : id === "3" ? 3 : 7;
+  const years = id === "1" ? 1 : id === "2" ? 2 : id === "3" ? 3 : 7;
   const w = mskWall(now);
   const y = w.y - years;
   const d = Math.min(w.d, monthLen(y, w.mo));
   return `${y}-${pad2(w.mo)}-${pad2(d)}`;
 }
 
+export function planFromIdOf(study: "1" | "2", id: string): PlanFromId {
+  if (study === "2") return id === "2" ? "2" : "1";
+  return PLAN_FROM_OPTS.some((o) => o.id === id) ? (id as PlanFromId) : "2015";
+}
+
 export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
+  const fromId = planFromIdOf(rule.study, rule.dateFromId);
   if (rule.mode === "auto") {
     return {
       mode: "roster" as const,
@@ -257,7 +264,7 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
       study: rule.study,
       recheck: false,
       recheckDays: 32,
-      dateFrom: planDateFrom(rule.dateFromId, now),
+      dateFrom: planDateFrom(fromId, now),
       archived: rule.study === "2",
       pipe: [...AUTO_PIPE],
     };
@@ -271,7 +278,7 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
     study: rule.study,
     recheck: meta.recheck,
     recheckDays: meta.recheck ? rule.recheckDays : 32,
-    dateFrom: needFrom ? planDateFrom(rule.dateFromId, now) : "",
+    dateFrom: needFrom ? planDateFrom(fromId, now) : "",
     archived: rule.study === "2",
     pipe: [] as HistoryPlanMode[],
   };
