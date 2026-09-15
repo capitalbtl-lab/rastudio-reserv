@@ -207,8 +207,12 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(ui, /return "нет"/);
     assert.match(ui, /for \(const h of hits\)/);
     assert.match(ui, /archPeople/);
+    assert.match(ui, /diskArch/);
     assert.match(ui, /asAuditRow\(r, by.get\(r.cid\)\)/);
     assert.match(ui, /auditRole\(r\) === "архив" \|\| rowMatched\(r\)/);
+    assert.match(pull, /function auditArchivePeople/);
+    assert.match(pull, /x.study !== 2 && x.status !== "архив"/);
+    assert.match(pull, /auditArchive: auditArchivePeople\(\)/);
     assert.match(ui, /В роли/);
     assert.match(pull, /leadStatus/);
     assert.match(pull, /dossierAuditRole/);

@@ -858,8 +858,45 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
     },
     live: studentSide("1"),
     archive: studentSide("2"),
+    auditArchive: auditArchivePeople(),
     ungrouped,
   };
+}
+
+/** Архив как в Alfa: is_study=2. Не рабочий отбор шага 2. Для чипа шага 5. */
+function auditArchivePeople() {
+  const live = liveAttendeeCids();
+  const out: {
+    cid: number;
+    branchId: number;
+    name: string;
+    groups: string[];
+    alfaRole: "архив";
+    status: string;
+    study: number;
+    funnel: string;
+    leadStatus: number;
+  }[] = [];
+  for (const x of listDossierCrm()) {
+    if (!x.cid) continue;
+    if (x.status === "удалён" || x.removed === "1") continue;
+    if (x.study !== 2 && x.status !== "архив") continue;
+    if (live.has(x.cid)) continue;
+    const d = findDossier({ crmId: x.cid });
+    out.push({
+      cid: x.cid,
+      branchId: x.branchId,
+      name: fioOf(x.cid),
+      groups: groupsOfStudent(x.cid).slice(0, 3),
+      alfaRole: "архив",
+      status: "архив",
+      study: 2,
+      funnel: String(d?.extras?.crm_funnel || ""),
+      leadStatus: Number(d?.extras?.lead_status_id) || 0,
+    });
+    if (out.length >= 2500) break;
+  }
+  return out;
 }
 
 function cashCardOf(cid: number) {

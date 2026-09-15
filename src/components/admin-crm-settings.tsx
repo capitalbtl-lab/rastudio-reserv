@@ -4722,6 +4722,7 @@ export function AdminCrmSettings() {
                 {(() => {
                   const live = p?.live;
                   const archPeople = p?.archive?.people || [];
+                  const diskArch = (p as { auditArchive?: typeof archPeople })?.auditArchive || [];
                   const hits = journal?.lastAudit?.rows || [];
                   const by = new Map(hits.map((h) => [h.cid, h]));
                   const livePeople = live?.people || [];
@@ -4731,7 +4732,7 @@ export function AdminCrmSettings() {
                     seenCid.add(r.cid);
                     rows.push(asAuditRow(r, by.get(r.cid)));
                   }
-                  for (const r of archPeople) {
+                  for (const r of [...archPeople, ...diskArch]) {
                     if (seenCid.has(r.cid)) continue;
                     seenCid.add(r.cid);
                     rows.push(asAuditRow(r, by.get(r.cid)));
