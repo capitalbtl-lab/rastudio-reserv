@@ -297,7 +297,7 @@ export function recheckWindowFull(from?: string) {
   return !s || s <= "2015-01-01";
 }
 
-/** Дырки и лишние по lessonId. protect — hold и id с group-card. */
+/** Дырки и лишние по lessonId. protect — очередь hold, не копии с группы. */
 export function lessonsSetGap(have: Iterable<number>, seen: Iterable<number>, protect: Iterable<number> = []) {
   const H = new Set<number>();
   const S = new Set<number>();

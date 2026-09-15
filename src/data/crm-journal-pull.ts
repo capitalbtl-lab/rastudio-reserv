@@ -1376,7 +1376,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || 0, true);
     } else {
       const haveBefore = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
-      const applied = applyCustomerLessonCensus(cid, census.ids, true, windowFrom, windowTo);
+      const fullWin = recheckWindowFull(windowFrom);
+      const applied = applyCustomerLessonCensus(cid, census.ids, true, fullWin ? "" : windowFrom, fullWin ? "" : windowTo);
       if (!applied.ok) {
         mark(disk, 0, false);
       } else {
@@ -1384,7 +1385,6 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       const haveAfter = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
       const gone = windowFrom ? windowGoneLessonIds(haveBefore, haveAfter) : [];
       const keep0 = Number(customerSyncOf(cid).lessonsAlfa) || 0;
-      const fullWin = recheckWindowFull(windowFrom);
       let liveAlfa = keep0;
       if (windowFrom) {
         liveAlfa = fullWin ? windowAlfaLive(keep0, census.ids.length, 0, gone.length, true) : windowAlfaKeep(keep0, 0, gone.length);

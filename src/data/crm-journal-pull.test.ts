@@ -479,7 +479,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /inboundMissingUntilSeated/);
     assert.match(pull, /!short && !extra && !holeApproved/);
     assert.match(rec, /dateTo: windowTo/);
-    assert.match(rec, /applyCustomerLessonCensus\(cid, census.ids, true, windowFrom, windowTo\)/);
+    assert.match(rec, /applyCustomerLessonCensus\(cid, census.ids, true, fullWin \? "" : windowFrom, fullWin \? "" : windowTo\)/);
     assert.match(one, /iceWindowOrNow/);
     assert.match(one, /mark\(disk, alfa0, true, censusOk\)/);
     assert.match(one, /mark\(disk, alfa0, first.ok, censusOk\)/);
@@ -499,8 +499,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /if \(lid > 0\) ids.add\(lid\)/);
     assert.match(inbound, /if \(page === pageCap - 1\) aborted = true/);
     assert.match(inbound, /lessonIdsOnStudentGroups/);
-    assert.match(inbound, /const groupKeep = keepBefore \? lessonIdsOnStudentGroups\(id\) : \[\]/);
-    assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep, keepBefore, keepAfter\)/);
+    assert.doesNotMatch(inbound, /const groupKeep = keepBefore/);
+    assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, \[\], keepBefore, keepAfter\)/);
     assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, true\)/);
     assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa, lessonsAlfaAt/);
     assert.match(inbound, /keepBefore \? disk !== keepAlfa : disk !== alfa/);

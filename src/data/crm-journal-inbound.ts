@@ -529,8 +529,8 @@ function lessonIdsOnStudentGroups(cid: number) {
 }
 
 export function studentProtectLessonIds(cid: number) {
-  const hold = pendingExportIds(["lesson.update", "lesson.create"]);
-  return uniquePositiveIds([...hold, ...lessonIdsOnStudentGroups(cid)]);
+  void cid;
+  return uniquePositiveIds(pendingExportIds(["lesson.update", "lesson.create"]));
 }
 
 /** Жёлтая «С нуля»: календарь с диска. Счёт Alfa снимаем — следующая проба пишет живой. В очередь не пишет. */
@@ -575,8 +575,7 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   const before = countAlfaLessonUniq(prev);
   const hold = pendingExportIds(["lesson.update", "lesson.create"]);
   const uniq = uniquePositiveIds(ids);
-  const groupKeep = keepBefore ? lessonIdsOnStudentGroups(id) : [];
-  const next = pruneCalendarToAlfaIds(prev, uniq, hold, groupKeep, keepBefore, keepAfter);
+  const next = pruneCalendarToAlfaIds(prev, uniq, hold, [], keepBefore, keepAfter);
   replaceCustomerCalendar(id, next);
   const disk = countAlfaLessonUniq(next);
   const keepAlfa = Number(customerSyncOf(id).lessonsAlfa) || 0;
@@ -584,7 +583,7 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   const alfa = keepBefore ? keepAlfa : heldAlfa.alfa;
   const gap = keepBefore
     ? {}
-    : stampLessonSetGap({ lessonsSeenIds: uniq }, uniquePositiveIds(next.map((x) => Number(x.lessonId) || 0)), [...hold, ...groupKeep]);
+    : stampLessonSetGap({ lessonsSeenIds: uniq }, uniquePositiveIds(next.map((x) => Number(x.lessonId) || 0)), hold);
   stampCustomerSync(id, {
     lessonsDisk: disk,
     ...gap,
