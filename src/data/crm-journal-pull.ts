@@ -18,7 +18,7 @@ import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlap
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
-import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, recheckWindowYmd, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, recheckWindowFull, journalIdsReady } from "./crm-inbound-core";
+import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady } from "./crm-inbound-core";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -1094,10 +1094,12 @@ async function pullOneGroup(
   period: { key: string; from: string; to: string; label: string; keys?: string[] },
   recheck = false,
   recheckDays?: number,
+  iceFrom = "",
+  iceTo = "",
 ) {
   const beforeCard = loadGroupCard(g.branchId, g.groupId);
   const days = clampRecheckDays(recheckDays);
-  const win = recheck ? recheckWindowYmd(days) : { from: period.from, to: period.to };
+  const win = iceWindowOrNow(recheck, iceFrom || period.from, iceTo || (recheck ? "" : period.to), days);
   const beforeAll = (beforeCard?.calendar || []).length;
   const beforeWin = (beforeCard?.calendar || []).filter((l) => inPeriod(l.date, win.from, win.to)).length;
   const { inboundJournalGroup } = await import("./crm-journal-inbound");
@@ -1106,7 +1108,8 @@ async function pullOneGroup(
     lite: true,
     recheck,
     recheckDays: days,
-    ...(recheck ? {} : { dateFrom: period.from, dateTo: period.to }),
+    dateFrom: win.from,
+    dateTo: win.to,
     groupName: g.name,
   });
   const ok = res.ok !== false;
@@ -1152,8 +1155,8 @@ async function pullOneGroup(
 
 export { keepAlfaProbe };
 
-async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32) {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, recheckCensusWindow, studentProtectLessonIds } = await import("./crm-journal-inbound");
+async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32, dateTo = "") {
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, studentProtectLessonIds } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const reset0 = String(customerSyncOf(cid).lessonsResetAt || "");
@@ -1339,8 +1342,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
     }
     try {
-    const sync0 = customerSyncOf(cid);
-    const win = recheckCensusWindow(sync0, recheckDays);
+    const win = iceWindowOrNow(true, from, dateTo, recheckDays);
     const windowFrom = win.from;
     const windowTo = win.to;
     const censusFrom = windowFrom || from;
@@ -1349,9 +1351,22 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
     if (!census.ok) {
       mark(disk, 0, false);
+      if (!holeApproved && census.ids.length) {
+        const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+        const missing = census.ids.filter((n) => !have.has(n));
+        if (missing.length) {
+          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+          if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
+          lessons += Number(gap.count) || 0;
+          seated += Number(gap.count) || 0;
+          droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
+          disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
+        }
+      }
+    } else if (holeApproved) {
+      mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || 0, true);
     } else {
       const haveBefore = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
-      const новые = windowFrom ? windowNewLessonIds(census.ids, haveBefore) : [];
       const applied = applyCustomerLessonCensus(cid, census.ids, true, windowFrom, windowTo);
       if (!applied.ok) {
         mark(disk, 0, false);
@@ -1361,36 +1376,38 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       const gone = windowFrom ? windowGoneLessonIds(haveBefore, haveAfter) : [];
       const keep0 = Number(customerSyncOf(cid).lessonsAlfa) || 0;
       const fullWin = recheckWindowFull(windowFrom);
-      let liveAlfa = windowFrom ? (holeApproved ? keep0 : windowAlfaLive(keep0, census.ids.length, новые.length, gone.length, fullWin)) : applied.alfa;
-      if (windowFrom && !holeApproved) {
+      let liveAlfa = keep0;
+      if (windowFrom) {
+        liveAlfa = fullWin ? windowAlfaLive(keep0, census.ids.length, 0, gone.length, true) : windowAlfaKeep(keep0, 0, gone.length);
         stampCustomerSync(cid, { lessonsAlfa: liveAlfa, lessonsAlfaAt: atOf() });
       }
-      if (новые.length && !holeApproved) {
+      const новые = windowFrom ? windowNewLessonIds(census.ids, haveBefore) : [];
+      if (новые.length) {
         const gap = await inboundMissingUntilSeated(branchId, cid, новые, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
         if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
         lessons += Number(gap.count) || 0;
         seated += Number(gap.count) || 0;
         droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
         disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
-        const phantom = windowNewLessonIds(gap.dropped || [], []);
-        const dropNew = новые.filter((id) => phantom.includes(id)).length;
-        if (dropNew) {
-          liveAlfa = windowAlfaLive(keep0, census.ids.length, новые.length - dropNew, gone.length, fullWin);
+        const seatedHave = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
+        const seatedNew = новые.filter((id) => seatedHave.includes(id)).length;
+        if (windowFrom) {
+          liveAlfa = fullWin ? windowAlfaLive(keep0, census.ids.length, seatedNew, gone.length, true) : windowAlfaKeep(keep0, seatedNew, gone.length);
           stampCustomerSync(cid, { lessonsAlfa: liveAlfa, lessonsAlfaAt: atOf() });
         }
-        const seatedHave = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
         const seen0 = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
+        const phantom = windowNewLessonIds(gap.dropped || [], []);
         const seenNext = uniquePositiveIds([...seen0.filter((id) => !gone.includes(id)), ...census.ids.filter((id) => seatedHave.includes(id) || !phantom.includes(id))]);
         stampCustomerSync(cid, { lessonsSeenIds: seenNext });
-      } else if (windowFrom && !holeApproved) {
+      } else if (windowFrom) {
         const seen0 = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
         stampCustomerSync(cid, { lessonsSeenIds: uniquePositiveIds([...seen0.filter((id) => !gone.includes(id)), ...census.ids]) });
-      } else if (!windowFrom) {
+      } else {
       const alfaN = applied.alfa;
       const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
       const gapN = stampLessonSetGap(customerSyncOf(cid), uniquePositiveIds([...have]), studentProtectLessonIds(cid));
       const short = lessonsStampShort({ ...customerSyncOf(cid), lessonsDisk: disk, lessonsAlfa: alfaN, lessonsAlfaAt: "x", ...gapN });
-      if (short && !holeApproved) {
+      if (short) {
         const missing = census.ids.filter((n) => !have.has(n));
         if (missing.length) {
           const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0 }));
@@ -1425,7 +1442,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const { token, request } = await import("./alfacrm");
     const t = await token();
     const forcePay = Boolean(recheck) && !pendingPay;
-    const payWin = recheck ? recheckWindowYmd(recheckDays) : { from, to: "" };
+    const payWin = iceWindowOrNow(Boolean(recheck), from, dateTo, recheckDays);
     if (recheck) stampCustomerSync(cid, { paysRecheckAt: "" });
     try {
       await inboundCustomerPays(request, t, branchId, cid, { force: forcePay, dateFrom: payWin.from, dateTo: payWin.to });
@@ -1493,6 +1510,7 @@ export async function journalPull(opts: {
   customerId?: number;
   probe?: boolean;
   dateFrom?: string;
+  dateTo?: string;
   recheckDays?: number;
   jobMode?: string;
   take?: number;
@@ -1540,6 +1558,7 @@ export async function journalPull(opts: {
       study: opts.study === "1" || opts.study === "2" ? opts.study : "1",
       recheck: Boolean(opts.recheck),
       dateFrom: opts.dateFrom || "",
+      dateTo: opts.dateTo || "",
       recheckDays: opts.recheckDays,
       grain: opts.grain,
       school: opts.school || "",
@@ -2199,7 +2218,7 @@ export async function journalPull(opts: {
       saveStore(store);
       return { ok: true as const, extra: store.note, count: 0, scanned: 0, more: false, ...snap() };
     }
-    const res = await pullOneGroup(hit, picked, recheck || Boolean(periodKey && chunkDone(picked, doneKeys)), opts.recheckDays).catch((e) => ({
+    const res = await pullOneGroup(hit, picked, recheck || Boolean(periodKey && chunkDone(picked, doneKeys)), opts.recheckDays, String(opts.dateFrom || "").trim(), String(opts.dateTo || "").trim()).catch((e) => ({
       extra: `«${hit.name}»: ${e instanceof Error ? e.message : "ошибка"}`,
       count: 0,
       ok: false,
@@ -2315,7 +2334,7 @@ export async function journalPull(opts: {
       };
     }
     const balance = kind === "balance";
-    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim(), Boolean(opts.slowFill), clampRecheckDays(opts.recheckDays));
+    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim(), Boolean(opts.slowFill), clampRecheckDays(opts.recheckDays), String(opts.dateTo || "").trim());
     if (row.blocked) {
       return {
         ok: false as const,

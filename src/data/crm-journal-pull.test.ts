@@ -68,6 +68,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /fanOutLessonWriteoffs\(seatedNew\)/);
     assert.match(inbound, /const pageSize = 500/);
     assert.match(inbound, /recheckWindowYmd/);
+    assert.match(inbound, /iceWindowOrNow/);
     assert.match(inbound, /recheckCensusWindow/);
     assert.match(inbound, /journalIdsReady/);
     assert.match(inbound, /idsChecksum/);
@@ -76,7 +77,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /journalIdsReady/);
     assert.match(pull, /if \(slow && shortByIds/);
     assert.match(pull, /setsClosed/);
-    assert.match(pull, /recheckCensusWindow\(sync0, recheckDays\)/);
+    assert.match(pull, /iceWindowOrNow\(true, from, dateTo, recheckDays\)/);
     assert.match(pull, /!\/\^w\\d\+\$\/\.test\(key\)/);
     assert.doesNotMatch(pull, /alfaTotal > 0 && n < alfaTotal/);
     assert.match(pull, /key: `w\$\{clampRecheckDays/);
@@ -296,6 +297,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /kind === "roster"/);
     assert.match(pull, /kind === "rosterPolicy"/);
     assert.match(pull, /pullGroupRoster/);
+    {
+      const rosterAt = pull.indexOf("await pullGroupRoster");
+      const roster = pull.slice(rosterAt, rosterAt + 400);
+      assert.match(roster, /force: Boolean\(opts.recheck\)/);
+      assert.doesNotMatch(roster, /dateFrom/);
+      assert.doesNotMatch(roster, /dateTo/);
+    }
     assert.doesNotMatch(pull, /if \(study === "1"\) return true/);
     assert.match(pull, /lessonsRecheckAt/);
     assert.match(pull, /customerId/);
@@ -353,11 +361,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /censusSeatLessonId\(item\)/);
     assert.match(inbound, /census cid=\$\{id\} dropped no-date/);
     assert.doesNotMatch(inbound, /const lid = Number\(\(item as \{ id\?: number \}\)\.id\) \|\| 0;\s*if \(lid > 0\) ids\.add\(lid\)/);
-    assert.match(inbound, /const alfa = keepBefore \? keepAlfa \|\| uniq\.length : heldAlfa.alfa/);
-    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, !keepBefore\)/);
+    assert.match(inbound, /const alfa = keepBefore \? keepAlfa : heldAlfa.alfa/);
+    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, true\)/);
+    assert.match(inbound, /if \(holeApproved\) \{/);
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
     assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
     assert.match(inbound, /if \(received >= live.total\) break/);
+    assert.match(inbound, /!live.items.length && received < live.total/);
     assert.match(inbound, /ymd\(item.date\) \|\| ymd\(\(item as \{ lesson_date\?: string \}\).lesson_date\)/);
     assert.doesNotMatch(inbound, /ymd\(item.date\) \|\| ymd\(item.time_from\) \|\| ymd/);
     assert.match(inbound, /live.total > 0 \? received >= live.total : live.items.length < 100/);
@@ -421,25 +431,27 @@ describe("ручной журнал с Alfa", () => {
     const oneAt = pull.indexOf("async function pullOneStudent");
     const oneEnd = pull.indexOf("export async function journalPull", oneAt);
     const one = pull.slice(oneAt, oneEnd > oneAt ? oneEnd : oneAt + 9000);
-    const recAt = one.indexOf("const win = recheckCensusWindow");
+    const recAt = one.indexOf("const win = iceWindowOrNow");
     const rec = one.slice(recAt);
     assert.match(one, /waitLockStudentAlfa\(cid, 20000\)/);
     assert.match(rec, /unlockStudentAlfa\(cid\)/);
     assert.match(pull, /!short && !dups && !holeApproved/);
     assert.doesNotMatch(rec, /if \(extra\)/);
     assert.doesNotMatch(rec, /inboundCustomerLessons\(/);
-    assert.match(rec, /recheckCensusWindow\(sync0, recheckDays\)/);
+    assert.match(rec, /iceWindowOrNow\(true, from, dateTo, recheckDays\)/);
     assert.doesNotMatch(inbound, /if \(!wasLessonGreen\(sync\)\) return \{ from: ""/);
     assert.match(rec, /windowNewLessonIds/);
     assert.match(rec, /windowAlfaLive/);
     assert.match(rec, /recheckWindowFull\(windowFrom\)/);
-    assert.match(rec, /новые\.length && !holeApproved/);
+    assert.match(rec, /const новые = windowFrom \? windowNewLessonIds/);
+    assert.match(rec, /windowAlfaKeep/);
+    assert.match(rec, /seatedNew/);
     assert.match(rec, /mark\(disk, Number\(customerSyncOf\(cid\)\.lessonsAlfa\) \|\| liveAlfa, true\)/);
     assert.match(rec, /inboundMissingUntilSeated/);
     assert.match(pull, /!short && !extra && !holeApproved/);
     assert.match(rec, /dateTo: windowTo/);
     assert.match(rec, /applyCustomerLessonCensus\(cid, census.ids, true, windowFrom, windowTo\)/);
-    assert.match(one, /recheckCensusWindow/);
+    assert.match(one, /iceWindowOrNow/);
     assert.match(one, /mark\(disk, alfa0, true, censusOk\)/);
     assert.match(one, /mark\(disk, alfa0, first.ok, censusOk\)/);
     assert.match(one, /keepAlfaProbe\(keep, alfa, probedOk, census\)/);
@@ -460,9 +472,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /lessonIdsOnStudentGroups/);
     assert.match(inbound, /const groupKeep = keepBefore \? lessonIdsOnStudentGroups\(id\) : \[\]/);
     assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep, keepBefore, keepAfter\)/);
-    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, !keepBefore\)/);
+    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, true\)/);
     assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa, lessonsAlfaAt/);
-    assert.match(inbound, /holeApproved \|\| \(keepBefore \? disk !== keepAlfa : disk !== alfa\)/);
+    assert.match(inbound, /keepBefore \? disk !== keepAlfa : disk !== alfa/);
   });
 
   it("3g: окно не 2015 если счёт есть; missing сажает или снимает seen", () => {

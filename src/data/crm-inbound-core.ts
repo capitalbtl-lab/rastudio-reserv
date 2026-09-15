@@ -236,6 +236,21 @@ export function recheckWindowYmd(days: unknown, now = new Date()): { from: strin
   return { from: shift(-n), to: shift(n) };
 }
 
+/** Синяя и оба конца непусты → окно = они, не now. */
+export function iceWindowOrNow(
+  recheck: boolean,
+  dateFrom?: string,
+  dateTo?: string,
+  recheckDays?: unknown,
+  now = new Date(),
+): { from: string; to: string } {
+  const from = String(dateFrom || "").trim();
+  const to = String(dateTo || "").trim();
+  if (recheck && from && to) return { from, to };
+  if (recheck) return recheckWindowYmd(recheckDays, now);
+  return { from: from || "2015-01-01", to: "" };
+}
+
 /** Id переписи окна, которых ещё нет на диске. */
 export function windowNewLessonIds(censusIds: Iterable<number>, have: Iterable<number>): number[] {
   const onDisk = new Set([...have].map(Number).filter((n) => n > 0));

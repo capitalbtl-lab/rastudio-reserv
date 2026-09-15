@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, recheckWindowYmd, lessonsSetGap, groupWindowGone, idsChecksum, journalIdsReady, censusSeatLessonId } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, recheckWindowYmd, iceWindowOrNow, lessonsSetGap, groupWindowGone, idsChecksum, journalIdsReady, censusSeatLessonId } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -213,7 +213,7 @@ export async function inboundJournalGroup(
   };
   const recheck = Boolean(opts?.recheck);
   const days = clampRecheckDays(opts?.recheckDays);
-  const winRecheck = recheck ? recheckWindowYmd(days) : null;
+  const winRecheck = recheck ? iceWindowOrNow(true, opts?.dateFrom, opts?.dateTo, days) : null;
   const dateFrom = winRecheck ? winRecheck.from : opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
   const dateTo = winRecheck ? winRecheck.to : opts?.dateTo || ruShift(90);
   const winFrom = ymd(dateFrom);
@@ -494,10 +494,13 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
           }
         }
         received += live.items.length;
-        if (!live.items.length) break;
         if (live.total > 0) {
+          if (!live.items.length && received < live.total) {
+            aborted = true;
+            break;
+          }
           if (received >= live.total) break;
-        } else if (live.items.length < pageSize) {
+        } else if (!live.items.length || live.items.length < pageSize) {
           break;
         }
         if (page === pageCap - 1) aborted = true;
@@ -560,6 +563,11 @@ export function resetStudentLessonDisk(customerId: number) {
 export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean, keepBefore = "", keepAfter = "") {
   const id = Number(customerId) || 0;
   if (!closed) return { ok: false as const, disk: countAlfaLessonUniq(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
+  const holeApproved = Boolean(customerSyncOf(id).journalHoleApprovedAt);
+  if (holeApproved) {
+    const disk = countAlfaLessonUniq(loadCustomerCalendar(id));
+    return { ok: true as const, disk, alfa: Number(customerSyncOf(id).lessonsAlfa) || 0, pruned: 0 };
+  }
   const held = ownsStudentAlfa(id);
   if (!held && !tryLockStudentAlfa(id)) return { ok: false as const, disk: countAlfaLessonUniq(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
   try {
@@ -572,9 +580,8 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   replaceCustomerCalendar(id, next);
   const disk = countAlfaLessonUniq(next);
   const keepAlfa = Number(customerSyncOf(id).lessonsAlfa) || 0;
-  const heldAlfa = keepAlfaProbe(keepAlfa, uniq.length, true, !keepBefore);
-  const alfa = keepBefore ? keepAlfa || uniq.length : heldAlfa.alfa;
-  const holeApproved = Boolean(customerSyncOf(id).journalHoleApprovedAt);
+  const heldAlfa = keepBefore ? { write: false, alfa: keepAlfa, probed: keepAlfa > 0 } : keepAlfaProbe(keepAlfa, uniq.length, true, true);
+  const alfa = keepBefore ? keepAlfa : heldAlfa.alfa;
   const gap = keepBefore
     ? {}
     : stampLessonSetGap({ lessonsSeenIds: uniq }, uniquePositiveIds(next.map((x) => Number(x.lessonId) || 0)), [...hold, ...groupKeep]);
@@ -587,7 +594,7 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
           lessonsSeenIds: uniq,
           ...(heldAlfa.write ? { lessonsAlfa: heldAlfa.alfa, lessonsAlfaAt: new Date().toISOString() } : {}),
         }),
-    ...(holeApproved || (keepBefore ? disk !== keepAlfa : disk !== alfa) ? { lessonsFull: false } : {}),
+    ...(keepBefore ? disk !== keepAlfa : disk !== alfa) ? { lessonsFull: false } : {},
   });
   return { ok: true as const, disk, alfa, pruned: Math.max(0, before - disk) };
   } finally {

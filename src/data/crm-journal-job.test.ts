@@ -27,6 +27,8 @@ import {
   jobRetryGapMs,
   RECHECK_STALL_MS,
   stoppedJobMsg,
+  isRecheckWaveMode,
+  jobHasIce,
 } from "./crm-journal-job-core.ts";
 
 describe("фон истории из Alfa", () => {
@@ -52,6 +54,39 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldResumeStalledJob({ ...stalled, n: 75 }), false);
     assert.equal(shouldResumeStalledJob({ ...stalled, waits: 9 }), false);
     assert.equal(shouldResumeStalledJob({ ...stalled, lastAt: new Date().toISOString() }), false);
+    assert.equal(emptyJournalJob().dateTo, "");
+    assert.equal(isRecheckWaveMode("people-recheck"), true);
+    assert.equal(isRecheckWaveMode("groups-recheck"), true);
+    assert.equal(isRecheckWaveMode("roster-recheck"), true);
+    assert.equal(isRecheckWaveMode("people"), false);
+    const waveEnd = {
+      ...stalled,
+      mode: "people-recheck" as const,
+      idx: 80,
+      items: Array.from({ length: 80 }, () => ({ name: "x" })),
+      n: 79,
+      total: 80,
+      wave: "right" as const,
+      running: false,
+    };
+    assert.equal(shouldResumeStalledJob(waveEnd), false);
+    assert.equal(shouldResumeStalledJob(waveEnd, Date.now(), { wouldAdvance: true }), true);
+    assert.equal(shouldResumeStalledJob({ ...waveEnd, wave: "right2" as const }, Date.now(), { wouldAdvance: false }), false);
+    assert.equal(
+      shouldResumeStalledJob({
+        ...stalled,
+        mode: "people-recheck" as const,
+        n: 75,
+        total: 75,
+        idx: 0,
+        items: [{ name: "a" }],
+      }),
+      true,
+    );
+    const iced = { ...emptyJournalJob(), dateFrom: "2026-08-13", dateTo: "2026-10-16", recheck: true };
+    assert.equal(jobHasIce(iced), true);
+    assert.equal(mergeJobPatch(iced, { n: 1 }).dateTo, "2026-10-16");
+    assert.equal(mergeJobPatch(iced, { dateTo: "" }).dateTo, "");
     assert.equal(jobRetryGapMs("429 Too Many Requests"), 120_000);
     assert.equal(jobRetryGapMs("ок"), 5000);
   });
@@ -279,6 +314,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapMs("people-recheck", 2555), 5000);
     assert.equal(jobGapMs("people-recheck", 4000), 5000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 32 }), 2000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 32, dateFrom: "2026-08-13", dateTo: "2026-10-16" }), 2000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 92 }), 2000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 182 }), 2000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 1095 }), 3000);
@@ -391,6 +427,15 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /сбой · ещё этот/);
     assert.doesNotMatch(job, /Остановились на «\$\{item\.name\}»\. Нажмите ещё раз/);
     assert.match(job, /if \(waits > JOB_WAIT_CAP\)/);
+    assert.match(job, /skipAfterCap/);
+    assert.match(job, /finishWaveOrStop/);
+    assert.match(job, /wave: isRecheckWaveMode\(job.mode\) \? "right2"/);
+    assert.match(job, /dateTo: job.dateTo/);
+    assert.match(job, /iceWindowOrNow/);
+    assert.match(job, /ensureJobIce/);
+    assert.match(core, /dateTo: ""/);
+    assert.match(core, /export function isRecheckWaveMode/);
+    assert.match(core, /export function jobHasIce/);
     assert.match(core, /export function shouldRetryShortPeople/);
     assert.match(job, /не хватает, ещё этот/);
     assert.match(job, /pauseTxt/);

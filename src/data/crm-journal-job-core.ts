@@ -84,6 +84,7 @@ export type JournalJob = {
   study: "1" | "2";
   recheck: boolean;
   dateFrom: string;
+  dateTo?: string;
   recheckDays: number;
   grain: "quarter" | "half" | "year";
   school: string;
@@ -118,6 +119,7 @@ export function emptyJournalJob(): JournalJob {
     study: "1",
     recheck: false,
     dateFrom: "",
+    dateTo: "",
     recheckDays: 32,
     grain: "quarter",
     school: "",
@@ -184,11 +186,31 @@ export function jobRetryGapMs(err?: string, periodDays?: number) {
   return jobGapMs("", periodDays);
 }
 
-export function shouldResumeStalledJob(job = loadJournalJob(), now = Date.now()) {
+export function isRecheckWaveMode(mode?: string) {
+  return mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck";
+}
+
+export function jobHasIce(job?: { recheck?: boolean; dateFrom?: string; dateTo?: string }) {
+  return Boolean(job?.recheck && String(job.dateFrom || "").trim() && String(job.dateTo || "").trim());
+}
+
+export function shouldResumeStalledJob(
+  job = loadJournalJob(),
+  now = Date.now(),
+  opts?: { wouldAdvance?: boolean },
+) {
   if (job.stop || !job.id) return false;
   const age = now - Date.parse(job.lastAt || job.startedAt || "");
   if (!Number.isFinite(age) || age < RECHECK_STALL_MS) return false;
-  const total = Number(job.total) || job.items.length || 0;
+  const items = job.items || [];
+  const idx = Number(job.idx) || 0;
+  const wave = isRecheckWaveMode(job.mode);
+  if (wave) {
+    if (idx < items.length) return true;
+    if (opts && "wouldAdvance" in opts) return Boolean(opts.wouldAdvance);
+    return false;
+  }
+  const total = Number(job.total) || items.length || 0;
   const n = Number(job.n) || 0;
   if (total > 0 && n >= total) return false;
   if ((Number(job.waits) || 0) > JOB_WAIT_CAP) return false;
@@ -403,6 +425,8 @@ export function mergeJobPatch(cur: JournalJob, extra: Partial<JournalJob>) {
     fill: stop ? null : extra.fill === undefined ? cur.fill : extra.fill,
     cur: stop ? "" : extra.cur === undefined ? cur.cur : extra.cur,
     msg: stop ? stoppedJobMsg(Number(n) || 0, Number(total) || 0) : extra.msg === undefined ? cur.msg : extra.msg,
+    dateFrom: extra.dateFrom === undefined ? cur.dateFrom : extra.dateFrom,
+    dateTo: extra.dateTo === undefined ? cur.dateTo || "" : extra.dateTo,
   };
 }
 
@@ -466,7 +490,7 @@ export function shouldRetryShortPeople(
   return (Number(res.student.seated) || 0) > 0 || (Number(res.student.dropped) || 0) > 0;
 }
 
-export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number; dateFrom?: string }): number {
+export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number; dateFrom?: string; dateTo?: string }): number {
   const d = Number(input?.recheckDays) || 0;
   if (d === 92 || d === 182 || d === 1095 || d === 2555 || d === 4000) return d;
   if (input?.recheck) return 32;
@@ -487,7 +511,7 @@ export function jobGapMs(_mode?: JournalJobMode | "", periodDays?: number) {
   return JOURNAL_ONE_GAP_MS;
 }
 
-export function jobGapOf(job?: { mode?: JournalJobMode | ""; recheck?: boolean; recheckDays?: number; dateFrom?: string }): number {
+export function jobGapOf(job?: { mode?: JournalJobMode | ""; recheck?: boolean; recheckDays?: number; dateFrom?: string; dateTo?: string }): number {
   return jobGapMs(job?.mode, jobPeriodDays(job));
 }
 
