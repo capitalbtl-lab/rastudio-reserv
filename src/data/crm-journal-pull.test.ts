@@ -42,6 +42,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /Определено/);
     assert.match(pull, /recheck/);
     assert.match(pull, /пакет оборвался|дозаписали/);
+    assert.match(pull, /в окне было \$\{beforeWin\}, стало \$\{n\} · на диске \$\{afterAll\}/);
+    assert.match(pull, /ушло из окна/);
+    assert.doesNotMatch(pull, /было \$\{before\}, стало \$\{n\}/);
     assert.match(pull, /journalFill: \{/);
     assert.match(pull, /journalIdsChecksum/);
     assert.doesNotMatch(pull, /inferredPeriodKeys\(card\?\.calendar/);

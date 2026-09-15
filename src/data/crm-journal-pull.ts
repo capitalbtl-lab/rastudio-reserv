@@ -1086,6 +1086,15 @@ function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch
   return next;
 }
 
+function shiftDaysYmd(fromDays: number, toDays: number) {
+  const one = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  return { from: one(fromDays), to: one(toDays) };
+}
+
 async function pullOneGroup(
   g: JournalPullGroup,
   period: { key: string; from: string; to: string; label: string; keys?: string[] },
@@ -1093,9 +1102,11 @@ async function pullOneGroup(
   recheckDays?: number,
 ) {
   const beforeCard = loadGroupCard(g.branchId, g.groupId);
-  const before = (beforeCard?.calendar || []).filter((l) => (recheck ? true : inPeriod(l.date, period.from, period.to))).length;
-  const { inboundJournalGroup } = await import("./crm-journal-inbound");
   const days = clampRecheckDays(recheckDays);
+  const win = recheck ? shiftDaysYmd(-days, days) : { from: period.from, to: period.to };
+  const beforeAll = (beforeCard?.calendar || []).length;
+  const beforeWin = (beforeCard?.calendar || []).filter((l) => inPeriod(l.date, win.from, win.to)).length;
+  const { inboundJournalGroup } = await import("./crm-journal-inbound");
   const res = await inboundJournalGroup(g.branchId, g.groupId, {
     deep: false,
     lite: true,
@@ -1133,12 +1144,13 @@ async function pullOneGroup(
     diskUniq,
     checksum: String(res.checksum || ""),
   });
-  const added = Math.max(0, n - before);
+  const added = Math.max(0, n - beforeWin);
+  const afterAll = Array.isArray(res.calendar) ? res.calendar.length : beforeAll;
   const extra = ok
     ? !pagesComplete
       ? `«${g.name}»: ${period.label} · ${n} зан.${holeN ? ` · дырок ${holeN}` : ""}${added ? `, +${added}` : ""} · пакет оборвался, нажмите ещё раз`
       : recheck
-        ? `перепроверка «${g.name}»: ${period.label} · было ${before}, стало ${n}${added ? `, дозаписали ${added}` : ""}${holeN ? `, дырок ${holeN}` : ""}${goneN ? `, ушло ${goneN}` : holeN || goneN ? "" : ", дырок нет"}`
+        ? `перепроверка «${g.name}»: ${period.label} · в окне было ${beforeWin}, стало ${n} · на диске ${afterAll}${added ? `, дозаписали ${added}` : ""}${holeN ? `, дырок ${holeN}` : ""}${goneN ? `, ушло из окна ${goneN}` : holeN || goneN ? "" : ", дырок нет"}`
         : `«${g.name}»: ${period.label} · ${n} зан. за порцию${holeN ? ` · дырок ${holeN}` : ""}`
     : String(res.extra || `«${g.name}»: ${period.label} — Alfa не ответила`);
   return { extra, count: n, ok, capped: weak };
