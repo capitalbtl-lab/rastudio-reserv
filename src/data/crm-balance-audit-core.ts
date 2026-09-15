@@ -94,6 +94,9 @@ export function classifyAudit(p: {
     if (!moneyClose(p.cash, p.alfa)) {
       if (goodsNet && moneyClose(p.cash - goodsNet, p.alfa)) codes.push("goods");
       else if (refundGoods && moneyClose(p.cash + refundGoods, p.alfa)) codes.push("refund-goods");
+      else if (p.cash > p.alfa + 1) codes.push("wo");
+      if (p.cash < p.alfa - 1) codes.push("pays");
+      return [...new Set(codes.filter((c) => c !== "ok"))];
     }
     return [...new Set(["ok", ...codes.filter((c) => c !== "pays" && c !== "wo")])];
   }

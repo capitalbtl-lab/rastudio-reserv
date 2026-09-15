@@ -238,7 +238,7 @@ const HINT = {
   tabStudents: "Второй шаг: личный календарь. Ученики и лиды из живых групп шага 1. Красная рамка — загрузка и годы. Синяя рамка — перепроверка и месяцы. Жёлтая — в Alfa есть id, которых нет на диске. В Alfa не пишется.",
   tabGroups: "Третий шаг. Здесь качаются явки по группам: кто был на уроке, а не личный календарь человека. Сначала красная «по одному», потом список «годы» — это размер порции: квартал, полугодие или год. Архив групп и сроки жизни курса — отдельные кнопки ниже, их лучше нажать до массовой качки. Фильтр школы сужает очередь. В Alfa журнал не проводится. Без этого шага на сайте будут люди, но без отметок в группе. Тема и ДЗ грузятся уже в карточке группы, после явок.",
   tabMoney: "Четвёртый шаг — касса: платежи по id, не уроки, не остаток. Те же люди, что шаг 1–2: ученики и лиды из опрошенных групп. Красная рамка — загрузка и годы (Alfa режет date_from). Синяя — перепроверка и ±. Сумма vs шапка — шаг 5. В Alfa оплаты не создаёт.",
-  tabAudit: "Пятый шаг — сверка остатка. Закон раздела: только по одному, пауза 5 секунд, пакетом нельзя. Берёт тех, кто в группах шага 1 — ученики и лиды из состава. Для каждого читает из Alfa общий остаток с шапки карточки, считает число в «Клиентах» и кассу. Если цифры разошлись — добирает журнал или кассу только этого человека. В Alfa ничего не пишет. Совпало — справа. Не совпало — слева с причиной.",
+  tabAudit: "Пятый шаг — сверка остатка. Совпало справа, только если Клиенты = шапка Alfa = касса ±1 ₽. Иначе сегмент слева и на карточке написано, что сделать: календарь, касса, товар не чинить, лида не сверять. В Alfa не пишет.",
   auditAll: "Красная кнопка проходит всех текущих по одному. Между людьми пауза пять секунд, в Alfa один запрос в полёте. Сравнивает число на карточке «Клиенты» с общим остатком шапки Alfa. Если не сошлось — догружает явки или оплаты только этого номера. Цифру из Alfa в кассу не записывает. Стоп прерывает после текущего.",
   auditRecheck: "Ещё раз сверяет только этого ученика с общим остатком шапки Alfa. Читает карточку, при расхождении добирает его журнал или кассу. Чужих не трогает, зелёные шаги 1 и 3 у остальных не сбрасывает. В Alfa ничего не сохраняет. Нужна, если человек слева с причиной или вы только что правили его кассу. После совпадения карточка уйдёт вправо, даже если есть непроведённые уроки с ценой. Если снова formula — это показ в «Клиентах», не его личная дыра.",
   scopeLive: "Показывает тех, кто сейчас ходит: люди в живых группах админки после состава шага 1. Не все is_study=1 из Alfa. Красная очередь и сверка идут только по этому списку, архивных не трогают. Цифра на кнопке — сколько таких людей в выборке. Переключение само ничего не качает и в Alfa не пишет. Если нужен бывший ученик, соседняя кнопка «Архивные клиенты». Можно спокойно прыгать туда-сюда, списки уже на диске. Для кассы и календаря это один и тот же переключатель.",
@@ -537,6 +537,7 @@ type PeopleRow = {
   paysRechecked?: boolean;
   extra?: string;
   at?: string;
+  alfaRole?: "лид" | "клиент" | "архив";
 };
 
 type MissPack = {
@@ -1151,10 +1152,6 @@ function patchHoleApproved(
   return { ...side, people };
 }
 
-function auditRight(codes?: string[]) {
-  return Boolean(codes?.includes("ok"));
-}
-
 function auditFail(codes?: string[]) {
   return Boolean(codes?.includes("нет ответа"));
 }
@@ -1163,13 +1160,21 @@ function moneyCloseUi(a?: number, b?: number) {
   return Math.abs((Number(a) || 0) - (Number(b) || 0)) <= 1;
 }
 
-function rowMatched(r: { seen?: boolean; codes?: string[]; clients?: number; alfaMoney?: number; cash?: number }) {
+type AuditSegIn = {
+  seen?: boolean;
+  codes?: string[];
+  clients?: number;
+  alfaMoney?: number;
+  cash?: number;
+  alfaRole?: string;
+};
+
+function rowMatched(r: AuditSegIn) {
   if (!r.seen || auditFail(r.codes)) return false;
-  if (auditRight(r.codes)) return true;
-  if (!moneyCloseUi(r.clients, r.alfaMoney)) return false;
-  const extras = (r.codes || []).filter((c) => c !== "snap" && c !== "dup" && c !== "branch");
-  const empty = Math.abs(Number(r.clients) || 0) <= 1 && Math.abs(Number(r.cash) || 0) <= 1 && extras.length === 0;
-  return !empty;
+  if (!moneyCloseUi(r.clients, r.alfaMoney) || !moneyCloseUi(r.cash, r.alfaMoney)) return false;
+  const zero = moneyCloseUi(r.clients, 0) && moneyCloseUi(r.cash, 0);
+  if (zero && (r.codes || []).includes("snap") && !(r.codes || []).includes("ok")) return false;
+  return true;
 }
 
 const AUDIT_WORD: Record<string, string> = {
@@ -1193,45 +1198,87 @@ const AUDIT_WORD: Record<string, string> = {
   "нет ответа": "Нет ответа Alfa",
 };
 
+type AuditSeg = { id: string; label: string; rec: string };
+
+function auditSeg(r: AuditSegIn): AuditSeg {
+  const codes = r.codes || [];
+  if (!r.seen) {
+    return { id: "wait", label: "Не сверяли", rec: "Сверить всех текущих или на карточке «Перепроверить»." };
+  }
+  if (auditFail(codes)) {
+    if (r.alfaRole === "лид") {
+      return { id: "lead", label: "Лид в Альфе", rec: "Это лид: шапки клиента в Alfa нет. Не чинить кассу. Сначала перевод в клиенты в Alfa, потом сверка." };
+    }
+    if (r.alfaRole === "архив") {
+      return { id: "arch", label: "Архив в Альфе", rec: "Карточка в архиве. Как текущего не сверять. Либо вернуть в ученики в Alfa." };
+    }
+    return { id: "fail", label: "Нет ответа Alfa", rec: "Клиент есть, Alfa не ответила. «Перепроверить». Если снова тишина — обрыв или 429, не бан." };
+  }
+  if (rowMatched(r)) {
+    return { id: "ok", label: "Совпало", rec: "Клиенты, шапка и касса сходятся ±1 ₽. Трогать не нужно." };
+  }
+  const header = moneyCloseUi(r.clients, r.alfaMoney);
+  const cashHi = (Number(r.cash) || 0) > (Number(r.alfaMoney) || 0) + 1;
+  const cashLo = (Number(r.cash) || 0) < (Number(r.alfaMoney) || 0) - 1;
+  const goods = codes.includes("goods") || codes.includes("refund-goods");
+  if (header && goods) {
+    return { id: "goods", label: "Товар в кассе", rec: "Шапка без товара, в кассе продажа. Деньги уроков не чинить. Остаток абонемента на сайте — не эта лента." };
+  }
+  if (header && cashHi) {
+    if (codes.includes("lessons") || codes.includes("wo") || codes.includes("status")) {
+      return { id: "cash-hi", label: "Касса больше шапки", rec: "На диске мало списаний. Шаг 2: календарь этого человека «Перепроверить». Шапку не подгонять." };
+    }
+    if (codes.includes("snap")) {
+      return { id: "snap", label: "Касса не дочитана", rec: "Шаг 4: касса «Перепроверить» с начала. Потом снова шаг 5." };
+    }
+    return { id: "cash-hi", label: "Касса больше шапки", rec: "Сначала шаг 2 (календарь), затем шаг 4 (касса). Шапку не трогать." };
+  }
+  if (header && cashLo) {
+    if (codes.includes("status") && !codes.includes("pays") && !codes.includes("snap")) {
+      return { id: "status", label: "Урок ещё не проведён", rec: "В календаре цена, урок не проведён. Alfa ещё не списала. Ждать занятие, в Alfa не писать." };
+    }
+    return { id: "cash-lo", label: "Касса меньше шапки", rec: "Не все оплаты на диске. Шаг 4: загрузить / перепроверить кассу. Затем снова сверка." };
+  }
+  if (codes.includes("ctt")) {
+    return { id: "ctt", label: "Спутали с абонементом", rec: "Сравнивали rest абонемента с общей шапкой. «Перепроверить» на шаге 5 — в Клиентах должна быть шапка, не rest." };
+  }
+  if (codes.includes("src") || codes.includes("formula")) {
+    return { id: "show", label: "Показ в Клиентах", rec: "«Перепроверить» на шаге 5: заново поставит шапку в карточку. Журнал и кассу не качать." };
+  }
+  if (codes.includes("snap") || codes.includes("pays")) {
+    return { id: "cash-lo", label: "Касса меньше шапки", rec: "Шаг 4 дочитать кассу, потом шаг 5." };
+  }
+  if (codes.includes("lessons") || codes.includes("wo")) {
+    return { id: "cash-hi", label: "Касса больше шапки", rec: "Шаг 2 перепроверить календарь, потом шаг 5. Шапку не трогать." };
+  }
+  return { id: "money", label: "Цифры не сошлись", rec: "«Перепроверить» на шаге 5. Если касса пустая — шаг 4. Если занятий мало — шаг 2." };
+}
+
 const AUDIT_REASON_CHIPS: { id: string; label: string }[] = [
   { id: "all", label: "Все" },
-  { id: "wait", label: "Не сверяли" },
-  { id: "fail", label: "Нет ответа Alfa" },
-  { id: "money", label: "Цифры не сошлись" },
-  { id: "formula", label: "Показ в Клиентах" },
-  { id: "src", label: "Журнал ≠ календарь" },
-  { id: "snap", label: "Касса не дочитана" },
+  { id: "ok", label: "Совпало" },
+  { id: "cash-hi", label: "Касса больше шапки" },
+  { id: "cash-lo", label: "Касса меньше шапки" },
   { id: "goods", label: "Товар в кассе" },
-  { id: "pays", label: "Оплаты не сошлись" },
-  { id: "lessons", label: "Занятия не сошлись" },
+  { id: "snap", label: "Касса не дочитана" },
+  { id: "show", label: "Показ в Клиентах" },
   { id: "ctt", label: "Спутали с абонементом" },
   { id: "status", label: "Урок ещё не проведён" },
-  { id: "ok", label: "Совпало" },
+  { id: "lead", label: "Лид в Альфе" },
+  { id: "arch", label: "Архив в Альфе" },
+  { id: "fail", label: "Нет ответа Alfa" },
+  { id: "wait", label: "Не сверяли" },
 ];
+
+const AUDIT_SEG_ORDER = AUDIT_REASON_CHIPS.map((c) => c.id).filter((id) => id !== "all" && id !== "ok");
 
 function auditCodeWords(codes?: string[]) {
   return [...new Set((codes || []).filter((c) => c && c !== "ok").map((c) => AUDIT_WORD[c] || c))];
 }
 
-function auditBadgeWords(r: { seen?: boolean; codes?: string[]; clients?: number; alfaMoney?: number; cash?: number }) {
-  if (!r.seen) return ["Не сверяли"];
-  if (auditFail(r.codes)) return ["Нет ответа Alfa"];
-  if (rowMatched(r)) {
-    const extra = auditCodeWords(r.codes).filter((w) => w !== "Совпало");
-    return extra.length ? ["Совпало", ...extra] : ["Совпало"];
-  }
-  const words = auditCodeWords(r.codes);
-  return words.length ? words : ["Цифры не сошлись"];
-}
-
-function auditReasonHit(r: { seen?: boolean; codes?: string[]; clients?: number; alfaMoney?: number; cash?: number }, id: string) {
+function auditReasonHit(r: AuditSegIn, id: string) {
   if (id === "all") return true;
-  if (id === "wait") return !r.seen;
-  if (id === "fail") return Boolean(r.seen && auditFail(r.codes));
-  if (id === "ok") return rowMatched(r);
-  if (id === "money") return Boolean(r.seen && !auditFail(r.codes) && !rowMatched(r));
-  if (id === "goods") return Boolean(r.codes?.includes("goods") || r.codes?.includes("refund-goods"));
-  return Boolean(r.codes?.includes(id));
+  return auditSeg(r).id === id;
 }
 
 function rubAudit(n?: number) {
@@ -1815,7 +1862,15 @@ type AuditUiRow = {
   extra?: string;
   at?: string;
   seen?: boolean;
+  alfaRole?: "лид" | "клиент" | "архив";
 };
+
+function alfaRoleLabel(role?: string) {
+  if (role === "лид") return "лид в Альфе";
+  if (role === "архив") return "архив в Альфе";
+  if (role === "клиент") return "клиент в Альфе";
+  return "";
+}
 
 function AuditFillList({
   rows,
@@ -1844,22 +1899,24 @@ function AuditFillList({
   const isPinned = (r: AuditUiRow) => String(r.cid) === open || r.cid === loadingCid;
   const doneOf = (r: AuditUiRow) => rowMatched(r);
   const failOf = (r: AuditUiRow) => Boolean(r.seen && auditFail(r.codes));
-  const moneyOf = (r: AuditUiRow) => Boolean(r.seen && !failOf(r) && !doneOf(r));
-  const waitOf = (r: AuditUiRow) => !r.seen;
   const byName = (a: AuditUiRow, b: AuditUiRow) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid;
-  const moneyRows = orderActiveQueue(scoped.filter(moneyOf), (r) => r.cid === loadingCid, () => true, byName);
-  const failRows = orderActiveQueue(scoped.filter(failOf), (r) => r.cid === loadingCid, () => true, byName);
-  const waitRows = orderActiveQueue(scoped.filter(waitOf), (r) => r.cid === loadingCid, () => true, byName);
-  const needRows = [...moneyRows, ...failRows, ...waitRows];
+  const bySeg = (a: AuditUiRow, b: AuditUiRow) => {
+    const ia = AUDIT_SEG_ORDER.indexOf(auditSeg(a).id);
+    const ib = AUDIT_SEG_ORDER.indexOf(auditSeg(b).id);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || byName(a, b);
+  };
+  const needRows = orderActiveQueue(
+    scoped.filter((r) => !doneOf(r)),
+    (r) => r.cid === loadingCid,
+    () => true,
+    bySeg,
+  );
   const doneRows = orderActiveQueue(
     scoped.filter((r) => doneOf(r)),
     (r) => r.cid === loadingCid,
     () => false,
     byName,
   );
-  const nMoney = moneyRows.length;
-  const nFail = failRows.length;
-  const nWait = waitRows.length;
   const nNeed = needRows.length;
   const nDone = doneRows.length;
   const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
@@ -1902,33 +1959,36 @@ function AuditFillList({
   function renderPerson(row: AuditUiRow) {
     const id = String(row.cid);
     const full = doneOf(row);
+    const fail = failOf(row);
     const active = loadingCid === row.cid;
     const shown = open === id;
-    const words = auditBadgeWords(row);
-    const extraWords = auditCodeWords(row.codes).join(" · ");
+    const seg = auditSeg(row);
+    const primary = seg.label;
+    const rest = auditCodeWords(row.codes).filter((w) => w !== primary);
+    const role = alfaRoleLabel(row.alfaRole);
+    const money = !row.seen
+      ? "ещё не сверяли"
+      : fail
+        ? `Клиенты ${rubAudit(row.clients)} · касса ${rubAudit(row.cash)} · Alfa не ответила`
+        : `Клиенты ${rubAudit(row.clients)} · Alfa ${rubAudit(row.alfaMoney)} · касса ${rubAudit(row.cash)}`;
     return (
-      <li key={id} className={cn("rounded-2xl p-3 ring-1", !row.seen ? "bg-white ring-black/8" : full ? "bg-white ring-emerald-300" : "bg-amber-50 ring-amber-400")}>
-        <div className="flex items-center gap-2">
-          <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => setOpen((cur) => (cur === id ? "" : id))} title={row.name}>
+      <li
+        key={id}
+        className={cn(
+          "rounded-2xl bg-white px-4 py-3 ring-1",
+          !row.seen ? "ring-black/8" : full ? "ring-emerald-200" : fail ? "ring-rose-200" : "ring-amber-200",
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <button type="button" className="min-w-0 flex-1 truncate text-left font-medium leading-tight" onClick={() => setOpen((cur) => (cur === id ? "" : id))} title={row.name}>
             {row.name}
           </button>
-          <span className="shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums">№{row.cid}</span>
-          <span className="flex min-w-0 max-w-[18rem] shrink flex-wrap items-center justify-end gap-1">
-            {words.map((w) => (
-              <span
-                key={w}
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[0.72rem] font-semibold",
-                  w === "Совпало" ? "bg-emerald-100 text-emerald-900" : !row.seen || w === "Нет ответа Alfa" ? "bg-rose-100 text-rose-900" : "bg-amber-200 text-amber-950",
-                )}
-              >
-                {w}
-              </span>
-            ))}
+          <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[0.72rem] font-semibold", full ? "bg-emerald-100 text-emerald-900" : fail || !row.seen ? "bg-rose-100 text-rose-900" : "bg-amber-100 text-amber-950")}>
+            {primary}
           </span>
           <button
             type="button"
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-semibold leading-none ring-1 ring-black/20 hover:bg-black/5"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-semibold leading-none text-muted ring-1 ring-black/10 hover:bg-black/5"
             aria-expanded={shown}
             aria-label={shown ? "свернуть" : "развернуть"}
             onClick={() => setOpen((cur) => (cur === id ? "" : id))}
@@ -1936,17 +1996,18 @@ function AuditFillList({
             {shown ? "−" : "+"}
           </button>
         </div>
-        <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
-          {!row.seen
-            ? "ещё не сверяли"
-            : failOf(row)
-              ? `Клиенты ${rubAudit(row.clients)} · касса ${rubAudit(row.cash)} · Alfa не ответила`
-              : `Клиенты ${rubAudit(row.clients)} · Alfa ${rubAudit(row.alfaMoney)} · касса ${rubAudit(row.cash)}`}
+        <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
+          №{row.cid}
+          {role ? ` · ${role}` : ""}
+          {` · ${money}`}
         </p>
+        {full ? null : <p className="mt-1 text-[0.78rem] leading-snug">{seg.rec}</p>}
+        {full || !rest.length ? null : <p className="mt-0.5 truncate text-[0.72rem] leading-snug text-muted">{rest.join(" · ")}</p>}
         {shown ? (
-          <div className="mt-2">
-            <p className="text-[0.78rem] font-semibold">{row.extra?.replace(/\s*·\s*(ok|lessons|pays|snap|src|ctt|formula|status|dup|branch|goods|refund-goods|corr|corr-goods|wo0?|unknown|нет ответа)(, ?)?/gi, "").trim() || extraWords || "\u00a0"}</p>
-            {extraWords ? <p className="mt-1 text-[0.72rem] text-muted">{extraWords}</p> : null}
+          <div className="mt-3 border-t border-black/5 pt-3">
+            <p className="text-[0.78rem] leading-snug font-medium">{seg.rec}</p>
+            <p className="mt-1 text-[0.72rem] leading-snug text-muted">{money}</p>
+            {rest.length ? <p className="mt-1 text-[0.72rem] leading-snug text-muted">{rest.join(" · ")}</p> : null}
             <p className="mt-1 text-[0.72rem] text-muted">{(row.groups || []).slice(0, 3).join(" · ") || "групп на карточке нет"}</p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">
               {withHint(
@@ -2008,19 +2069,24 @@ function AuditFillList({
             <h4 className="font-display text-[1.05rem] text-rose-900">Слева · {nNeed}</h4>
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">
-            Цифры {nMoney} · нет ответа {nFail} · не сверяли {nWait}. Справа — Клиенты = шапка ±1 ₽.
-          </p>
+          <p className="mt-1 text-[0.72rem] text-muted">Сегмент и что сделать — на карточке. Справа только когда Клиенты = шапка = касса.</p>
           {listNeed.length ? (
             <ul className="mt-2 space-y-2 [overflow-anchor:none]">
               {listNeed.map((row, i) => {
                 const prev = i > 0 ? listNeed[i - 1] : null;
-                const g = moneyOf(row) ? "money" : failOf(row) ? "fail" : "wait";
-                const prevG = prev ? (moneyOf(prev) ? "money" : failOf(prev) ? "fail" : "wait") : "";
-                const label = g === "money" ? `Цифры не сошлись · ${nMoney}` : g === "fail" ? `Нет ответа Alfa · ${nFail}` : `Ещё не сверяли · ${nWait}`;
+                const g = auditSeg(row);
+                const prevId = prev ? auditSeg(prev).id : "";
+                const n = needRows.filter((x) => auditSeg(x).id === g.id).length;
                 return (
                   <Fragment key={row.cid}>
-                    {g !== prevG ? <li className="list-none pt-1 text-[0.72rem] font-semibold text-rose-900/80">{label}</li> : null}
+                    {g.id !== prevId ? (
+                      <li className="list-none space-y-0.5 pt-2">
+                        <p className="text-[0.78rem] font-semibold text-rose-900">
+                          {g.label} · {n}
+                        </p>
+                        <p className="text-[0.72rem] leading-snug text-muted">{g.rec}</p>
+                      </li>
+                    ) : null}
                     {renderPerson(row)}
                   </Fragment>
                 );
@@ -2035,7 +2101,7 @@ function AuditFillList({
             <h4 className="font-display text-[1.05rem] text-emerald-900">Совпало · {nDone}</h4>
             {pager(safeDone, pagesDone, setPageDone)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">Клиенты = Alfa ±1 ₽. Касса и товар могут отличаться — карточка всё равно здесь.</p>
+          <p className="mt-1 text-[0.72rem] text-muted">Клиенты = шапка Alfa = касса ±1 ₽. Трогать не нужно.</p>
           {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Пока никого не сверяли — справа пусто.</p>}
         </section>
       </div>
@@ -4568,6 +4634,7 @@ export function AdminCrmSettings() {
                       extra: h?.extra,
                       at: h?.at,
                       seen: Boolean(h),
+                      alfaRole: r.alfaRole,
                     };
                   });
                   const run = fillLoading?.kind === "audit";

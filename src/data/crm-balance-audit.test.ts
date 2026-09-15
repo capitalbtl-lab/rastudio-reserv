@@ -76,7 +76,7 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(auditOnRight(codes), true);
   });
 
-  it("шапка сошлась при неполной кассе — справа, товар не дыра", () => {
+  it("шапка сошлась, касса нет — не справа, товар отдельный сегмент", () => {
     const codes = classifyAudit({
       alfaOk: true,
       clients: 0,
@@ -92,12 +92,28 @@ describe("шаг 4 сверка остатка", () => {
       badStatus: true,
       goodsNet: 2000,
     });
-    assert.ok(codes.includes("ok"));
+    assert.equal(codes.includes("ok"), false);
     assert.ok(codes.includes("snap"));
     assert.ok(codes.includes("status"));
     assert.ok(codes.includes("goods"));
-    assert.equal(codes.includes("lessons"), false);
-    assert.equal(auditOnRight(codes), true);
+    assert.equal(auditOnRight(codes), false);
+    const three = classifyAudit({
+      alfaOk: true,
+      clients: 4350,
+      alfa: 4350,
+      cash: 6350,
+      paysComplete: false,
+      lessonsDisk: 10,
+      lessonsAlfa: 12,
+      woCard: 1000,
+      woCal: 800,
+      liveCtt: false,
+      repaired: false,
+      badStatus: true,
+    });
+    assert.equal(three.includes("ok"), false);
+    assert.ok(three.includes("wo"));
+    assert.equal(auditOnRight(three), false);
   });
 
   it("касса = шапка, Клиенты нет — formula, не pays", () => {
@@ -167,10 +183,10 @@ describe("шаг 4 сверка остатка", () => {
       liveCtt: true,
       repaired: false,
     });
-    assert.ok(afterShow.includes("ok"));
-    assert.equal(afterShow.includes("pays"), false);
+    assert.equal(afterShow.includes("ok"), false);
+    assert.ok(afterShow.includes("wo"));
     assert.equal(afterShow.includes("ctt"), false);
-    assert.equal(auditOnRight(afterShow), true);
+    assert.equal(auditOnRight(afterShow), false);
   });
 
   it("formula без ремонта: касса полная, Клиенты ≠ Alfa, не ctt", () => {

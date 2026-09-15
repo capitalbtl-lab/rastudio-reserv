@@ -883,6 +883,7 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
     const dups = lessonsStampExtra(sync);
     const journal = lessonsJournalReady(sync);
     const pays = payCustomerFilled(p.cid);
+    const alfaRole = p.study === 0 || p.status === "лид" ? "лид" : p.study === 2 || p.status === "архив" ? "архив" : "клиент";
     return {
       cid: p.cid,
       branchId: p.branchId,
@@ -895,6 +896,7 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
       dups,
       journal,
       pays,
+      alfaRole,
       paysScanned: payFillScanned(p.cid),
       paysEmpty: payFillEmpty(p.cid),
       cashRows: paysOf(p.cid).filter((x) => !x.deleted).length,
