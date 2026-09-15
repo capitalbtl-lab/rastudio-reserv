@@ -4,6 +4,8 @@ import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } f
 import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
 import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd } from "./crm-inbound-core.ts";
+import { loadSyncPolicy, saveSyncPolicy } from "./crm-sync-policy.ts";
+import { markPlanDue, pickDueRule, planRuleToJob, stampPlanFired, stampPlanSkip } from "./crm-sync-policy-core.ts";
 import {
   emptyJournalJob,
   jobGapOf,
@@ -522,6 +524,36 @@ export function stopJournalJob() {
   });
 }
 
+/** Автомат пульта: due с диска, тот же startJournalJob. Без пульта не стартует. */
+export function tickHistoryPlan(now = new Date()) {
+  if (process.env.NODE_ENV === "test") return;
+  const curPol = loadSyncPolicy();
+  const marked = markPlanDue(curPol, now);
+  const dueChanged = JSON.stringify(marked.plan.map((r) => [r.id, r.dueAt, r.lastSkip])) !== JSON.stringify(curPol.plan.map((r) => [r.id, r.dueAt, r.lastSkip]));
+  const pol = dueChanged ? (saveSyncPolicy(marked).ok ? loadSyncPolicy() : marked) : marked;
+  const job = loadJournalJob();
+  if (job.running && !job.stop) {
+    const skipped = stampPlanSkip(pol, "hands");
+    if (JSON.stringify(skipped.plan.map((r) => r.lastSkip)) !== JSON.stringify(pol.plan.map((r) => r.lastSkip))) {
+      saveSyncPolicy(skipped);
+    }
+    return;
+  }
+  const rule = pickDueRule(pol);
+  if (!rule) return;
+  const opts = planRuleToJob(rule, now);
+  const started = startJournalJob({
+    mode: opts.mode as JournalJobMode,
+    kind: opts.kind,
+    study: opts.study,
+    recheck: opts.recheck,
+    recheckDays: opts.recheckDays,
+    dateFrom: opts.dateFrom,
+    archived: opts.archived,
+  });
+  saveSyncPolicy(stampPlanFired(loadSyncPolicy(), rule.id, started.id || "", now));
+}
+
 export function startJournalJobWatch() {
   if (process.env.NODE_ENV === "test") return;
   if (!isHistoryWorker()) return;
@@ -529,10 +561,12 @@ export function startJournalJobWatch() {
   g.__raJournalWatch = setInterval(() => {
     resumeJournalJobFromDisk();
     resumeStalledRecheck();
+    tickHistoryPlan();
   }, 1000);
   setTimeout(() => {
     resumeJournalJobFromDisk();
     resumeStalledRecheck();
+    tickHistoryPlan();
   }, 200);
 }
 

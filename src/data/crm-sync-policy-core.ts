@@ -1,0 +1,386 @@
+/** Пульт автомата Истории. Без fs, без Alfa. */
+
+export const HISTORY_PLAN_MODES = [
+  { id: "roster", label: "Шаг 1 · загрузить состав", recheck: false, step: "roster" },
+  { id: "roster-recheck", label: "Шаг 1 · перепроверить состав", recheck: true, step: "roster" },
+  { id: "people", label: "Шаг 2 · загрузить календарь", recheck: false, step: "students" },
+  { id: "people-slow", label: "Шаг 2 · медленный добор", recheck: false, step: "students" },
+  { id: "people-recheck", label: "Шаг 2 · перепроверить календарь", recheck: true, step: "students" },
+  { id: "groups", label: "Шаг 3 · загрузить занятия групп", recheck: false, step: "groups" },
+  { id: "groups-recheck", label: "Шаг 3 · перепроверить группы", recheck: true, step: "groups" },
+  { id: "balance", label: "Шаг 4 · загрузить кассу", recheck: false, step: "money" },
+  { id: "audit", label: "Шаг 5 · сверка остатка", recheck: false, step: "audit" },
+  { id: "catalog", label: "Архив · каталог клиентов", recheck: false, step: "roster" },
+] as const;
+
+export type HistoryPlanMode = (typeof HISTORY_PLAN_MODES)[number]["id"];
+
+export const PLAN_RECHECK_OPTS = [
+  { days: 7 as const, label: "± неделя" },
+  { days: 32 as const, label: "± месяц" },
+  { days: 92 as const, label: "± три" },
+  { days: 182 as const, label: "± шесть" },
+  { days: 1095 as const, label: "за 3 года" },
+  { days: 2555 as const, label: "за 7 лет" },
+  { days: 4000 as const, label: "с начала · 2015" },
+] as const;
+
+export const PLAN_FROM_OPTS = [
+  { id: "2015", label: "с начала · 2015" },
+  { id: "7", label: "7 лет" },
+  { id: "3", label: "3 года" },
+  { id: "1", label: "1 год" },
+] as const;
+
+export type PlanFromId = (typeof PLAN_FROM_OPTS)[number]["id"];
+export type PlanWhenKind = "weekly" | "daily" | "interval" | "nthWeekday" | "ymd";
+export type PlanUnit = "day" | "week" | "month";
+
+export type HistoryWhen =
+  | { kind: "weekly"; days: number[] }
+  | { kind: "daily" }
+  | { kind: "interval"; every: number; unit: PlanUnit }
+  | { kind: "nthWeekday"; n: number; day: number }
+  | { kind: "ymd"; date: string };
+
+export type HistorySchedule = {
+  id: string;
+  on: boolean;
+  mode: HistoryPlanMode;
+  when: HistoryWhen;
+  at: string;
+  recheckDays: number;
+  dateFromId: PlanFromId;
+  study: "1" | "2";
+  label: string;
+  dueAt: string;
+  lastFiredAt: string;
+  lastJobId: string;
+  lastSkip: string;
+};
+
+export type CrmSyncPolicy = {
+  planEnabled: boolean;
+  plan: HistorySchedule[];
+};
+
+export const POLICY_FACTORY: CrmSyncPolicy = { planEnabled: false, plan: [] };
+
+export const PLAN_DUE_MS = 36 * 60 * 60 * 1000;
+export const PLAN_SLOT_MIN = 15;
+
+const MODE_IDS = new Set<string>(HISTORY_PLAN_MODES.map((m) => m.id));
+
+export function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+export function ymdOf(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+export function clampPlanAt(raw: unknown): string {
+  const s = String(raw || "").trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return "04:00";
+  const h = Math.max(0, Math.min(23, Number(m[1])));
+  const min = Math.round(Number(m[2]) / 15) * 15;
+  const mm = min >= 60 ? 45 : min;
+  return `${pad2(h)}:${pad2(mm)}`;
+}
+
+export function parsePlanAt(at: string): { h: number; m: number } {
+  const s = clampPlanAt(at);
+  return { h: Number(s.slice(0, 2)), m: Number(s.slice(3, 5)) };
+}
+
+export function weekdayMon1(d: Date) {
+  const n = d.getDay();
+  return n === 0 ? 7 : n;
+}
+
+export function planModeOf(raw: unknown): HistoryPlanMode {
+  const id = String(raw || "");
+  return MODE_IDS.has(id) ? (id as HistoryPlanMode) : "people-recheck";
+}
+
+export function planModeMeta(mode: string) {
+  return HISTORY_PLAN_MODES.find((m) => m.id === mode) || HISTORY_PLAN_MODES[4];
+}
+
+function uniqDays(raw: unknown): number[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const days = [...new Set(list.map((x) => Number(x) || 0).filter((n) => n >= 1 && n <= 7))].sort((a, b) => a - b);
+  return days;
+}
+
+function whenOf(raw: unknown): HistoryWhen {
+  const w = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const kind = String(w.kind || "");
+  if (kind === "daily") return { kind: "daily" };
+  if (kind === "interval") {
+    const unit: PlanUnit = w.unit === "day" || w.unit === "week" ? w.unit : "month";
+    const every = Math.max(1, Math.min(36, Number(w.every) || 1));
+    return { kind: "interval", every, unit };
+  }
+  if (kind === "nthWeekday") {
+    const nRaw = Number(w.n);
+    const n = nRaw === -1 ? -1 : Math.max(1, Math.min(5, nRaw || 1));
+    const day = Math.max(1, Math.min(7, Number(w.day) || 1));
+    return { kind: "nthWeekday", n, day };
+  }
+  if (kind === "ymd") {
+    const date = String(w.date || "").trim();
+    return { kind: "ymd", date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "" };
+  }
+  return { kind: "weekly", days: uniqDays(w.days) };
+}
+
+export function scheduleOf(raw: unknown, fallbackId = ""): HistorySchedule {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const id = String(r.id || fallbackId || "").trim();
+  const days = PLAN_RECHECK_OPTS.some((o) => o.days === Number(r.recheckDays)) ? Number(r.recheckDays) : 32;
+  const from = PLAN_FROM_OPTS.some((o) => o.id === r.dateFromId) ? (r.dateFromId as PlanFromId) : "2015";
+  return {
+    id,
+    on: r.on !== false,
+    mode: planModeOf(r.mode),
+    when: whenOf(r.when),
+    at: clampPlanAt(r.at),
+    recheckDays: days,
+    dateFromId: from,
+    study: r.study === "2" ? "2" : "1",
+    label: String(r.label || "").trim().slice(0, 80),
+    dueAt: String(r.dueAt || ""),
+    lastFiredAt: String(r.lastFiredAt || ""),
+    lastJobId: String(r.lastJobId || ""),
+    lastSkip: String(r.lastSkip || ""),
+  };
+}
+
+export function policyOf(raw: unknown): CrmSyncPolicy {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const list = Array.isArray(r.plan) ? r.plan : [];
+  const seen = new Set<string>();
+  const plan: HistorySchedule[] = [];
+  for (const row of list) {
+    const s = scheduleOf(row, `rule-${plan.length + 1}`);
+    if (!s.id) continue;
+    if (seen.has(s.id)) continue;
+    seen.add(s.id);
+    plan.push(s);
+  }
+  return {
+    planEnabled: Boolean(r.planEnabled),
+    plan,
+  };
+}
+
+export function canSavePolicy(p: CrmSyncPolicy): { ok: true } | { ok: false; error: string } {
+  for (const s of p.plan) {
+    if (!s.at) return { ok: false, error: "У расписания нет времени запуска." };
+    if (s.when.kind === "weekly" && !s.when.days.length) {
+      return { ok: false, error: "Выберите хотя бы один день недели." };
+    }
+    if (s.when.kind === "ymd" && !s.when.date) {
+      return { ok: false, error: "Укажите дату запуска." };
+    }
+    if (s.when.kind === "interval" && s.when.every < 1) {
+      return { ok: false, error: "Интервал — целое число от 1." };
+    }
+  }
+  return { ok: true };
+}
+
+export function planDateFrom(id: string, now = new Date()): string {
+  if (id === "2015") return "2015-01-01";
+  const years = id === "1" ? 1 : id === "3" ? 3 : 7;
+  const d = new Date(now.getFullYear() - years, now.getMonth(), now.getDate());
+  return ymdOf(d);
+}
+
+export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
+  const meta = planModeMeta(rule.mode);
+  const balance = rule.mode === "balance";
+  const needFrom = rule.mode === "people" || rule.mode === "balance";
+  return {
+    mode: (balance ? "people" : rule.mode) as HistoryPlanMode | "people",
+    kind: balance ? "balance" : "students",
+    study: rule.study,
+    recheck: meta.recheck,
+    recheckDays: meta.recheck ? rule.recheckDays : 32,
+    dateFrom: needFrom ? planDateFrom(rule.dateFromId, now) : "",
+    archived: rule.study === "2",
+  };
+}
+
+export function slotOpen(now: Date, at: string) {
+  const { h, m } = parsePlanAt(at);
+  if (now.getHours() !== h) return false;
+  const min = now.getMinutes();
+  return min >= m && min < m + PLAN_SLOT_MIN;
+}
+
+function intervalMs(every: number, unit: PlanUnit) {
+  if (unit === "day") return every * 86400000;
+  if (unit === "week") return every * 7 * 86400000;
+  return every * 30 * 86400000;
+}
+
+function nthWeekdayDate(now: Date, n: number, day: number): string {
+  const y = now.getFullYear();
+  const mo = now.getMonth();
+  if (n === -1) {
+    const last = new Date(y, mo + 1, 0);
+    const back = (weekdayMon1(last) - day + 7) % 7;
+    last.setDate(last.getDate() - back);
+    return ymdOf(last);
+  }
+  const first = new Date(y, mo, 1);
+  const add = (day - weekdayMon1(first) + 7) % 7;
+  const d = new Date(y, mo, 1 + add + (n - 1) * 7);
+  if (d.getMonth() !== mo) return "";
+  return ymdOf(d);
+}
+
+export function whenHits(when: HistoryWhen, now: Date): boolean {
+  if (when.kind === "daily") return true;
+  if (when.kind === "weekly") return when.days.includes(weekdayMon1(now));
+  if (when.kind === "ymd") return when.date === ymdOf(now);
+  if (when.kind === "nthWeekday") return nthWeekdayDate(now, when.n, when.day) === ymdOf(now);
+  if (when.kind === "interval") return true;
+  return false;
+}
+
+function firedThisOccurrence(rule: HistorySchedule, now: Date): boolean {
+  if (!rule.lastFiredAt) return false;
+  const t = Date.parse(rule.lastFiredAt);
+  if (!Number.isFinite(t)) return false;
+  if (rule.when.kind === "interval") {
+    return now.getTime() - t < intervalMs(rule.when.every, rule.when.unit);
+  }
+  return ymdOf(new Date(t)) === ymdOf(now);
+}
+
+export function markPlanDue(policy: CrmSyncPolicy, now = new Date()): CrmSyncPolicy {
+  if (!policy.planEnabled) {
+    return {
+      ...policy,
+      plan: policy.plan.map((r) => (r.dueAt ? { ...r, dueAt: "", lastSkip: "" } : r)),
+    };
+  }
+  return {
+    ...policy,
+    plan: policy.plan.map((r) => {
+      if (!r.on) return r.dueAt ? { ...r, dueAt: "" } : r;
+      if (r.dueAt) {
+        const due = Date.parse(r.dueAt);
+        if (Number.isFinite(due) && now.getTime() - due > PLAN_DUE_MS) {
+          return { ...r, dueAt: "", lastSkip: "expired" };
+        }
+        return r;
+      }
+      if (!whenHits(r.when, now) || !slotOpen(now, r.at)) return r;
+      if (firedThisOccurrence(r, now)) return r;
+      return { ...r, dueAt: now.toISOString(), lastSkip: "" };
+    }),
+  };
+}
+
+export function pickDueRule(policy: CrmSyncPolicy): HistorySchedule | null {
+  if (!policy.planEnabled) return null;
+  return policy.plan.find((r) => r.on && r.dueAt) || null;
+}
+
+export function stampPlanFired(policy: CrmSyncPolicy, id: string, jobId: string, now = new Date()): CrmSyncPolicy {
+  return {
+    ...policy,
+    plan: policy.plan.map((r) =>
+      r.id === id ? { ...r, dueAt: "", lastFiredAt: now.toISOString(), lastJobId: jobId, lastSkip: "" } : r,
+    ),
+  };
+}
+
+export function stampPlanSkip(policy: CrmSyncPolicy, reason: string): CrmSyncPolicy {
+  return {
+    ...policy,
+    plan: policy.plan.map((r) => (r.dueAt && !r.lastSkip ? { ...r, lastSkip: reason } : r)),
+  };
+}
+
+export function nextSlotAt(rule: HistorySchedule, now = new Date()): Date | null {
+  const { h, m } = parsePlanAt(rule.at);
+  const atToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+  const laterToday = atToday.getTime() > now.getTime();
+  if (rule.when.kind === "daily") {
+    return laterToday ? atToday : new Date(atToday.getTime() + 86400000);
+  }
+  if (rule.when.kind === "weekly") {
+    if (!rule.when.days.length) return null;
+    for (let i = laterToday ? 0 : 1; i <= 7; i += 1) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, h, m, 0, 0);
+      if (rule.when.days.includes(weekdayMon1(d))) return d;
+    }
+  }
+  if (rule.when.kind === "ymd") {
+    if (!rule.when.date) return null;
+    const [y, mo, da] = rule.when.date.split("-").map(Number);
+    const d = new Date(y, mo - 1, da, h, m, 0, 0);
+    return d.getTime() >= now.getTime() ? d : null;
+  }
+  if (rule.when.kind === "nthWeekday") {
+    const ymd = nthWeekdayDate(now, rule.when.n, rule.when.day);
+    if (ymd) {
+      const [y, mo, da] = ymd.split("-").map(Number);
+      const d = new Date(y, mo - 1, da, h, m, 0, 0);
+      if (d.getTime() >= now.getTime()) return d;
+    }
+    const nextMo = new Date(now.getFullYear(), now.getMonth() + 1, 1, h, m, 0, 0);
+    const nymd = nthWeekdayDate(nextMo, rule.when.n, rule.when.day);
+    if (!nymd) return null;
+    const [y, mo, da] = nymd.split("-").map(Number);
+    return new Date(y, mo - 1, da, h, m, 0, 0);
+  }
+  if (rule.when.kind === "interval") {
+    if (rule.lastFiredAt) {
+      const t = Date.parse(rule.lastFiredAt);
+      if (Number.isFinite(t)) {
+        const nxt = new Date(t + intervalMs(rule.when.every, rule.when.unit));
+        nxt.setHours(h, m, 0, 0);
+        if (nxt.getTime() > now.getTime()) return nxt;
+      }
+    }
+    return laterToday ? atToday : new Date(atToday.getTime() + 86400000);
+  }
+  return null;
+}
+
+export function whenLabel(when: HistoryWhen): string {
+  if (when.kind === "daily") return "каждый день";
+  if (when.kind === "weekly") {
+    const names = ["", "пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+    return when.days.map((d) => names[d] || "").filter(Boolean).join(", ") || "дни недели";
+  }
+  if (when.kind === "interval") {
+    const u = when.unit === "day" ? "дн" : when.unit === "week" ? "нед" : "мес";
+    return `каждые ${when.every} ${u}`;
+  }
+  if (when.kind === "nthWeekday") {
+    const names = ["", "пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+    return when.n === -1 ? `последний ${names[when.day]} месяца` : `${when.n}-й ${names[when.day]} месяца`;
+  }
+  return when.date || "дата";
+}
+
+export function emptyDraft(): Omit<HistorySchedule, "id" | "dueAt" | "lastFiredAt" | "lastJobId" | "lastSkip"> {
+  return {
+    on: true,
+    mode: "people-recheck",
+    when: { kind: "daily" },
+    at: "04:00",
+    recheckDays: 7,
+    dateFromId: "2015",
+    study: "1",
+    label: "",
+  };
+}

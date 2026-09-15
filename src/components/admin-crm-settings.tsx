@@ -14,6 +14,8 @@ import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-period
 import { keepAlfa, peopleLessonsLine, peopleStudentAction, peopleStudentBadge, peopleStudentHint, PEOPLE_PACK } from "@/data/crm-people-line";
 import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 import { RECHECK_DAY_OPTS, clampRecheckDays, type RecheckDays } from "@/data/crm-inbound-core";
+import { POLICY_FACTORY, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
+import { HistoryPlanPanel } from "@/components/admin-history-plan";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
   let n = from?.parentElement || null;
@@ -320,6 +322,7 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 const CRM_SET_TABS = [
   { id: "people", label: "Люди и роли" },
   { id: "alfa", label: "Фон с AlfaCRM" },
+  { id: "historyAuto", label: "Пульт Истории" },
   { id: "history", label: "История из Alfa" },
   { id: "queue", label: "Очередь" },
   { id: "funnel", label: "Воронка" },
@@ -2147,6 +2150,7 @@ export function AdminCrmSettings() {
   const [archNeedFio, setArchNeedFio] = useState(false);
   const [archNeedGroups, setArchNeedGroups] = useState(false);
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
+  const [syncPolicy, setSyncPolicy] = useState<CrmSyncPolicy>(POLICY_FACTORY);
   const [histTab, setHistTab] = useState<HistTab>("roster");
   const [loadGuide, setLoadGuide] = useState<HistTab | null>(null);
   const crmTabsRef = useRef<HTMLDivElement>(null);
@@ -2268,6 +2272,7 @@ export function AdminCrmSettings() {
     void loadCache();
     void loadActors();
     void loadJournal();
+    void loadSyncPolicy();
   }, []);
 
   useEffect(() => {
@@ -2353,6 +2358,31 @@ export function AdminCrmSettings() {
       return;
     }
     setMsg(res.error || "Не удалось сохранить кэш.");
+  }
+
+  async function loadSyncPolicy() {
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "syncPolicyGet" } as never,
+      })) as { ok?: boolean; policy?: CrmSyncPolicy };
+      if (res.ok && res.policy) setSyncPolicy(res.policy);
+    } catch {
+      /* завод */
+    }
+  }
+
+  async function saveSyncPolicy(next: CrmSyncPolicy) {
+    setSyncPolicy(next);
+    const res = (await adminSchedule({
+      data: { token: token(), action: "syncPolicySave", policy: next } as never,
+    })) as { ok?: boolean; policy?: CrmSyncPolicy; error?: string };
+    if (res.ok && res.policy) {
+      setSyncPolicy(res.policy);
+      setMsg(next.planEnabled ? "Пульт записан. Автомат включён." : "Пульт записан. Автомат выкл.");
+      return;
+    }
+    setMsg(res.error || "Не удалось сохранить пульт.");
+    await loadSyncPolicy();
   }
 
   async function loadActors() {
@@ -3489,6 +3519,15 @@ export function AdminCrmSettings() {
         </ul>
       </Card>
       </>
+      ) : null}
+
+      {crmTab === "historyAuto" ? (
+      <Card
+        title="Пульт Истории"
+        hint="Сервер сам нажимает те же кнопки, что в «История из Alfa». Без карточки расписания — молчит. С завода автомат выкл."
+      >
+        <HistoryPlanPanel policy={syncPolicy} job={journal?.job} busy={busy} onSave={(next) => void saveSyncPolicy(next)} />
+      </Card>
       ) : null}
 
       {crmTab === "history" ? (

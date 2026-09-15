@@ -1214,6 +1214,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "cachePolicyGet"
           | "cachePolicySave"
           | "alfaLinkSave"
+          | "syncPolicyGet"
+          | "syncPolicySave"
           | "actorsGet"
           | "actorsSave"
           | "crmQueueTick"
@@ -1335,6 +1337,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         take?: number;
         skip?: number;
         alfaLink?: string | { mode?: string; pull?: unknown; push?: unknown; minutes?: number };
+        policy?: import("./crm-sync-policy-core").CrmSyncPolicy;
         cachePolicy?: import("./crm-cache-policy").CachePolicy;
         groupKeys?: { branchId: number; groupId: number }[];
         pupilItems?: import("./pupil-tariffs").PupilTariffItem[];
@@ -3034,6 +3037,19 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const next = saveAlfaLink(typeof raw === "object" && raw ? raw : alfaLinkOf(typeof raw === "string" ? raw : ""));
       logAdmin(`Связь AlfaCRM: ${next.mode === "offline" ? "без Alfa" : "фон"}`);
       return { ok: true as const, alfaLink: next };
+    }
+    if (data.action === "syncPolicyGet") {
+      const { loadSyncPolicy, POLICY_FACTORY } = await import("./crm-sync-policy");
+      const { loadJournalJob } = await import("./crm-journal-job-core");
+      return { ok: true as const, policy: loadSyncPolicy(), factory: POLICY_FACTORY, job: loadJournalJob() };
+    }
+    if (data.action === "syncPolicySave") {
+      const { saveSyncPolicy } = await import("./crm-sync-policy");
+      const { logAdmin } = await import("./admin-settings");
+      const raw = (data as { policy?: unknown }).policy;
+      const res = saveSyncPolicy(raw && typeof raw === "object" ? (raw as Parameters<typeof saveSyncPolicy>[0]) : {});
+      if (res.ok) logAdmin(res.policy.planEnabled ? `Пульт Истории: автомат, расписаний ${res.policy.plan.length}` : "Пульт Истории: автомат выкл");
+      return res;
     }
     if (data.action === "actorsGet") {
       const { loadActors } = await import("./crm-actors-disk");

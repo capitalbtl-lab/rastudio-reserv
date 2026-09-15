@@ -31,6 +31,8 @@ export const KERNEL_FILES = [
   "src/data/crm-inbound-core.ts",
   "src/data/crm-pay-core.ts",
   "src/data/crm-alfa-link-core.ts",
+  "src/data/crm-sync-policy-core.ts",
+  "src/data/crm-sync-policy.ts",
   "src/data/dossiers.ts",
   "src/data/customer-card-disk.ts",
   "src/data/schedule-map.ts",
