@@ -1424,10 +1424,10 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const { token, request } = await import("./alfacrm");
     const t = await token();
     const forcePay = Boolean(recheck) && !pendingPay;
-    const payFrom = recheck ? recheckWindowYmd(recheckDays).from : from;
+    const payWin = recheck ? recheckWindowYmd(recheckDays) : { from, to: "" };
     if (recheck) stampCustomerSync(cid, { paysRecheckAt: "" });
     try {
-      await inboundCustomerPays(request, t, branchId, cid, { force: forcePay, dateFrom: payFrom });
+      await inboundCustomerPays(request, t, branchId, cid, { force: forcePay, dateFrom: payWin.from, dateTo: payWin.to });
     } catch (e) {
       payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
     }

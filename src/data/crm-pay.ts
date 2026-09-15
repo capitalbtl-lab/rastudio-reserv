@@ -726,18 +726,93 @@ async function stampPayBalances(_cids: number[]) {
   /* extras.balance не затираем кассой: шапка остаётся шапкой, rest абонемента — строка. */
 }
 
+/** Синяя касса: уже дочитанные не начинаем с page 0. Окно дат, done не снимаем. */
+async function inboundPayWindow(
+  request: (path: string, body: Record<string, unknown>, token: string) => Promise<unknown>,
+  token: string,
+  branchId: number,
+  customerId: number,
+  dateFrom: string,
+  dateTo: string,
+  reset0: string,
+) {
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  const resetGone = () => String(customerSyncOf(customerId).paysResetAt || "") !== reset0;
+  const branches = uniqueBranches(branchId);
+  const from = alfaPayIndexDate(dateFrom);
+  const to = alfaPayIndexDate(dateTo);
+  const raw: Record<string, unknown>[] = [];
+  const pageSize = PAY_CUSTOMER_PAGE;
+  for (const bid of branches) {
+    if (resetGone()) return paysOf(customerId);
+    try {
+      const json = await request(`/v2api/${bid}/pay/index`, {
+        page: 0,
+        pageSize,
+        customer_id: customerId,
+        date_from: from,
+        date_to: to,
+      }, token);
+      const pack = crmUnwrapIndex(json);
+      raw.push(...pack.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
+    } catch {
+      /* филиал окна — не валим done */
+    }
+    for (const typeId of PAY_INBOUND_EXTRA_TYPES) {
+      if (resetGone()) return paysOf(customerId);
+      try {
+        const extra = await request(`/v2api/${bid}/pay/index`, {
+          page: 0,
+          pageSize,
+          customer_id: customerId,
+          pay_type_id: typeId,
+          date_from: from,
+          date_to: to,
+        }, token);
+        const packT = crmUnwrapIndex(extra);
+        raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
+      } catch {
+        /* тип окна — не валим done */
+      }
+    }
+  }
+  if (resetGone()) return paysOf(customerId);
+  const pulled = raw
+    .map((it) => {
+      const explicit = payCustomerIdOf(it, 0);
+      if (explicit && explicit !== customerId) return null;
+      return packPay(it, customerId, branchId);
+    })
+    .filter((x): x is PayRow => Boolean(x) && Number(x.customerId) === customerId);
+  const merged = markRefundOfGoods(mergePayInbound(pulled, paysOf(customerId), holdPayIds()));
+  replaceCustomerPays(customerId, merged, { keepAll: true });
+  const liveN = merged.filter((x) => !x.deleted).length;
+  const next = load();
+  const prev = next.payFill?.[String(customerId)];
+  next.payFill = {
+    ...(next.payFill || {}),
+    [String(customerId)]: { bid: Number(prev?.bid) || branches[0], page: Number(prev?.page) || 0, done: true, empty: liveN === 0 },
+  };
+  save(next, { keepAll: true });
+  return merged;
+}
+
 export async function inboundCustomerPays(
   request: (path: string, body: Record<string, unknown>, token: string) => Promise<unknown>,
   token: string,
   branchId: number,
   customerId: number,
-  opts?: { force?: boolean; dateFrom?: string },
+  opts?: { force?: boolean; dateFrom?: string; dateTo?: string },
 ) {
   if (pendingExportIds(["pay.create"]).has(customerId) && !opts?.force && payCustomerFilled(customerId)) return paysOf(customerId);
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
-  if (opts?.force) markPayJournalIncomplete(customerId);
   const reset0 = String(customerSyncOf(customerId).paysResetAt || "");
   const resetGone = () => String(customerSyncOf(customerId).paysResetAt || "") !== reset0;
+  const scannedAlready = payFillScanned(customerId);
+  if (opts?.force && scannedAlready && !payFillPending(customerId)) {
+    return inboundPayWindow(request, token, branchId, customerId, String(opts.dateFrom || ""), String(opts.dateTo || ""), reset0);
+  }
+  if (opts?.force) markPayJournalIncomplete(customerId);
   const store = load();
   const branches = uniqueBranches(branchId);
   const raw: Record<string, unknown>[] = [];

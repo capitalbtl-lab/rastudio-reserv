@@ -185,7 +185,11 @@ describe("касса список", () => {
     assert.match(inbound, /extraResume = Boolean\(Number\(cur\?\.extra\) && !cur\?\.done\)/);
     assert.doesNotMatch(inbound, /!opts\?\.force && Number\(cur\?\.extra\)/);
     assert.match(inbound, /ran \+= 1/);
-    assert.doesNotMatch(inbound, /date_from/);
+    assert.match(inbound, /scannedAlready && !payFillPending\(customerId\)/);
+    assert.match(inbound, /inboundPayWindow/);
+    assert.match(pay, /async function inboundPayWindow/);
+    assert.match(pay, /date_from: from/);
+    assert.match(pay, /done: true, empty: liveN === 0/);
     assert.match(inbound, /received >= total/);
     assert.doesNotMatch(inbound, /if \(!failed && !done\) \{/);
     assert.match(inbound, /save\(store, \{ keepAll: true \}\)/);

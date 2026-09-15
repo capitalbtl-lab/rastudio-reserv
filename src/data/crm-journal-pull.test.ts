@@ -256,6 +256,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /paysScanned: payFillScanned\(p.cid\)|paysScanned/);
     assert.match(pull, /forcePay = Boolean\(recheck\) && !pendingPay/);
     assert.match(pull, /force: forcePay/);
+    assert.match(pull, /dateTo: payWin.to/);
     assert.doesNotMatch(pull, /force: Boolean\(recheck\)/);
     assert.doesNotMatch(pull, /if \(recheck\) markPayJournalIncomplete/);
     assert.doesNotMatch(pull, /force: recheck && payCustomerFilled\(cid\)/);
