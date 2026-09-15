@@ -85,6 +85,9 @@ describe("касса список", () => {
     assert.doesNotMatch(pay, /01\.01\.2020/);
     assert.doesNotMatch(pay, /pageSize: 50, \.\.\.dates/);
     assert.match(pay, /markPayJournalComplete/);
+    const completeFn = pay.slice(pay.indexOf("export function markPayJournalComplete"), pay.indexOf("export function markPayJournalIncomplete"));
+    assert.match(completeFn, /done: true/);
+    assert.doesNotMatch(completeFn, /delete store.payFill/);
     assert.match(pay, /payPollLookbackDates/);
     assert.match(pay, /pay_type_id: 2/);
     assert.match(pay, /pay_type_id: 3/);
@@ -185,7 +188,9 @@ describe("касса список", () => {
     assert.match(inbound, /extraResume = Boolean\(Number\(cur\?\.extra\) && !cur\?\.done\)/);
     assert.doesNotMatch(inbound, /!opts\?\.force && Number\(cur\?\.extra\)/);
     assert.match(inbound, /ran \+= 1/);
-    assert.match(inbound, /scannedAlready && !payFillPending\(customerId\)/);
+    assert.match(inbound, /opts\?\.force && !payFillPending\(customerId\)/);
+    assert.doesNotMatch(inbound, /if \(opts\?\.force\) markPayJournalIncomplete/);
+    assert.doesNotMatch(inbound, /scannedAlready && !payFillPending/);
     assert.match(inbound, /inboundPayWindow/);
     assert.match(pay, /async function inboundPayWindow/);
     assert.match(pay, /pruneWindowCorrections/);

@@ -312,10 +312,19 @@ export function markPayJournalComplete(customerId: number) {
   if (!id) return;
   const store = load();
   const set = new Set(store.complete || []);
-  if (set.has(id)) return;
   set.add(id);
   store.complete = [...set];
-  if (store.payFill) delete store.payFill[String(id)];
+  const prev = store.payFill?.[String(id)];
+  const liveN = paysOf(id).filter((x) => !x.deleted).length;
+  store.payFill = {
+    ...(store.payFill || {}),
+    [String(id)]: {
+      bid: Number(prev?.bid) || 1,
+      page: Number(prev?.page) || 0,
+      done: true,
+      empty: prev?.empty ?? liveN === 0,
+    },
+  };
   save(store);
 }
 
@@ -814,11 +823,9 @@ export async function inboundCustomerPays(
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const reset0 = String(customerSyncOf(customerId).paysResetAt || "");
   const resetGone = () => String(customerSyncOf(customerId).paysResetAt || "") !== reset0;
-  const scannedAlready = payFillScanned(customerId);
-  if (opts?.force && scannedAlready && !payFillPending(customerId)) {
+  if (opts?.force && !payFillPending(customerId)) {
     return inboundPayWindow(request, token, branchId, customerId, String(opts.dateFrom || ""), String(opts.dateTo || ""), reset0);
   }
-  if (opts?.force) markPayJournalIncomplete(customerId);
   const store = load();
   const branches = uniqueBranches(branchId);
   const raw: Record<string, unknown>[] = [];
