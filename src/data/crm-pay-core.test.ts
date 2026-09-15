@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, pruneWindowCorrections, collapsePayRows, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, PAY_INBOUND_EXTRA_TYPES, matchAlfaPayId, payNum, markRefundOfGoods, remainderClose, rowDelta, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, pruneWindowCorrections, collapsePayRows, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, payFillRange, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, PAY_INBOUND_EXTRA_TYPES, matchAlfaPayId, payNum, markRefundOfGoods, remainderClose, rowDelta, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -309,5 +309,18 @@ describe("журнал денег", () => {
     assert.equal(remainderClose(0, 0, false), true);
     assert.equal(remainderClose(47504, 47504, true), true);
     assert.equal(remainderClose(47404, 47504, true), false);
+  });
+
+  it("красные годы кассы → date_from/date_to в теле pay/index", () => {
+    assert.deepEqual(payFillRange(""), {});
+    assert.deepEqual(payFillRange(), {});
+    const y = payFillRange("2015-01-01", "2026-09-15");
+    assert.equal(y.date_from, "2015.01.01");
+    assert.equal(y.date_to, "2026.09.15");
+    const one = payFillRange("2025-09-15", "2026-09-15");
+    assert.equal(one.date_from, "2025.09.15");
+    const open = payFillRange("2015-01-01");
+    assert.equal(open.date_from, "2015.01.01");
+    assert.match(String(open.date_to || ""), /^\d{4}\.\d{2}\.\d{2}$/);
   });
 });

@@ -218,7 +218,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     const kind = opts.kind === "balance" ? "balance" : "students";
     if (given.length && mode !== "audit" && mode !== "people-slow" && mode !== "people-recheck") {
       if (kind === "balance" && mode === "people") {
-        const side = journalPeopleSide(study, { skipLeads: true });
+        const side = journalPeopleSide(study);
         const by = new Map((side.people || []).map((p) => [p.cid, p as PeopleJobRow]));
         return given.filter((g) => {
           const row = by.get(g.cid);
@@ -227,7 +227,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       }
       return given;
     }
-    const side = journalPeopleSide(study, { skipLeads: kind === "balance" || mode === "audit" });
+    const side = journalPeopleSide(study);
     const people = (side.people || []) as PeopleJobRow[];
     if (mode === "audit") {
       let queue = [...people];
@@ -325,7 +325,7 @@ function loopPullKind(mode: JournalJobMode | ""): "archiveCatalog" | "life" | "a
 }
 
 function peopleRowsFor(study: "1" | "2", kind: string): PeopleJobRow[] {
-  const side = journalPeopleSide(study, { skipLeads: kind === "balance" });
+  const side = journalPeopleSide(study);
   return (side.people || []) as PeopleJobRow[];
 }
 

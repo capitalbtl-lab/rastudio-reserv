@@ -19,6 +19,7 @@ import {
   payCustomerNameOf,
   ruDateIso,
   alfaPayIndexDate,
+  payFillRange,
   kindFromAlfaPay,
   snapshotBalance,
   payNum,
@@ -826,6 +827,7 @@ export async function inboundCustomerPays(
   if (opts?.force && !payFillPending(customerId)) {
     return inboundPayWindow(request, token, branchId, customerId, String(opts.dateFrom || ""), String(opts.dateTo || ""), reset0);
   }
+  const fillDates = payFillRange(opts?.dateFrom, opts?.dateTo);
   const store = load();
   const branches = uniqueBranches(branchId);
   const raw: Record<string, unknown>[] = [];
@@ -877,6 +879,7 @@ export async function inboundCustomerPays(
           page: p,
           pageSize,
           customer_id: customerId,
+          ...fillDates,
         }, token);
         const pack = crmUnwrapIndex(json);
         console.warn(`pay inbound cid=${customerId} branch=${bid} page=${p} n=${pack.items.length} total=${pack.total ?? "?"}`);
@@ -927,7 +930,7 @@ export async function inboundCustomerPays(
           console.warn(`pay inbound cid=${customerId} branch=${extraBid} type=${typeId}`);
           const extra = await request(
             `/v2api/${extraBid}/pay/index`,
-            { page: 0, pageSize, customer_id: customerId, pay_type_id: typeId },
+            { page: 0, pageSize, customer_id: customerId, pay_type_id: typeId, ...fillDates },
             token,
           );
           const packT = crmUnwrapIndex(extra);

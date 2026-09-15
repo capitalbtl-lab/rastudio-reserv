@@ -400,6 +400,19 @@ export function alfaPayIndexDate(raw?: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(sv) ? sv.replace(/-/g, ".") : "";
 }
 
+/** Красная касса: годы рамки → date_from/date_to в теле. Пустая дата — без фильтра (старый курсор). */
+export function payFillRange(dateFrom?: string, dateTo?: string): { date_from?: string; date_to?: string } {
+  const raw = String(dateFrom || "").trim();
+  if (!raw) return {};
+  const iso = ruDateIso(raw).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return {};
+  const from = `${iso.slice(0, 4)}.${iso.slice(5, 7)}.${iso.slice(8, 10)}`;
+  const toRaw = String(dateTo || "").trim();
+  const toIso = toRaw ? ruDateIso(toRaw).slice(0, 10) : shiftMskDate(0);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(toIso)) return { date_from: from };
+  return { date_from: from, date_to: `${toIso.slice(0, 4)}.${toIso.slice(5, 7)}.${toIso.slice(8, 10)}` };
+}
+
 export function shiftMskDate(days: number, now = new Date()) {
   const iso = now.toLocaleString("sv-SE", { timeZone: "Europe/Moscow" }).slice(0, 10);
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);

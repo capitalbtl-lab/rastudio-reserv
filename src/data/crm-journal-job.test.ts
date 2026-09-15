@@ -170,6 +170,8 @@ describe("фон истории из Alfa", () => {
     assert.match(jobSrc, /slowFill: mode === "people-slow"/);
     assert.match(jobSrc, /mode !== "people-slow"/);
     assert.match(jobSrc, /peopleJobQueue\(people, "students", false\)/);
+    assert.doesNotMatch(jobSrc, /skipLeads: true/);
+    assert.doesNotMatch(jobSrc, /skipLeads: kind === "balance"/);
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
     assert.match(jobSrc, /peopleSlowAdvance/);

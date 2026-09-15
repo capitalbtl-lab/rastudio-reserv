@@ -310,8 +310,9 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(chunk, /PAY_INBOUND_RUN/);
     assert.match(chunk, /pay_type_id: typeId/);
     assert.match(chunk, /PAY_INBOUND_EXTRA_TYPES/);
-    assert.match(chunk, /customer_id: customerId,\s*\}, token\)/);
-    assert.doesNotMatch(chunk, /customer_id: customerId,\s*date_from/);
+    assert.match(chunk, /payFillRange\(opts\?\.dateFrom, opts\?\.dateTo\)/);
+    assert.match(chunk, /\.\.\.fillDates/);
+    assert.match(chunk, /customer_id: customerId,\s*\.\.\.fillDates/);
     const incompleteAt = pay.indexOf("export function markPayJournalIncomplete");
     const incomplete = pay.slice(incompleteAt, incompleteAt + 400);
     assert.doesNotMatch(incomplete, /delete store\.payFill/);

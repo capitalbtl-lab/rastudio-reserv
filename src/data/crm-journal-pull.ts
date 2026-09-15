@@ -2224,7 +2224,6 @@ export async function journalPull(opts: {
 
   const group = selectedGid ? { groupId: selectedGid, branchId: selectedBid || 1 } : undefined;
   let people = rankedStudentIds(study, group, group ? "" : school);
-  if (kind === "balance" || kind === "audit") people = people.filter((p) => p.study !== 0 && p.status !== "лид");
   const wanted = Number(opts.customerId) || 0;
   if (!people.length && !wanted) {
     store.note = group

@@ -134,6 +134,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /rankedStudentIds\(study\)/);
     assert.match(pull, /if \(lead\) return study === "1"/);
     assert.match(pull, /skipLeads/);
+    assert.doesNotMatch(pull, /kind === "balance" \|\| kind === "audit"\) people = people.filter/);
     assert.match(pull, /export function peopleWithoutLiveGroup/);
     assert.match(pull, /x\.study !== 1\) continue/);
     assert.match(pull, /ungrouped/);
