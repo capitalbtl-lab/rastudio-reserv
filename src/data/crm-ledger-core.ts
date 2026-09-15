@@ -226,13 +226,23 @@ export function writeoffSumForCtt(
   return n;
 }
 
-export function ledgerMoney(opts: { paySum: number; writeoffSum: number; snap?: number; complete?: boolean }) {
+export function ledgerMoney(opts: {
+  paySum: number;
+  writeoffSum: number;
+  snap?: number;
+  complete?: boolean;
+  liveCtt?: boolean;
+  pending?: boolean;
+}) {
   const pay = Number(opts.paySum) || 0;
   const wo = Number(opts.writeoffSum) || 0;
   const snap = opts.snap == null ? Number.NaN : Number(opts.snap);
-  if (opts.complete) return pay - wo;
+  const tape = pay - wo;
+  if (opts.pending) return tape;
+  if (opts.liveCtt && Number.isFinite(snap)) return snap;
+  if (opts.complete) return tape;
   if (Number.isFinite(snap)) return snap;
-  return pay - wo;
+  return tape;
 }
 
 export function uniqueBranches(primary?: number) {

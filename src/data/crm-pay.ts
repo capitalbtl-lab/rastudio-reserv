@@ -57,6 +57,8 @@ import { pendingExportIds } from "./crm-export-queue";
 import { logAdmin } from "./admin-settings";
 import { ledgerMoney, uniqueBranches, payCttIdOf, writeoffSumOf } from "./crm-ledger-core";
 import { displayPersonName, isPhoneLike } from "./client-display";
+import { findDossier } from "./dossiers";
+import { parseDossierCtt } from "./pupil-tariffs";
 
 export type { PayKind, PayRow };
 export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, accountSnapOf, liveCttOf, cttRestSum, paySumForCtt, payCountForCtt, cttIdOfPay, OPENING_NOTE, payAccountLabel, CASH_PAGE_SIZES, cashPageSlice, cashTakeOf, payFillNote, payCustomerNameOf };
@@ -273,7 +275,11 @@ export function customerBalance(customerId: number, fallback?: number | string, 
   const rows = paysOf(id);
   const paySum = displayedBalance(rows, undefined, true);
   const snap = fallback == null || fallback === "" ? Number.NaN : Number(fallback);
-  return ledgerMoney({ paySum, writeoffSum, snap, complete: payCustomerFilled(id) });
+  const liveCtt = liveCttOf(parseDossierCtt(findDossier({ crmId: id })?.extras)).length > 0;
+  const pending =
+    localPaysPending().some((x) => Number(x.customerId) === id) ||
+    pendingExportIds(["pay.create", "pay.update", "pay.delete"]).has(id);
+  return ledgerMoney({ paySum, writeoffSum, snap, complete: payCustomerFilled(id), liveCtt, pending });
 }
 
 export function isPayJournalComplete(customerId: number) {

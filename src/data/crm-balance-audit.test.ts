@@ -143,6 +143,23 @@ describe("шаг 4 сверка остатка", () => {
     });
     assert.ok(codes.includes("ctt"));
     assert.equal(auditOnRight(codes), false);
+    const afterShow = classifyAudit({
+      alfaOk: true,
+      clients: 1200,
+      alfa: 1200,
+      cash: 8000,
+      paysComplete: true,
+      lessonsDisk: 20,
+      lessonsAlfa: 20,
+      woCard: 100,
+      woCal: 100,
+      liveCtt: true,
+      repaired: false,
+    });
+    assert.ok(afterShow.includes("ok"));
+    assert.equal(afterShow.includes("pays"), false);
+    assert.equal(afterShow.includes("ctt"), false);
+    assert.equal(auditOnRight(afterShow), true);
   });
 
   it("formula без ремонта: касса полная, Клиенты ≠ Alfa, не ctt", () => {

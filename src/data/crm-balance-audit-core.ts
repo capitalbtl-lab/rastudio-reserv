@@ -91,8 +91,10 @@ export function classifyAudit(p: {
       return [...new Set(codes)];
     }
     if (p.paysComplete && !moneyClose(p.cash, p.alfa)) {
-      codes.push("pays");
-      return [...new Set(codes.filter((c) => c !== "ok"))];
+      if (!(p.liveCtt && moneyClose(p.clients, p.alfa))) {
+        codes.push("pays");
+        return [...new Set(codes.filter((c) => c !== "ok"))];
+      }
     }
     if (codes.includes("lessons")) return [...new Set(codes.filter((c) => c !== "ok"))];
     if (!codes.includes("src") && !codes.includes("status") && !codes.includes("corr")) return codes.length ? ["ok", ...codes] : ["ok"];

@@ -68,6 +68,10 @@ describe("журнал оплат и списаний", () => {
     assert.equal(writeoffSumForCtt(done, 4412), 1700);
     assert.equal(writeoffSumForCtt(done, 0), 400);
     assert.equal(ledgerMoney({ paySum: 12000, writeoffSum: 1700, snap: 12000, complete: true }), 10300);
+    assert.equal(ledgerMoney({ paySum: 8000, writeoffSum: 0, snap: 1200, complete: true, liveCtt: true }), 1200);
+    assert.equal(ledgerMoney({ paySum: 8000, writeoffSum: 0, snap: 1200, complete: true, liveCtt: true, pending: true }), 8000);
+    assert.equal(ledgerMoney({ paySum: 1487, writeoffSum: 0, snap: 1488, complete: true }), 1487);
+    assert.equal(ledgerMoney({ paySum: 6450, writeoffSum: 0, snap: 6450, complete: true, liveCtt: true }), 6450);
   });
 
   it("филиалы 1–4, основной первый", () => {
