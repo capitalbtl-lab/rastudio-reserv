@@ -51,7 +51,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /opts\?\.skipPeople \? new Map/);
     assert.match(pull, /loadGroupCard\(g\.branchId, g\.groupId\)/);
     assert.match(pull, /hydrateDisk/);
-    assert.match(pull, /chunkOutsideLessons/);
+    assert.match(pull, /chunkOutsideLessons\(p, lifeFirst, lifeLast\)/);
     assert.match(pull, /done: stamped \|\| empty/);
     assert.doesNotMatch(pull, /stamped \|\| n > 0 \|\| emptyPrefix/);
     assert.match(pull, /applyHydrateFills/);
@@ -86,6 +86,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /chunkOutsideLessons/);
     assert.match(pull, /journalGroupNow/);
     assert.match(job, /if \(mode === "groups" && item.groupId && !item.periodKey\)/);
+    assert.match(job, /givenG.every\(\(r\) => r.periodKey\)/);
     assert.match(job, /prune: blue/);
     assert.match(job, /periodKey: blue && !windowed \? "whole"/);
     assert.match(job, /dateFrom: blue \? \(windowed \? job.dateFrom : "2015-01-01"\) : job.dateFrom/);
@@ -353,9 +354,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /ra-progress-run/);
     assert.match(ui, /bg-primary/);
     assert.match(ui, /overflow-anchor:none/);
-    assert.match(ui, /Шаг 2 · тема, ДЗ, комментарий, таблица учеников/);
+    assert.match(ui, /явки на месте · без темы\/ДЗ/);
     assert.match(ui, /Загрузить явки/);
-    assert.match(ui, /Загрузить тему, ДЗ, комментарий и таблицу учеников всех кварталов/);
+    assert.match(ui, /Тема, ДЗ, комментарий, таблица · \$\{detailsLeft\}/);
+    assert.match(ui, /onRecheckAll\(row\)/);
     assert.match(ui, /грузить нечего/);
     assert.match(ui, /holdFill/);
     assert.match(ui, /colLock/);

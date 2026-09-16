@@ -615,9 +615,8 @@ export function groupFillRow(g: JournalPullGroup) {
   const age = groupAge(clipFrom, clipTo);
   const known = Boolean(clipFrom || clipTo);
   const cal = loadGroupCard(g.branchId, g.groupId)?.calendar || [];
-  const firsts = cal.map((l) => parseLessonDate(l.date)).filter((d): d is Date => Boolean(d));
-  const first = firsts.length ? new Date(Math.min(...firsts.map((d) => d.getTime()))) : null;
-  const last = firsts.length ? new Date(Math.max(...firsts.map((d) => d.getTime()))) : null;
+  const lifeFirst = parseLessonDate(life.from);
+  const lifeLast = parseLessonDate(life.to);
   const allParts = periods.map((p) => {
     let n = 0;
     let needDetails = 0;
@@ -628,7 +627,7 @@ export function groupFillRow(g: JournalPullGroup) {
       if (Number(l.status) === 3) conducted += 1;
       if (lessonNeedsHomework(l)) needDetails += 1;
     }
-    const empty = chunkOutsideLessons(p, first, last);
+    const empty = Boolean(lifeFirst && lifeLast) && chunkOutsideLessons(p, lifeFirst, lifeLast);
     const stamped = done.includes(p.key) && !weak.has(p.key);
     return {
       key: p.key,
@@ -2347,11 +2346,11 @@ export async function journalPull(opts: {
     const useGrain = clampGrain(age.id, grain);
     const chunksAll = journalChunks(useGrain);
     const known = Boolean(clipFrom || clipTo);
-    const cal = loadGroupCard(hit.branchId, hit.groupId)?.calendar || [];
-    const firsts = cal.map((l) => parseLessonDate(l.date)).filter((d): d is Date => Boolean(d));
-    const first = firsts.length ? new Date(Math.min(...firsts.map((d) => d.getTime()))) : null;
-    const last = firsts.length ? new Date(Math.max(...firsts.map((d) => d.getTime()))) : null;
-    const chunks = known ? chunksAll.filter((c) => chunkOverlapsLife(c, clipFrom, clipTo) && !chunkOutsideLessons(c, first, last)) : chunksAll.slice(0, 4);
+    const lifeFirst = parseLessonDate(life.from);
+    const lifeLast = parseLessonDate(life.to);
+    const chunks = known
+      ? chunksAll.filter((c) => chunkOverlapsLife(c, clipFrom, clipTo) && !chunkOutsideLessons(c, lifeFirst, lifeLast))
+      : chunksAll.slice(0, 4);
     const need = (c: (typeof chunks)[number]) => {
       const hitRow = fill.periodHit?.[c.key];
       if (hitRow?.pagesComplete && !(Number(hitRow.holeN) || 0)) return false;

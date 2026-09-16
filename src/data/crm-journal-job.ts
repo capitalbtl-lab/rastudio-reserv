@@ -309,7 +309,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
         periodLabel: r.periodLabel,
       }))
       .filter((r) => r.groupId);
-    if (givenG.length && mode !== "group-one" && mode !== "groups-recheck") return givenG;
+    if (givenG.length && mode === "groups" && givenG.every((r) => r.periodKey)) return givenG;
     if (mode === "group-one") {
       const all = journalPullGroups();
       const hit = all.find((g) => g.groupId === Number(opts.groupId) && (!opts.branchId || g.branchId === Number(opts.branchId))) || all.find((g) => g.groupId === Number(opts.groupId));
@@ -318,8 +318,13 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
         return [{ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: opts.periodKey, periodLabel: opts.periodLabel || opts.periodKey }];
       }
       const row = groupFillRow(hit);
+      if (opts.recheck) {
+        return [{ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: groupJournalGreen(row) ? "" : "whole", periodLabel: groupJournalGreen(row) ? "окно" : "целиком" }];
+      }
       const chunks = packGrain(row.parts || [], clampGrain(row.age, grain));
-      return chunks.map((c) => ({ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: c.key, periodLabel: c.label }));
+      return chunks
+        .filter((c) => !c.empty && (!c.done || c.weak))
+        .map((c) => ({ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: c.key, periodLabel: c.label }));
     }
     const rows = groups.map((g) => groupFillRow(g));
     if (mode === "groups-recheck") {
@@ -329,7 +334,9 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       return queue.map((r) => ({ groupId: r.groupId, branchId: r.branchId, name: r.name }));
     }
     const items: JournalJobItem[] = [];
+    const wantG = givenG.length ? new Set(givenG.map((r) => r.groupId)) : null;
     for (const r of rows) {
+      if (wantG && !wantG.has(r.groupId)) continue;
       if (groupJournalGreen(r)) continue;
       const chunks = packGrain(r.parts || [], clampGrain(r.age, grain));
       for (const c of chunks) {
@@ -1229,7 +1236,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       periodKey: blue && !windowed ? "whole" : item.periodKey || "",
       grain: job.grain,
       recheck: Boolean(job.recheck) || (mode === "group-one" && !item.periodKey),
-      prune: blue,
+      prune: blue || item.periodKey === "whole",
       dateFrom: blue ? (windowed ? job.dateFrom : "2015-01-01") : job.dateFrom,
       dateTo: blue ? (windowed ? job.dateTo || "" : "") : job.dateTo,
       recheckDays: job.recheckDays,

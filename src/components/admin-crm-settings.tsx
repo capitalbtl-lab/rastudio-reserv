@@ -221,7 +221,7 @@ const HINT = {
   resetPay: "Стирает платежи этого ученика у нас на диске и пометку «касса загружена». Сама загрузку не начинает — дальше «Загрузить кассу». Свои ещё не отправленные платежи не трогает. Календарь занятий не трогает. В Alfa ничего не пишет.",
   loadCal: "Красная загрузка календаря этой карточки. Сколько лет назад — список в красной рамке, не синяя. Сверяет набор номеров уроков, дописывает дырки. Если карточка давно жёлтая — надёжнее «Загрузить всю историю» (всегда с 2015). В Alfa не пишет.",
   hole: "Галка на жёлтой карточке: в Alfa есть номера уроков, которых нет у нас. Сама ничего не качает и журнал не закрывает. С этой галкой человека пускают к шагам 3–5, даже если календарь дырявый. Снять можно только руками. У кого набор номеров сошёлся, галки нет.",
-  loadOneGroups: "Красная очередь порций: группа + кусок зерна. Одна порция, пауза 5 с. Спрашивает номера этого куска, добирает недостающие, лишнее не снимает. Лишнее порцию не повторяет — карточка жёлтая. Пустые куски до первого и после последнего урока не берёт. Список кончился — стоп. Зелёный — весь журнал: перепись дошла, дырок нет, лишнего нет. Чип синей не читает. В Alfa не пишет.",
+  loadOneGroups: "Красная очередь порций: группа + кусок зерна. Одна порция, пауза 5 с, потом следующая. Спрашивает номера этого куска, добирает недостающие, лишнее не снимает. Лишнее порцию не повторяет — карточка жёлтая. Пустые куски — только вне срока группы, не «что уже на диске». Список кончился — стоп. Зелёный — весь журнал: перепись дошла, дырок нет, лишнего нет. Тема и ДЗ кнопку перепроверки не подменяют. Чип синей не читает. В Alfa не пишет.",
   grain: "Только красная рамка шага 3. Квартал / полугодие / год — размер порции, не «с 2015». Год — у молодых. Пустые куски вне уроков в очередь не ставим. Синяя зерно не читает. В Alfa ничего не отправляет.",
   archPupils: "Смотрит карточки людей выбранной колонки: «сейчас ходят» или рабочий архив — в одном прогоне не смешивает. Собирает номера групп, где они когда-то числились. Живые группы из списка выкидывает. Остальные появятся как архивные — чтобы старый остаток на карточке сошёлся. Идёт по одной группе, пауза 5 секунд. Журнал явок сама не качает — только список групп. Дальше красная «по одному» на виде «Архивные группы». В Alfa ничего не создаёт.",
   archAll: "Тянет из Alfa архивные группы филиала, не только те, что есть у ваших учеников. Поэтому программа спрашивает подтверждение. Живое расписание не трогает. Журнал явок не качает — появится только список групп. Один филиал, пауза 5 секунд. Если нужен архив только ваших людей — кнопка «Архив групп учеников» уже и спокойнее. В Alfa ничего не пишет.",
@@ -681,24 +681,16 @@ function nextWizard(chunks: FillPart[]) {
     return {
       kind: "load" as const,
       part: load,
-      step: "Шаг 1 · загрузить явки",
+      step: `Шаг 1 · загрузить явки · ${load.label}`,
       btn: load.weak ? `Загрузить ещё раз ${load.label}` : `Загрузить ${load.label}`,
     };
   }
   const detailsLeft = chunks.reduce((s, c) => s + (c.needDetails || 0), 0);
-  if (detailsLeft > 0) {
-    return {
-      kind: "details" as const,
-      part: chunks.find((c) => (c.needDetails || 0) > 0),
-      step: "Шаг 2 · тема, ДЗ, комментарий, таблица учеников",
-      btn: `Загрузить тему, ДЗ, комментарий и таблицу учеников всех кварталов · ${detailsLeft}`,
-    };
-  }
   return {
-    kind: "done" as const,
+    kind: "recheck" as const,
     part: chunks[0] || null,
-    step: "Все явки, тема, ДЗ, комментарий и таблица учеников на месте",
-    btn: chunks.length ? "Перепроверить" : "Готово",
+    step: detailsLeft > 0 ? `явки на месте · без темы/ДЗ ${detailsLeft}` : "Все явки, тема, ДЗ, комментарий и таблица учеников на месте",
+    btn: "Перепроверить",
   };
 }
 
@@ -875,14 +867,24 @@ function GroupFillList({
           const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || wiz.part?.label || "" : "";
           return (
             <li key={id} data-gid={id} className={cn("rounded-2xl p-3 ring-1", green ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
-              <div className="flex items-center gap-2">
-                <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => toggleOpen(id)} title={row.name}>
+              <div className="flex items-start gap-2">
+                <button type="button" className="min-w-0 flex-1 text-left font-medium leading-snug" onClick={() => toggleOpen(id)} title={row.name}>
                   {row.name}
                 </button>
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-semibold leading-none ring-1 ring-black/20 hover:bg-black/5"
+                  aria-expanded={shown}
+                  aria-label={shown ? "свернуть" : "развернуть"}
+                  onClick={() => toggleOpen(id)}
+                >
+                  {shown ? "−" : "+"}
+                </button>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1">
                 <span className="shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums text-fg" title={`группа ${Number(row.groupId) || ""}`}>
                   №{Number(row.groupId) || "—"}
                 </span>
-                <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                     {row.archived ? (
                       <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[0.72rem] font-semibold text-zinc-800">архив</span>
                     ) : null}
@@ -909,16 +911,6 @@ function GroupFillList({
                     {detailsLeft > 0 ? (
                       <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.72rem] font-semibold text-violet-900">без темы/ДЗ · {detailsLeft}</span>
                     ) : null}
-                </span>
-                <button
-                  type="button"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-semibold leading-none ring-1 ring-black/20 hover:bg-black/5"
-                  aria-expanded={shown}
-                  aria-label={shown ? "свернуть" : "развернуть"}
-                  onClick={() => toggleOpen(id)}
-                >
-                  {shown ? "−" : "+"}
-                </button>
               </div>
               <FillBar pct={pct} run={active} done={green} warn={false} />
               <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
@@ -931,18 +923,33 @@ function GroupFillList({
                 <button
                   type="button"
                   disabled={busy && !active}
-                  className={cn(BTN_LOAD_SM, "min-w-[12.5rem] w-fit shrink-0 px-4", active && "ra-progress-run")}
+                  className={cn(BTN_LOAD_SM, "min-w-[12.5rem] w-fit shrink-0 px-4", active && loadKind !== "details" && "ra-progress-run")}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (wiz.kind === "load" && wiz.part) onLoad(row, wiz.part, Boolean(wiz.part.done || wiz.part.weak));
-                    else if (wiz.kind === "details") onDetails(row);
                     else onRecheckAll(row);
                   }}
                 >
                   {wiz.btn}
                 </button>,
-                wiz.kind === "details" ? HINT.loadDetails : HINT.loadAttend,
+                HINT.loadAttend,
                 )}
+                {detailsLeft > 0
+                  ? withHint(
+                      <button
+                        type="button"
+                        disabled={busy && !active}
+                        className={cn(BTN_LOAD_SM, "min-w-[12.5rem] w-fit shrink-0 px-4", active && loadKind === "details" && "ra-progress-run")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDetails(row);
+                        }}
+                      >
+                        {`Тема, ДЗ, комментарий, таблица · ${detailsLeft}`}
+                      </button>,
+                      HINT.loadDetails,
+                    )
+                  : null}
                 {onGrain ? <GrainSelect value={grain} disabled={busy} onChange={onGrain} small /> : null}
                 {withHint(
                 <button
