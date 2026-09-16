@@ -1,7 +1,7 @@
 /** Пульт автомата Истории. Без fs, без Alfa. */
 
 export const HISTORY_PLAN_MODES = [
-  { id: "auto", label: "Автомат · полный прогон", recheck: false, step: "roster" },
+  { id: "auto", label: "Автомат · перепроверить 1–5", recheck: true, step: "roster" },
   { id: "roster", label: "Шаг 1 · загрузить состав", recheck: false, step: "roster" },
   { id: "roster-recheck", label: "Шаг 1 · перепроверить состав", recheck: true, step: "roster" },
   { id: "people", label: "Шаг 2 · загрузить календарь", recheck: false, step: "students" },
@@ -257,15 +257,24 @@ export function planFromIdOf(study: "1" | "2", id: string): PlanFromId {
   return PLAN_FROM_OPTS.some((o) => o.id === id) ? (id as PlanFromId) : "2015";
 }
 
+/** Синяя таблица пауз: годы с пульта → окно перепроверки. */
+export function planFromIdToRecheckDays(id: string): number {
+  if (id === "7") return 2555;
+  if (id === "3") return 1095;
+  if (id === "2") return 730;
+  if (id === "1") return 365;
+  return 4000;
+}
+
 export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
   const fromId = planFromIdOf(rule.study, rule.dateFromId);
   if (rule.mode === "auto") {
     return {
-      mode: "roster" as const,
+      mode: "roster-recheck" as const,
       kind: "roster",
       study: rule.study,
-      recheck: false,
-      recheckDays: 32,
+      recheck: true,
+      recheckDays: planFromIdToRecheckDays(fromId),
       dateFrom: planDateFrom(fromId, now),
       archived: rule.study === "2",
       pipe: rule.study === "2" ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL],

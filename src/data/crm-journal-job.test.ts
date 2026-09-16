@@ -478,11 +478,11 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /kind: "jobStart"/);
     assert.match(ui, /kind: "jobStatus"/);
     assert.match(ui, /jobMode: "auto"/);
-    assert.match(plan, /Запустить шаги 1–5 сейчас/);
+    assert.match(plan, /Перепроверить шаги 1–5 сейчас/);
     assert.match(plan, /Архив действующих групп/);
     assert.match(plan, /Активные группы/);
     assert.match(plan, /Лиды действующих групп/);
-    assert.match(plan, /Годы календаря/);
+    assert.match(plan, /Окно перепроверки/);
     assert.match(plan, /Сброс настроек/);
     assert.match(plan, /Синхронизация расписания/);
     assert.match(plan, /процесс истории молчит/);
@@ -496,6 +496,8 @@ describe("фон истории из Alfa", () => {
     assert.match(plan, /translate-x-5/);
     assert.match(plan, /Лиды/);
     assert.match(pull, /opts.jobMode === "auto"/);
+    assert.match(pull, /mode: "roster-recheck"/);
+    assert.match(job, /mode: "people-recheck"/);
     assert.match(pull, /archGroups=1/);
     assert.match(job, /groups-archived/);
     assert.match(ui, /function ServerJobStrip/);

@@ -321,7 +321,7 @@ function DraftForm({
           Сохранить расписание
         </button>
       </div>
-      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. «Автомат · полный прогон»: состав → календарь → активные группы → архив действующих групп → касса → сверка. Лиды действующих групп — как галка «Запомнить» на шаге 1.</p>
+      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. «Автомат · перепроверить 1–5»: состав, календарь, группы, касса, сверка — как синие кнопки, всех на диске, не только дырки слева. Лиды действующих групп — как галка «Запомнить» на шаге 1.</p>
     </div>
   );
 }
@@ -510,7 +510,7 @@ export function HistoryPlanPanel({
             </Chip>
           </>
         ) : null}
-        <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Годы календаря</p>
+        <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Окно перепроверки</p>
         {(runStudy === "2" ? PLAN_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PLAN_FROM_OPTS).map((o) => (
           <Chip key={o.id} on={runFrom === o.id} onClick={() => setRunFrom(o.id)}>
             {o.label}
@@ -523,7 +523,7 @@ export function HistoryPlanPanel({
           onClick={() => {
             if (!onRunAuto) return;
             if (run) return;
-            if (!window.confirm("Запустить полный прогон сейчас? Состав → календарь → активные группы → архив действующих групп (если чип) → касса → сверка. Галка лидов на шаге 1 не меняется.")) return;
+            if (!window.confirm("Перепроверить всех на диске сейчас? Это не «дыры слева», а синяя перепроверка: состав → календарь → активные группы → архив действующих групп (если чип) → касса → сверка. Окно — чипы сверху. Пауза как у синей. Галка лидов на шаге 1 не меняется.")) return;
             onRunAuto({
               study: runStudy,
               dateFromId: runStudy === "2" && runFrom !== "1" && runFrom !== "2" ? "1" : runFrom,
@@ -532,7 +532,7 @@ export function HistoryPlanPanel({
             });
           }}
         >
-          Запустить шаги 1–5 сейчас
+          Перепроверить шаги 1–5 сейчас
         </button>
       </div>
 
@@ -664,7 +664,7 @@ export function HistoryPlanModal({
             <p id="history-plan-title" className="font-display text-[1.2rem] leading-tight">
               Пульт синхронизации
             </p>
-            <p className="mt-1 text-[0.82rem] text-muted">Расписание — само в слот. «Запустить шаги 1–5 сейчас» — полный прогон руками, тумблер не нужен. Лиды — как на шаге 1, галку не затираем.</p>
+            <p className="mt-1 text-[0.82rem] text-muted">Расписание — само в слот. Кнопка — перепроверка всех на диске, не только дырок слева. Тумблер для кнопки не нужен. Лиды — как на шаге 1, галку не затираем.</p>
           </div>
           <button
             type="button"

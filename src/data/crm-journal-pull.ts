@@ -1553,12 +1553,15 @@ export async function journalPull(opts: {
       const raw = String(opts.name || "");
       const archGroups = study === "1" && /archGroups=1/.test(raw);
       const pipe = study === "1" && archGroups ? [...AUTO_PIPE_FULL] : [...AUTO_PIPE];
+      const from = String(opts.dateFrom || "2015-01-01");
+      const days = Number(opts.recheckDays) > 0 ? Number(opts.recheckDays) : from <= "2015-01-01" ? 4000 : 365;
       startJournalJob({
-        mode: "roster",
+        mode: "roster-recheck",
         kind: "roster",
         study,
-        recheck: false,
-        dateFrom: String(opts.dateFrom || "2015-01-01"),
+        recheck: true,
+        recheckDays: days,
+        dateFrom: from,
         archived: study === "2",
         pipe,
         name: raw,

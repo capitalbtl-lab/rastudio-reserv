@@ -119,7 +119,9 @@ describe("пульт Истории", () => {
     const r = scheduleOf({ id: "a", mode: "auto", when: { kind: "daily" }, at: "04:00", dateFromId: "1" });
     assert.equal(r.mode, "auto");
     const job = planRuleToJob(r, msk(2026, 8, 15, 12, 0));
-    assert.equal(job.mode, "roster");
+    assert.equal(job.mode, "roster-recheck");
+    assert.equal(job.recheck, true);
+    assert.equal(job.recheckDays, 365);
     assert.deepEqual(job.pipe, ["people", "groups", "archivesPupils", "groups-archived", "balance", "audit"]);
     const arch = scheduleOf({ id: "b", mode: "auto", study: "2", when: { kind: "daily" }, at: "04:00", dateFromId: "1" });
     assert.deepEqual(planRuleToJob(arch).pipe, ["people", "groups", "balance", "audit"]);

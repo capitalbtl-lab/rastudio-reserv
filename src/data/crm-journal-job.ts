@@ -586,25 +586,55 @@ function continueAutoPipe(job: JournalJob) {
   if (!next) return;
   notePlan({
     kind: "pipe",
-    text: `Дальше ${modeRu(next === "groups-archived" ? "groups" : next, next === "groups-archived" ? "group" : "")}.`,
+    text: `Дальше ${modeRu(next === "groups-archived" ? "groups" : next, next === "groups-archived" || next === "balance" ? (next === "balance" ? "balance" : "group") : "")}.`,
     mode: next,
     jobId: job.id,
     src: "plan",
     reason: "pipe",
   });
-  if (next === "archivesPupils" || next === "archives" || next === "groups-archived") {
-    const archGroups = next === "groups-archived" || next === "archives";
+  const days = Number(job.recheckDays) || 4000;
+  const base = {
+    study: job.study,
+    dateFrom: job.dateFrom,
+    recheckDays: days,
+    pipe: rest.slice(1),
+    src: "plan" as const,
+    fromPipe: true,
+  };
+  if (next === "archivesPupils" || next === "archives") {
     startJournalJob({
-      mode: (next === "groups-archived" ? "groups" : next) as JournalJobMode,
-      kind: next === "groups-archived" ? "group" : next,
-      study: job.study,
+      ...base,
+      mode: next as JournalJobMode,
+      kind: next,
       recheck: false,
-      dateFrom: job.dateFrom,
-      archived: archGroups || job.archived,
-      pipe: rest.slice(1),
-      src: "plan",
-      fromPipe: true,
+      archived: next === "archives" || job.archived,
     });
+    return;
+  }
+  if (next === "groups-archived") {
+    startJournalJob({
+      ...base,
+      mode: "groups-recheck",
+      kind: "group",
+      recheck: true,
+      archived: true,
+    });
+    return;
+  }
+  if (next === "people" || next === "people-recheck") {
+    startJournalJob({ ...base, mode: "people-recheck", kind: "students", recheck: true, archived: job.archived });
+    return;
+  }
+  if (next === "groups" || next === "groups-recheck") {
+    startJournalJob({ ...base, mode: "groups-recheck", kind: "group", recheck: true, archived: job.archived });
+    return;
+  }
+  if (next === "balance") {
+    startJournalJob({ ...base, mode: "people-recheck", kind: "balance", recheck: true, archived: job.archived });
+    return;
+  }
+  if (next === "audit") {
+    startJournalJob({ ...base, mode: "audit", kind: "audit", recheck: false, archived: job.archived });
     return;
   }
   const rule = scheduleOf({
@@ -620,8 +650,8 @@ function continueAutoPipe(job: JournalJob) {
     mode: opts.mode as JournalJobMode,
     kind: opts.kind,
     study: job.study,
-    recheck: opts.recheck,
-    recheckDays: opts.recheckDays,
+    recheck: true,
+    recheckDays: days,
     dateFrom: job.dateFrom || opts.dateFrom,
     archived: opts.archived,
     pipe: rest.slice(1),
