@@ -485,6 +485,8 @@ describe("фон истории из Alfa", () => {
     assert.match(plan, /Синхронизация расписания/);
     assert.match(plan, /процесс истории молчит/);
     assert.match(plan, /Последние синхронизации/);
+    assert.match(plan, /setLogOpen/);
+    assert.match(plan, />\s*Лог\s*</);
     assert.match(pull, /AUTO_PIPE_FULL/);
     assert.doesNotMatch(pull, /saveRosterPolicy\(\{ leads/);
     assert.match(plan, /role="switch"/);

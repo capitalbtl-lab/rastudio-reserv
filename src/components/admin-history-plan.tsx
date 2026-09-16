@@ -344,6 +344,7 @@ export function HistoryPlanPanel({
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
   const [runStudy, setRunStudy] = useState<"1" | "2">("1");
   const [runFrom, setRunFrom] = useState<PlanFromId>("2015");
   const [runLeads, setRunLeads] = useState(true);
@@ -418,6 +419,16 @@ export function HistoryPlanPanel({
         </div>
         <button
           type="button"
+          className={cn(
+            "h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10",
+            logOpen ? "bg-black text-white ring-black" : "",
+          )}
+          onClick={() => setLogOpen((v) => !v)}
+        >
+          Лог
+        </button>
+        <button
+          type="button"
           className="h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
           disabled={busy}
           onClick={() => {
@@ -428,6 +439,50 @@ export function HistoryPlanPanel({
           Сброс настроек
         </button>
       </div>
+      {logOpen ? (
+        <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
+          <p className="text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Последние синхронизации</p>
+          {(() => {
+            const rows = (planLog || []).filter((e) => e.kind === "start" || e.kind === "done").slice(0, 10);
+            if (!rows.length) return <p className="mt-2 text-[0.78rem] text-muted">Ещё не было. Старт, стоп и сбои появятся здесь.</p>;
+            return (
+              <ul className="mt-2 space-y-1.5">
+                {rows.map((e, i) => (
+                  <li key={`${e.at}-${e.kind}-${i}`} className="text-[0.78rem] leading-snug">
+                    <span className="font-semibold">{logWhen(e.at)}</span>
+                    <span className="text-muted"> · {LOG_KIND[e.kind || ""] || e.kind}</span>
+                    {e.src === "plan" ? <span className="text-muted"> · слот</span> : e.src === "hands" ? <span className="text-muted"> · руками</span> : null}
+                    <span> · {e.text}</span>
+                    {e.who ? <span className="text-muted"> · {e.who}{e.cid ? ` №${e.cid}` : ""}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+          <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">События</p>
+          {!(planLog || []).length ? (
+            <p className="mt-2 text-[0.78rem] text-muted">Пусто. Почему соскочило — будет строкой: ребёнок, причина, шаг.</p>
+          ) : (
+            <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">
+              {(planLog || []).slice(0, 24).map((e, i) => (
+                <li
+                  key={`${e.at}-${e.kind}-ev-${i}`}
+                  className={cn(
+                    "text-[0.78rem] leading-snug",
+                    e.kind === "fail" || e.kind === "stop" ? "text-red-800" : e.kind === "skip" ? "text-amber-800" : "",
+                  )}
+                >
+                  <span className="font-semibold">{logWhen(e.at)}</span>
+                  <span className="text-muted"> · {LOG_KIND[e.kind || ""] || e.kind}</span>
+                  <span> · {e.text}</span>
+                  {e.who && !String(e.text || "").includes(e.who) ? <span> · {e.who}{e.cid ? ` №${e.cid}` : ""}</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2.5 ring-1 ring-black/8">
         <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Ручной запуск</p>
         <Chip on={runStudy === "1"} onClick={() => setRunStudy("1")}>
@@ -479,48 +534,6 @@ export function HistoryPlanPanel({
         >
           Запустить шаги 1–5 сейчас
         </button>
-      </div>
-
-      <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
-        <p className="text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Последние синхронизации</p>
-        {(() => {
-          const rows = (planLog || []).filter((e) => e.kind === "start" || e.kind === "done").slice(0, 10);
-          if (!rows.length) return <p className="mt-2 text-[0.78rem] text-muted">Ещё не было. Старт, стоп и сбои появятся здесь.</p>;
-          return (
-            <ul className="mt-2 space-y-1.5">
-              {rows.map((e, i) => (
-                <li key={`${e.at}-${e.kind}-${i}`} className="text-[0.78rem] leading-snug">
-                  <span className="font-semibold">{logWhen(e.at)}</span>
-                  <span className="text-muted"> · {LOG_KIND[e.kind || ""] || e.kind}</span>
-                  {e.src === "plan" ? <span className="text-muted"> · слот</span> : e.src === "hands" ? <span className="text-muted"> · руками</span> : null}
-                  <span> · {e.text}</span>
-                  {e.who ? <span className="text-muted"> · {e.who}{e.cid ? ` №${e.cid}` : ""}</span> : null}
-                </li>
-              ))}
-            </ul>
-          );
-        })()}
-        <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">События</p>
-        {!(planLog || []).length ? (
-          <p className="mt-2 text-[0.78rem] text-muted">Пусто. Почему соскочило — будет строкой: ребёнок, причина, шаг.</p>
-        ) : (
-          <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">
-            {(planLog || []).slice(0, 24).map((e, i) => (
-              <li
-                key={`${e.at}-${e.kind}-ev-${i}`}
-                className={cn(
-                  "text-[0.78rem] leading-snug",
-                  e.kind === "fail" || e.kind === "stop" ? "text-red-800" : e.kind === "skip" ? "text-amber-800" : "",
-                )}
-              >
-                <span className="font-semibold">{logWhen(e.at)}</span>
-                <span className="text-muted"> · {LOG_KIND[e.kind || ""] || e.kind}</span>
-                <span> · {e.text}</span>
-                {e.who && !String(e.text || "").includes(e.who) ? <span> · {e.who}{e.cid ? ` №${e.cid}` : ""}</span> : null}
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
 
       {!policy.plan.length && !adding ? (
