@@ -2738,7 +2738,7 @@ export function AdminCrmSettings() {
     })) as { ok?: boolean; policy?: CrmSyncPolicy; error?: string };
     if (res.ok && res.policy) {
       setSyncPolicy(res.policy);
-      setMsg(next.planEnabled ? "Пульт записан. Автомат включён." : "Пульт записан. Автомат выкл.");
+      setMsg(next.planEnabled ? "Пульт записан. Автоматический пульт включён." : "Пульт записан. Автоматический пульт выкл.");
       return;
     }
     setMsg(res.error || "Не удалось сохранить пульт.");
