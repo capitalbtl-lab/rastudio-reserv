@@ -343,7 +343,7 @@ export function HistoryPlanPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-surface-2 px-3 py-2.5">
+      <div className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3 py-2.5">
         <button
           type="button"
           role="switch"
@@ -351,26 +351,34 @@ export function HistoryPlanPanel({
           disabled={busy}
           onClick={() => patch({ ...policy, planEnabled: !policy.planEnabled })}
           className={cn(
-            "relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50",
+            "relative h-6 w-11 shrink-0 appearance-none border-0 p-0 rounded-full transition disabled:opacity-50",
             policy.planEnabled ? "bg-emerald-700" : "bg-black/15",
           )}
         >
-          <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow", policy.planEnabled ? "left-5" : "left-0.5")} />
+          <span
+            className={cn(
+              "pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+              policy.planEnabled && "translate-x-5",
+            )}
+          />
         </button>
-        <div className="min-w-[10rem]">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight">Синхронизация расписания</p>
-          <p className="text-[0.72rem] text-muted">{policy.planEnabled ? "вкл · слоты сами стартуют" : "выкл · только руками"}</p>
+          <p className="h-5 truncate text-[0.72rem] leading-5 text-muted">
+            {run
+              ? `Сейчас: ${job?.cur || job?.mode || "работаем"} · ${job?.n || 0}/${job?.total || 0}`
+              : policy.planEnabled
+                ? policy.plan.some((r) => r.dueAt)
+                  ? "вкл · ждёт слот"
+                  : policy.plan.some((r) => r.on)
+                    ? `вкл · ${nextLine.replace(/^следующее:\s*/i, "")}`
+                    : "вкл · расписаний нет"
+                : "выкл · только руками"}
+          </p>
         </div>
-        <p className="min-w-[12rem] flex-1 text-[0.78rem] text-muted">
-          {run
-            ? `Сейчас: ${job?.cur || job?.mode || "работаем"} · ${job?.n || 0}/${job?.total || 0}`
-            : policy.plan.some((r) => r.dueAt)
-              ? "Ждёт: руки заняли очередь или слот due"
-              : `Свободен · ${nextLine}`}
-        </p>
         <button
           type="button"
-          className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
+          className="h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
           disabled={busy}
           onClick={() => {
             if (!window.confirm("Сбросить настройки пульта? Синхронизация расписания выкл, расписания удалятся. Текущая загрузка не остановится.")) return;

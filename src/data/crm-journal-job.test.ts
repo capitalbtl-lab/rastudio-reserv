@@ -478,6 +478,8 @@ describe("фон истории из Alfa", () => {
     assert.match(plan, /Сброс настроек/);
     assert.match(plan, /Синхронизация расписания/);
     assert.match(plan, /role="switch"/);
+    assert.match(plan, /appearance-none/);
+    assert.match(plan, /translate-x-5/);
     assert.match(plan, /Лиды/);
     assert.match(pull, /opts.jobMode === "auto"/);
     assert.match(pull, /archGroups=1/);
