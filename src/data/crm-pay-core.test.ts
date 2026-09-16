@@ -17,7 +17,7 @@ describe("журнал денег", () => {
   it("доход, возврат, товар и корректировка", () => {
     assert.deepEqual(payEffect("income", 1000, 200), { income: 1000, expenditure: 0, next: 1200 });
     assert.deepEqual(payEffect("refund", 300, 1000), { income: 0, expenditure: 300, next: 700 });
-    assert.deepEqual(payEffect("product", 500, 1000), { income: 500, expenditure: 0, next: 1000 });
+    assert.deepEqual(payEffect("product", 500, 1000), { income: 500, expenditure: 0, next: 500 });
     assert.deepEqual(payEffect("correct", 2500, 1000), { income: 1500, expenditure: 0, next: 2500 });
     assert.deepEqual(payEffect("correct", 400, 1000), { income: 0, expenditure: 600, next: 400 });
     const anisichkin = [
@@ -36,9 +36,9 @@ describe("журнал денег", () => {
       row({ id: -2, kind: "income", income: 1000, expenditure: 0 }),
       row({ id: -3, kind: "product", income: 200, expenditure: 0 }),
     ];
-    assert.equal(balanceOf(rows), 1500);
+    assert.equal(balanceOf(rows), 1300);
     assert.equal(displayedBalance([], "800"), 800);
-    assert.equal(displayedBalance(rows, "800"), 1500);
+    assert.equal(displayedBalance(rows, "800"), 1300);
     const fragment = [row({ id: 23529, kind: "income", income: 6450, expenditure: 0 })];
     assert.equal(displayedBalance(fragment, "500"), 500);
     assert.equal(displayedBalance(fragment, "500", true), 6450);
@@ -62,7 +62,7 @@ describe("журнал денег", () => {
       row({ id: 4, kind: "product", income: 50, expenditure: 0, cttId: 5016 }),
       row({ id: 5, kind: "income", income: 10, expenditure: 0, cttId: 5016, deleted: true }),
     ];
-    assert.equal(paySumForCtt(alehinPays, 5016), 4350);
+    assert.equal(paySumForCtt(alehinPays, 5016), 4300);
     assert.equal(payCountForCtt(alehinPays, 5016), 2);
     assert.equal(paySumForCtt(alehinPays, 0), 200);
     assert.equal(payCountForCtt(alehinPays, 0), 1);
@@ -263,18 +263,19 @@ describe("журнал денег", () => {
     assert.deepEqual(payFillAdvance({ bid: 4, page: 3 }, true), { bid: 4, page: 3, done: true });
     assert.equal(payFillAdvance({ bid: 4, page: 3, done: true }, false).done, true);
     assert.equal(payFillOf({ bid: 2, page: 4, extra: 2 })?.extra, 2);
-    assert.deepEqual(PAY_INBOUND_EXTRA_TYPES, [3, 5, 6]);
+    assert.deepEqual(PAY_INBOUND_EXTRA_TYPES, [2, 3, 5, 6, 9]);
     assert.equal(payFillOf(null), undefined);
     assert.match(payFillNote({ bid: 3, page: 11 }), /филиал 3/);
     assert.equal(payFillNote({ bid: 4, page: 0, done: true }), "вся касса на диске");
     assert.match(payFillNote(undefined), /ещё не выгружалась/);
   });
 
-  it("остаток: тип 9 не в ₽, тип 6 всегда, возврат товара парой, 0/0 не готово", () => {
-    assert.equal(rowDelta({ kind: "product", income: 2000, expenditure: 0 }), 0);
-    assert.equal(skipAlfaGoodsPay({ pay_type_id: 9, income: 2000 }), true);
-    assert.equal(skipAlfaGoodsPay({ pay_type_id: 2, income: 200 }), true);
-    assert.equal(skipAlfaGoodsPay({ commodity_id: 4, income: 500 }), true);
+  it("остаток: товар списывается с карточки, как в сверке АльфаСРМ", () => {
+    assert.equal(rowDelta({ kind: "product", income: 2000, expenditure: 0 }), -2000);
+    assert.equal(rowDelta({ kind: "product", income: 0, expenditure: 2000 }), -2000);
+    assert.equal(skipAlfaGoodsPay({ pay_type_id: 9, income: 2000 }), false);
+    assert.equal(skipAlfaGoodsPay({ pay_type_id: 2, income: 200 }), false);
+    assert.equal(skipAlfaGoodsPay({ commodity_id: 4, income: 500 }), false);
     assert.equal(skipAlfaGoodsPay({ pay_type_id: 1, income: 1000 }), false);
     assert.equal(isGoodsPayRow({ kind: "product", income: 2000, expenditure: 0, payTypeId: 9 }), true);
     assert.deepEqual(
@@ -282,12 +283,17 @@ describe("журнал денег", () => {
         row({ id: 1, kind: "income", income: 1000, expenditure: 0 }),
         row({ id: 2, kind: "product", income: 2000, expenditure: 0, payTypeId: 9 }),
       ]).map((r) => r.kind),
-      ["income"],
+      ["income", "product"],
     );
+    assert.equal(balanceOf([
+      row({ id: 1, kind: "income", income: 4000, expenditure: 0 }),
+      row({ id: 2, kind: "product", income: 2000, expenditure: 0, payTypeId: 9 }),
+    ]), 2000);
+    assert.equal(2000 - 2800, -800);
     assert.equal(rowDelta({ kind: "correct", income: 50000, expenditure: 0 }), 50000);
     assert.equal(rowDelta({ kind: "correct", income: -28405, expenditure: 0 }), -28405);
     assert.equal(rowDelta({ kind: "refund", income: 0, expenditure: 100 }), -100);
-    assert.equal(rowDelta({ kind: "refund", income: 0, expenditure: 2000, refundOfGoods: true }), 0);
+    assert.equal(rowDelta({ kind: "refund", income: 0, expenditure: 2000, refundOfGoods: true }), 2000);
     const chudnova: PayRow[] = [
       row({ id: 1, kind: "income", income: 100, expenditure: 0 }),
       row({ id: 2, kind: "income", income: 100, expenditure: 0 }),

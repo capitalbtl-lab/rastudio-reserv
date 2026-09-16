@@ -72,8 +72,9 @@ function payMethodName(id?: string) {
   return ALFA_PAY_METHODS.find((x) => x.id === s)?.name || "";
 }
 
-function payRowSum(p: { kind?: string; income?: number; expenditure?: number }) {
-  if (p.kind === "product") return Number(p.income || 0);
+function payRowSum(p: { kind?: string; income?: number; expenditure?: number; refundOfGoods?: boolean }) {
+  if (p.kind === "product") return -(Math.abs(Number(p.expenditure || 0) || Number(p.income || 0)));
+  if (p.kind === "refund" && p.refundOfGoods) return Math.abs(Number(p.expenditure || 0) || Number(p.income || 0));
   return Number(p.income || 0) - Number(p.expenditure || 0);
 }
 

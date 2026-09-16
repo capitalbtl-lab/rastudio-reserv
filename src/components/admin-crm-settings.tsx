@@ -1236,7 +1236,7 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   const cashLo = (Number(r.cash) || 0) < (Number(r.alfaMoney) || 0) - 1;
   const goods = codes.includes("goods") || codes.includes("refund-goods");
   if (header && goods) {
-    return { id: "goods", label: "Товар в кассе", rec: "Продажа на диске со старой загрузки. Товар больше не берём. Шаг 4 перепроверить кассу — строка уйдёт, сверка без товара." };
+    return { id: "goods", label: "Товар в кассе", rec: "Продажа товара списывается с остатка, как в сверке АльфаСРМ. Шаг 4: перепроверить кассу. Если три цифры сошлись — ничего не чинить." };
   }
   if (header && cashHi) {
     if (codes.includes("lessons") || codes.includes("wo") || codes.includes("status")) {

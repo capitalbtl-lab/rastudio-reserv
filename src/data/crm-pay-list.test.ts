@@ -89,12 +89,8 @@ describe("касса список", () => {
     assert.match(completeFn, /done: true/);
     assert.doesNotMatch(completeFn, /delete store.payFill/);
     assert.match(pay, /payPollLookbackDates/);
-    assert.doesNotMatch(pay, /pay_type_id: 2/);
-    assert.match(pay, /pay_type_id: 3/);
-    assert.match(pay, /pay_type_id: 5/);
-    assert.match(pay, /pay_type_id: 6/);
-    assert.doesNotMatch(pay, /pay_type_id: 9/);
-    assert.match(pay, /skipAlfaGoodsPay/);
+    assert.match(pay, /PAY_INBOUND_EXTRA_TYPES/);
+    assert.match(pay, /pay_type_id: typeId/);
     assert.match(pay, /markRefundOfGoods/);
     assert.match(pay, /remainderClose/);
     assert.doesNotMatch(pay, /p >= 40/);
