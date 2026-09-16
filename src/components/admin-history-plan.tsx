@@ -292,7 +292,7 @@ function DraftForm({
           Сохранить расписание
         </button>
       </div>
-      <p className="mt-2 text-[0.75rem] text-muted">Пока автоматический пульт выкл — карточка лежит и не стартует. Режим «Автомат · шаги 1–5» в слот жмёт состав → календарь → группы → кассу → сверку.</p>
+      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. Режим «Автомат · шаги 1–5» в слот жмёт состав → календарь → группы → кассу → сверку.</p>
     </div>
   );
 }
@@ -316,7 +316,7 @@ export function HistoryPlanPanel({
   const [runLeads, setRunLeads] = useState(true);
   const [runArchGroups, setRunArchGroups] = useState(true);
   const nextLine = useMemo(() => {
-    if (!policy.planEnabled) return "автоматический пульт выкл — слоты не стартуют";
+    if (!policy.planEnabled) return "синхронизация расписания выкл — слоты не стартуют";
     const soon = policy.plan
       .filter((r) => r.on)
       .map((r) => ({ r, at: nextSlotAt(r) }))
@@ -358,7 +358,7 @@ export function HistoryPlanPanel({
           <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow", policy.planEnabled ? "left-5" : "left-0.5")} />
         </button>
         <div className="min-w-[10rem]">
-          <p className="text-sm font-semibold leading-tight">Включение автоматического пульта</p>
+          <p className="text-sm font-semibold leading-tight">Синхронизация расписания</p>
           <p className="text-[0.72rem] text-muted">{policy.planEnabled ? "вкл · слоты сами стартуют" : "выкл · только руками"}</p>
         </div>
         <p className="min-w-[12rem] flex-1 text-[0.78rem] text-muted">
@@ -373,7 +373,7 @@ export function HistoryPlanPanel({
           className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
           disabled={busy}
           onClick={() => {
-            if (!window.confirm("Сбросить настройки пульта? Автоматический пульт выкл, расписания удалятся. Текущая загрузка не остановится.")) return;
+            if (!window.confirm("Сбросить настройки пульта? Синхронизация расписания выкл, расписания удалятся. Текущая загрузка не остановится.")) return;
             patch({ planEnabled: false, plan: [] });
           }}
         >
@@ -434,7 +434,7 @@ export function HistoryPlanPanel({
       </div>
 
       {!policy.plan.length && !adding ? (
-        <p className="text-sm text-muted">Расписаний нет. Автоматический пульт молчит. Кнопки шагов как были.</p>
+        <p className="text-sm text-muted">Расписаний нет. Синхронизация расписания молчит. Кнопки шагов как были.</p>
       ) : null}
 
       {policy.plan.map((r) => (

@@ -476,7 +476,7 @@ describe("фон истории из Alfa", () => {
     assert.match(plan, /Живые группы/);
     assert.match(plan, /Годы календаря/);
     assert.match(plan, /Сброс настроек/);
-    assert.match(plan, /Включение автоматического пульта/);
+    assert.match(plan, /Синхронизация расписания/);
     assert.match(plan, /role="switch"/);
     assert.match(plan, /Лиды/);
     assert.match(pull, /opts.jobMode === "auto"/);
