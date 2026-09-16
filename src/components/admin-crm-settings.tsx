@@ -3965,6 +3965,7 @@ export function AdminCrmSettings() {
                     study: opts.study,
                     dateFrom: planDateFrom(planFromIdOf(opts.study, opts.dateFromId)),
                     archived: opts.study === "2",
+                    name: `leads=${opts.leads ? 1 : 0}&archGroups=${opts.archGroups ? 1 : 0}`,
                   })
                 }
               />

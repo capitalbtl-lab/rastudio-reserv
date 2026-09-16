@@ -308,11 +308,13 @@ export function HistoryPlanPanel({
   job?: JobSnap | null;
   busy?: boolean;
   onSave: (next: CrmSyncPolicy) => void;
-  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId }) => void;
+  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [runStudy, setRunStudy] = useState<"1" | "2">("1");
   const [runFrom, setRunFrom] = useState<PlanFromId>("2015");
+  const [runLeads, setRunLeads] = useState(true);
+  const [runArchGroups, setRunArchGroups] = useState(true);
   const nextLine = useMemo(() => {
     if (!policy.planEnabled) return "автомат выкл — слоты не стартуют";
     const soon = policy.plan
@@ -383,8 +385,18 @@ export function HistoryPlanPanel({
             if (runFrom !== "1" && runFrom !== "2") setRunFrom("1");
           }}
         >
-          Архив
+          Архив клиентов
         </Chip>
+        {runStudy === "1" ? (
+          <>
+            <Chip on={runLeads} onClick={() => setRunLeads((v) => !v)}>
+              Лиды
+            </Chip>
+            <Chip on={runArchGroups} onClick={() => setRunArchGroups((v) => !v)}>
+              Архивные группы действующих
+            </Chip>
+          </>
+        ) : null}
         {(runStudy === "2" ? PLAN_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PLAN_FROM_OPTS).map((o) => (
           <Chip key={o.id} on={runFrom === o.id} onClick={() => setRunFrom(o.id)}>
             {o.label}
@@ -398,7 +410,12 @@ export function HistoryPlanPanel({
             if (!onRunAuto) return;
             if (run) return;
             if (!window.confirm("Запустить шаги 1–5 сейчас? Состав → календарь → группы → касса → сверка. Расписание не нужно.")) return;
-            onRunAuto({ study: runStudy, dateFromId: runStudy === "2" && runFrom !== "1" && runFrom !== "2" ? "1" : runFrom });
+            onRunAuto({
+              study: runStudy,
+              dateFromId: runStudy === "2" && runFrom !== "1" && runFrom !== "2" ? "1" : runFrom,
+              leads: runStudy === "1" && runLeads,
+              archGroups: runStudy === "1" && runArchGroups,
+            });
           }}
         >
           Запустить шаги 1–5 сейчас
@@ -504,7 +521,7 @@ export function HistoryPlanModal({
   job?: JobSnap | null;
   busy?: boolean;
   onSave: (next: CrmSyncPolicy) => void;
-  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId }) => void;
+  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
 }) {
   useEffect(() => {
     if (!open) return;

@@ -531,6 +531,19 @@ function continueAutoPipe(job: JournalJob) {
   const rest = job.pipe.map(String).filter(Boolean);
   const next = rest[0];
   if (!next) return;
+  if (next === "archivesPupils" || next === "archives" || next === "groups-archived") {
+    const archGroups = next === "groups-archived" || next === "archives";
+    startJournalJob({
+      mode: (next === "groups-archived" ? "groups" : next) as JournalJobMode,
+      kind: next === "groups-archived" ? "group" : next,
+      study: job.study,
+      recheck: false,
+      dateFrom: job.dateFrom,
+      archived: archGroups || job.archived,
+      pipe: rest.slice(1),
+    });
+    return;
+  }
   const rule = scheduleOf({
     id: "pipe",
     mode: next,

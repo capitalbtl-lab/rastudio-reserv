@@ -1545,6 +1545,14 @@ export async function journalPull(opts: {
     if (opts.jobMode === "auto") {
       const { AUTO_PIPE } = await import("./crm-sync-policy-core");
       const study = opts.study === "2" ? "2" : "1";
+      const raw = String(opts.name || "");
+      const leads = study === "1" && /leads=1/.test(raw);
+      const archGroups = study === "1" && /archGroups=1/.test(raw);
+      if (study === "1") {
+        const { saveRosterPolicy } = await import("./crm-roster");
+        saveRosterPolicy({ leads, archiveInLive: true });
+      }
+      const pipe = archGroups ? ["people", "groups", "archivesPupils", "groups-archived", "balance", "audit"] : [...AUTO_PIPE];
       startJournalJob({
         mode: "roster",
         kind: "roster",
@@ -1552,7 +1560,8 @@ export async function journalPull(opts: {
         recheck: false,
         dateFrom: String(opts.dateFrom || "2015-01-01"),
         archived: study === "2",
-        pipe: [...AUTO_PIPE],
+        pipe,
+        name: raw,
       });
       return journalJobView();
     }
