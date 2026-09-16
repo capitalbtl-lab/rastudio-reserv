@@ -479,8 +479,9 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /kind: "jobStatus"/);
     assert.match(ui, /jobMode: "auto"/);
     assert.match(plan, /Запустить шаги 1–5 сейчас/);
-    assert.match(plan, /Архивные группы действующих/);
-    assert.match(plan, /Живые группы/);
+    assert.match(plan, /Архив действующих групп/);
+    assert.match(plan, /Активные группы/);
+    assert.match(plan, /Лиды действующих групп/);
     assert.match(plan, /Годы календаря/);
     assert.match(plan, /Сброс настроек/);
     assert.match(plan, /Синхронизация расписания/);
