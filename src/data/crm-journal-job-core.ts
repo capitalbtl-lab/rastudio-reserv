@@ -4,15 +4,16 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { dirname, join } from "node:path";
 
 /**
- * Закон пауз Alfa (История + Фон). Между людьми / группами, не между страницами одного.
+ * Закон пауз Alfa (История + Фон). Между заходами / людьми, не между страницами одного.
  * Красная «Загрузить по одному»: всегда 5 с (2015 / 7 лет / 3 года / 1 год). Быстрее нельзя.
  * Синяя «Перепроверить по одному»:
- *   ≤ 2 недели — 1 с; месяц — 2 с; 3 мес — 3 с; 6 мес — 4 с;
+ *   ± неделя и ± 2 недели — 2 с; ± месяц — 2,5 с; ± 3 мес — 3 с; ± 6 мес — 4 с;
  *   3 года / 7 лет / с начала · 2015 — 5 с.
  */
 export const JOURNAL_ONE_GAP_MS = 5000;
-export const JOURNAL_FORTNIGHT_GAP_MS = 1000;
+export const JOURNAL_FORTNIGHT_GAP_MS = 2000;
 export const JOURNAL_WINDOW_GAP_MS = 2000;
+export const JOURNAL_MONTH_GAP_MS = 2500;
 export const JOURNAL_QUARTER_GAP_MS = 3000;
 export const JOURNAL_HALF_GAP_MS = 4000;
 export const JOURNAL_WINDOW_DAYS = 31;
@@ -102,6 +103,8 @@ export type JournalJob = {
   items: JournalJobItem[];
   idx: number;
   waits: number;
+  wait429: number;
+  waitOther: number;
   cur: string;
   n: number;
   total: number;
@@ -111,6 +114,8 @@ export type JournalJob = {
   lastAt: string;
   wave: RecheckWave;
   follow: JournalJobItem[];
+  defer: JournalJobItem[];
+  skip: JournalJobItem[];
   archived: boolean;
   pipe: string[];
   skipLeads: boolean;
@@ -139,6 +144,8 @@ export function emptyJournalJob(): JournalJob {
     items: [],
     idx: 0,
     waits: 0,
+    wait429: 0,
+    waitOther: 0,
     cur: "",
     n: 0,
     total: 0,
@@ -148,6 +155,8 @@ export function emptyJournalJob(): JournalJob {
     lastAt: "",
     wave: "",
     follow: [],
+    defer: [],
+    skip: [],
     archived: false,
     pipe: [],
     skipLeads: false,
@@ -163,6 +172,8 @@ export function loadJournalJob(): JournalJob {
     if (!existsSync(fileOf())) return emptyJournalJob();
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<JournalJob>;
     const follow = Array.isArray(raw.follow) ? raw.follow : [];
+    const defer = Array.isArray(raw.defer) ? raw.defer : [];
+    const skip = Array.isArray(raw.skip) ? raw.skip : [];
     const pipe = Array.isArray(raw.pipe) ? raw.pipe.map((x) => String(x || "")).filter(Boolean) : [];
     const wave: RecheckWave =
       raw.wave === "preleft" || raw.wave === "right" || raw.wave === "left" || raw.wave === "right2" || raw.wave === "left2" ? raw.wave : "";
@@ -171,8 +182,12 @@ export function loadJournalJob(): JournalJob {
       ...raw,
       items: Array.isArray(raw.items) ? raw.items : [],
       follow,
+      defer,
+      skip,
       pipe,
       wave,
+      wait429: Number(raw.wait429) || 0,
+      waitOther: Number(raw.waitOther) || 0,
       archived: Boolean(raw.archived),
       skipLeads: Boolean(raw.skipLeads),
     };
@@ -356,7 +371,7 @@ export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance
   if (kind === "balance") return Boolean(row.paysScanned || row.pays);
   if (row.short && row.holeApproved) return true;
   if (row.short) return false;
-  if (row.dups) return true;
+  if (row.dups) return false;
   return Boolean(row.journal);
 }
 
@@ -390,15 +405,25 @@ export function peopleSlowAdvance(people: PeopleJobRow[]): { done: boolean; item
   return { done: !items.length, items };
 }
 
-/** Синяя: сначала дырки слева, потом справа, снова дырки, те же справа, ещё раз слева если перекинуло. */
+/** Синяя: сначала дырки слева целиком, потом справа окном, снова дырки, кто уехал вправо — окно, ещё раз слева. После 5-й — стоп. */
 export function peopleRecheckAdvance(
   people: PeopleJobRow[],
   kind: "students" | "balance",
   finishedWave: RecheckWave,
   follow: JournalJobItem[],
+  defer: JournalJobItem[] = [],
+  skip: JournalJobItem[] = [],
 ): { done: boolean; wave: RecheckWave; items: JournalJobItem[]; follow: JournalJobItem[]; recheck: boolean } {
-  const leftNow = () => peopleJobQueue(people, kind, false).map(asPeopleItem);
-  const rightNow = () => peopleJobQueue(people, kind, true).map(asPeopleItem);
+  const leftBase = () => peopleJobQueue(people, kind, false).map(asPeopleItem);
+  const skipSet = new Set((skip || []).map((d) => Number(d.cid) || 0).filter(Boolean));
+  const deferSet = new Set((defer || []).map((d) => Number(d.cid) || 0).filter(Boolean));
+  const leftNow = () => mergeDeferItems(leftBase(), defer).filter((x) => !skipSet.has(Number(x.cid) || 0));
+  const rightNow = () =>
+    people
+      .filter(onRight)
+      .map(asPeopleItem)
+      .filter((x) => !skipSet.has(Number(x.cid) || 0) && !deferSet.has(Number(x.cid) || 0));
+  const onRight = (r: PeopleJobRow) => peopleJobFinished(r, kind) && !(kind === "students" && r.short && r.holeApproved);
   if (finishedWave === "left2") {
     return { done: true, wave: "left2", items: [], follow, recheck: true };
   }
@@ -409,9 +434,7 @@ export function peopleRecheckAdvance(
   }
   if (finishedWave === "left") {
     const want = new Set(follow.map((f) => Number(f.cid) || 0).filter(Boolean));
-    const items = people
-      .filter((r) => want.has(r.cid) && !(kind === "students" && r.short && r.holeApproved))
-      .map(asPeopleItem);
+    const items = people.filter((r) => want.has(r.cid) && onRight(r)).map(asPeopleItem);
     if (items.length) return { done: false, wave: "right2", items, follow, recheck: true };
     const leftover = leftNow();
     if (leftover.length) return { done: false, wave: "left2", items: leftover, follow: leftover, recheck: false };
@@ -428,6 +451,18 @@ export function peopleRecheckAdvance(
   const left = leftNow();
   if (left.length) return { done: false, wave: "left", items: left, follow: left, recheck: false };
   return { done: true, wave: finishedWave || "right", items: [], follow: [], recheck: true };
+}
+
+export function mergeDeferItems(left: JournalJobItem[], defer: JournalJobItem[] = []) {
+  const out = left.slice();
+  const seen = new Set(out.map((x) => Number(x.cid) || Number(x.groupId) || 0).filter(Boolean));
+  for (const d of defer) {
+    const k = Number(d.cid) || Number(d.groupId) || 0;
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(d);
+  }
+  return out;
 }
 
 export type GroupWaveRow = { groupId: number; branchId: number; name: string; finished: boolean; needRecheck: boolean; roster?: boolean };
@@ -494,6 +529,8 @@ export function mergeJobPatch(cur: JournalJob, extra: Partial<JournalJob>) {
     running: stop ? false : extra.running === undefined ? cur.running : extra.running,
     items: Array.isArray(extra.items) ? extra.items : cur.items,
     follow: Array.isArray(extra.follow) ? extra.follow : cur.follow,
+    defer: Array.isArray(extra.defer) ? extra.defer : cur.defer,
+    skip: Array.isArray(extra.skip) ? extra.skip : cur.skip,
     fill: stop ? null : extra.fill === undefined ? cur.fill : extra.fill,
     cur: stop ? "" : extra.cur === undefined ? cur.cur : extra.cur,
     msg: stop ? stoppedJobMsg(Number(n) || 0, Number(total) || 0) : extra.msg === undefined ? cur.msg : extra.msg,
@@ -528,22 +565,20 @@ export function shouldRetryCash(
   return false;
 }
 
-/** Синяя: человек не закрыт — не брать следующего. Красная этим не пользуется. */
+/** Синяя справа: один проход окна, до победы не крутим. Касса — как раньше. */
 export function shouldRetryOpenRecheck(
   recheck: boolean,
   kind: string,
   res: { ok?: boolean; student?: { rechecked?: boolean; paysRechecked?: boolean; holeApproved?: boolean; dups?: boolean; paysMore?: boolean; short?: boolean } } | null,
 ) {
   if (!recheck) return false;
-  if (kind !== "students" && kind !== "balance") return false;
+  if (kind === "students") return false;
+  if (kind !== "balance") return false;
   if (!res?.ok) return false;
   const s = res.student;
   if (!s) return false;
   if (s.holeApproved) return false;
-  if (kind === "balance") return Boolean(s.paysMore) || !s.paysRechecked;
-  if (s.dups) return true;
-  if (s.short) return true;
-  return !s.rechecked;
+  return Boolean(s.paysMore) || !s.paysRechecked;
 }
 
 /** 429 / нет входа — считаем к cap. Дырка 2015 — нет. */
@@ -551,9 +586,31 @@ export function recheckBusyErr(err: string) {
   return /уже грузим|нет входа|429|502|нет ответа/i.test(String(err || ""));
 }
 
-/** 8 сбоев Alfa на синем календаре: в конец очереди, не выкинуть. */
+/** 8 отказов: с этой волны снимаем, в хвост этой же не ставим. */
 export function capRecheckAction(recheck: boolean, kind: string): "rotate" | "skip" {
-  return recheck && kind === "students" ? "rotate" : "skip";
+  void recheck;
+  void kind;
+  return "skip";
+}
+
+export function is429Err(err?: string) {
+  return /429/i.test(String(err || ""));
+}
+
+export function bumpJobWaits(wait429: number, waitOther: number, err?: string) {
+  const hit429 = is429Err(err);
+  const next429 = hit429 ? (Number(wait429) || 0) + 1 : Number(wait429) || 0;
+  const nextOther = hit429 ? Number(waitOther) || 0 : (Number(waitOther) || 0) + 1;
+  return {
+    wait429: next429,
+    waitOther: nextOther,
+    waits: Math.max(next429, nextOther),
+    cap: next429 >= JOB_WAIT_CAP || nextOther >= JOB_WAIT_CAP,
+  };
+}
+
+export function resetJobWaits() {
+  return { wait429: 0, waitOther: 0, waits: 0 };
 }
 
 /** Красная: дырка жива и этот шаг что-то посадил — не брать следующего. */
@@ -561,16 +618,18 @@ export function shouldRetryShortPeople(
   mode: string,
   recheck: boolean,
   kind: string,
-  res: { ok?: boolean; student?: { short?: boolean; seated?: number; dropped?: number; holeApproved?: boolean } } | null,
+  res: { ok?: boolean; student?: { short?: boolean; seated?: number; dropped?: number; holeApproved?: boolean; dups?: boolean } } | null,
 ) {
   if (recheck) return false;
   if (mode !== "people" && mode !== "person" && mode !== "people-slow" && mode !== "people-recheck") return false;
   if (kind !== "students") return false;
   if (!res?.ok) return false;
   if (res.student?.holeApproved) return false;
-  if (!res.student?.short) return false;
   if (mode === "people-slow") return false;
-  return (Number(res.student.seated) || 0) > 0 || (Number(res.student.dropped) || 0) > 0;
+  const hole = Boolean(res.student?.short);
+  const extra = Boolean(res.student?.dups);
+  if (!hole && !extra) return false;
+  return (Number(res.student?.seated) || 0) > 0 || (Number(res.student?.dropped) || 0) > 0;
 }
 
 export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number; dateFrom?: string; dateTo?: string }): number {
@@ -590,7 +649,7 @@ export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number;
 export function jobGapMs(_mode?: JournalJobMode | "", periodDays?: number) {
   const n = Number(periodDays) || 0;
   if (n > 0 && n <= 14) return JOURNAL_FORTNIGHT_GAP_MS;
-  if (n === 32 || (n > 14 && n < 60)) return JOURNAL_WINDOW_GAP_MS;
+  if (n === 32 || (n > 14 && n < 60)) return JOURNAL_MONTH_GAP_MS;
   if (n === 92 || (n >= 60 && n < 140)) return JOURNAL_QUARTER_GAP_MS;
   if (n === 182 || (n >= 140 && n < 300)) return JOURNAL_HALF_GAP_MS;
   return JOURNAL_ONE_GAP_MS;
@@ -602,6 +661,8 @@ export function jobGapOf(job?: { mode?: JournalJobMode | ""; recheck?: boolean; 
 }
 
 export function jobGapLabel(ms: number): string {
-  const s = Math.max(1, Math.round((Number(ms) || JOURNAL_ONE_GAP_MS) / 1000));
+  const n = Number(ms);
+  const sec = Number.isFinite(n) && n > 0 ? n / 1000 : JOURNAL_ONE_GAP_MS / 1000;
+  const s = Number.isInteger(sec) ? String(sec) : sec.toFixed(1).replace(/\.0$/, "");
   return `пауза ${s} с`;
 }

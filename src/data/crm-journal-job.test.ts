@@ -17,6 +17,11 @@ import {
   capRecheckAction,
   jobGapMs,
   jobGapOf,
+  jobGapLabel,
+  bumpJobWaits,
+  resetJobWaits,
+  is429Err,
+  JOURNAL_MONTH_GAP_MS,
   JOURNAL_WINDOW_GAP_MS,
   mergeJobPatch,
   parseJobItems,
@@ -92,8 +97,8 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobRetryGapMs("429 Too Many Requests"), 120_000);
     assert.equal(jobRetryGapMs("429 Too Many Requests", 0), 120_000);
     assert.equal(jobRetryGapMs("ок"), 5000);
-    assert.equal(jobRetryGapMs("нет ответа", 14), 1000);
-    assert.match(readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8"), /gap: jobRetryGapMs\(err, live\.recheck \? jobPeriodDays\(live\) : 0\)/);
+    assert.equal(jobRetryGapMs("нет ответа", 14), 2000);
+    assert.match(readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8"), /gap: jobRetryGapMs\(err \|\| "перепись не дошла", live\.recheck \? jobPeriodDays\(live\) : 0\)/);
   });
   it("очередь учеников: слева неготовые, справа перепроверка", () => {
     const people = [
@@ -104,7 +109,8 @@ describe("фон истории из Alfa", () => {
     ];
     assert.deepEqual(peopleJobQueue(people, "students", false).map((x) => x.cid), [1, 4]);
     assert.deepEqual(peopleJobQueue(people, "students", true).map((x) => x.cid), [3]);
-    assert.deepEqual(peopleJobQueue([{ ...people[1], dups: true }], "students", true).map((x) => x.cid), [2]);
+    assert.deepEqual(peopleJobQueue([{ ...people[1], dups: true }], "students", true).map((x) => x.cid), []);
+    assert.deepEqual(peopleJobQueue([{ ...people[1], dups: true }], "students", false).map((x) => x.cid), [2]);
     assert.equal(peopleJobFinished(people[1], "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: true, short: true }, "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false }, "balance"), false);
@@ -123,7 +129,7 @@ describe("фон истории из Alfa", () => {
       [],
     );
     assert.equal(peopleJobFinished(people[3], "students"), false);
-    assert.equal(peopleJobFinished({ cid: 6, branchId: 2, name: "Е", journal: false, pays: false, dups: true }, "students"), true);
+    assert.equal(peopleJobFinished({ cid: 6, branchId: 2, name: "Е", journal: false, pays: false, dups: true }, "students"), false);
     assert.equal(peopleJobFinished({ cid: 6176, branchId: 1, name: "Баукина", journal: false, pays: false, short: true, dups: true }, "students"), false);
     assert.deepEqual(
       peopleJobQueue([{ cid: 6176, branchId: 1, name: "Баукина", journal: false, pays: false, short: true, dups: true }], "students", false).map((x) => x.cid),
@@ -186,10 +192,10 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryCash("students", false, { ok: false, error: "уже грузим другого ученика" }), true);
     assert.equal(shouldRetryCash("students", false, { ok: false, error: "502" }), true);
     assert.equal(shouldRetryCash("group", false, { ok: false, error: "Alfa не ответила, нажмите снова" }), false);
-    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: false } }), true);
-    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: false, dups: true } }), true);
+    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: false } }), false);
+    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: false, dups: true } }), false);
     assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: true } }), false);
-    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: true, short: true } }), true);
+    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: true, short: true } }), false);
     assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: true, short: false } }), false);
     assert.equal(shouldRetryOpenRecheck(false, "students", { ok: true, student: { rechecked: false } }), false);
     assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { rechecked: true, paysRechecked: false } }), true);
@@ -202,6 +208,8 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryShortPeople("person", false, "students", { ok: true, student: { short: true, seated: 19 } }), true);
     assert.equal(shouldRetryShortPeople("people", false, "students", { ok: true, student: { short: true, seated: 0 } }), false);
     assert.equal(shouldRetryShortPeople("people", false, "students", { ok: true, student: { short: true, seated: 0, dropped: 36 } }), true);
+    assert.equal(shouldRetryShortPeople("people-recheck", false, "students", { ok: true, student: { short: false, dups: true, dropped: 4 } }), true);
+    assert.equal(shouldRetryShortPeople("people-recheck", false, "students", { ok: true, student: { short: false, dups: true, seated: 0, dropped: 0 } }), false);
     assert.equal(shouldRetryShortPeople("people", true, "students", { ok: true, student: { short: true, seated: 50 } }), false);
     assert.equal(shouldRetryShortPeople("people", false, "balance", { ok: true, student: { short: true, seated: 50 } }), false);
     assert.equal(shouldRetryShortPeople("people-slow", false, "students", { ok: true, student: { short: true, seated: 50 } }), false);
@@ -209,7 +217,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryShortPeople("people-recheck", true, "students", { ok: true, student: { short: true, seated: 8 } }), false);
     assert.equal(recheckBusyErr("429 Too Many Requests"), true);
     assert.equal(recheckBusyErr("на диске 12 · в Alfa 40 — не хватает, добрать"), false);
-    assert.equal(capRecheckAction(true, "students"), "rotate");
+    assert.equal(capRecheckAction(true, "students"), "skip");
     assert.equal(capRecheckAction(true, "balance"), "skip");
     assert.equal(capRecheckAction(false, "students"), "skip");
     const jobSrc = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
@@ -221,12 +229,22 @@ describe("фон истории из Alfa", () => {
     assert.doesNotMatch(jobSrc, /skipLeads: kind === "balance"/);
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
-    assert.match(jobSrc, /holdOpen/);
-    assert.match(jobSrc, /rotateAfterCap/);
-    assert.match(jobSrc, /в конец очереди/);
+    assert.match(jobSrc, /перепись не дошла/);
+    assert.match(jobSrc, /skipAfterCap/);
     assert.match(jobSrc, /peopleSlowAdvance/);
     assert.match(jobSrc, /ещё круг/);
     assert.equal(JOB_WAIT_CAP, 8);
+    assert.equal(is429Err("429 Too Many Requests"), true);
+    assert.equal(is429Err("нет ответа"), false);
+    const eight429 = bumpJobWaits(7, 3, "429");
+    assert.equal(eight429.wait429, 8);
+    assert.equal(eight429.waitOther, 3);
+    assert.equal(eight429.cap, true);
+    const mixed = bumpJobWaits(7, 7, "нет ответа");
+    assert.equal(mixed.wait429, 7);
+    assert.equal(mixed.waitOther, 8);
+    assert.equal(mixed.cap, true);
+    assert.deepEqual(resetJobWaits(), { wait429: 0, waitOther: 0, waits: 0 });
   });
 
   it("медленный добор снова берёт слева, пока очередь не пустая", () => {
@@ -262,15 +280,20 @@ describe("фон истории из Alfa", () => {
     assert.equal(afterHoles.wave, "right");
     assert.deepEqual(afterHoles.items.map((x) => x.cid), [1]);
     assert.equal(afterHoles.recheck, true);
+    const already = { cid: 5, branchId: 1, name: "уже справа", journal: true, pays: false, rechecked: true };
+    const greened = { cid: 6, branchId: 1, name: "позеленел", journal: true, pays: false, rechecked: false };
+    const wave2All = peopleRecheckAdvance([already, greened, hole], "students", "preleft", []);
+    assert.equal(wave2All.wave, "right");
+    assert.deepEqual(wave2All.items.map((x) => x.cid).sort(), [5, 6]);
     const afterRight = peopleRecheckAdvance([right, left, hole], "students", "right", []);
     assert.equal(afterRight.wave, "left");
     assert.deepEqual(afterRight.items.map((x) => x.cid), [2]);
     assert.equal(afterRight.recheck, false);
     const stillYellow = peopleRecheckAdvance([right, left, hole], "students", "left", afterRight.follow);
-    assert.equal(stillYellow.wave, "right2");
+    assert.equal(stillYellow.wave, "left2");
     assert.equal(stillYellow.done, false);
     assert.deepEqual(stillYellow.items.map((x) => x.cid), [2]);
-    assert.equal(stillYellow.recheck, true);
+    assert.equal(stillYellow.recheck, false);
     const loaded = { ...left, journal: true, short: false };
     const afterLeft = peopleRecheckAdvance([right, loaded, hole], "students", "left", afterRight.follow);
     assert.equal(afterLeft.wave, "right2");
@@ -286,6 +309,23 @@ describe("фон истории из Alfa", () => {
     const onlyLeft = peopleRecheckAdvance([left], "students", "", []);
     assert.equal(onlyLeft.wave, "preleft");
     assert.deepEqual(onlyLeft.items.map((x) => x.cid), [2]);
+    const deferred = peopleRecheckAdvance([right, hole], "students", "right", [], [{ cid: 8, branchId: 1, name: "обрыв" }]);
+    assert.equal(deferred.wave, "left");
+    assert.equal(deferred.recheck, false);
+    assert.deepEqual(deferred.items.map((x) => x.cid), [8]);
+    const skipped = peopleRecheckAdvance(
+      [{ cid: 9, branchId: 1, name: "слева", journal: false, pays: false, short: true }],
+      "students",
+      "preleft",
+      [],
+      [],
+      [{ cid: 9, branchId: 1, name: "слева" }],
+    );
+    assert.ok(!skipped.items.some((x) => x.cid === 9));
+    assert.equal(emptyJournalJob().defer.length, 0);
+    assert.equal(emptyJournalJob().skip.length, 0);
+    assert.equal(emptyJournalJob().wait429, 0);
+    assert.equal(emptyJournalJob().waitOther, 0);
     const cashLeft = { cid: 9, branchId: 2, name: "касса", journal: true, pays: false };
     const cashStart = peopleRecheckAdvance([cashLeft], "balance", "", []);
     assert.equal(cashStart.wave, "preleft");
@@ -327,25 +367,29 @@ describe("фон истории из Alfa", () => {
     assert.equal(fillClear.fill, null);
   });
 
-  it("закон пауз: красная 5 с; синяя ≤2 нед 1 с, месяц 2 с, 3 мес 3 с, 6 мес 4 с, длинные 5 с", () => {
+  it("закон пауз: красная 5 с; синяя неделя/две 2 с, месяц 2,5 с, 3 мес 3 с, 6 мес 4 с, длинные 5 с", () => {
     assert.equal(PEOPLE_JOB_GAP_MS, 5000);
     assert.equal(CATALOG_JOB_GAP_MS, 5000);
     assert.equal(JOURNAL_WINDOW_GAP_MS, 2000);
+    assert.equal(JOURNAL_MONTH_GAP_MS, 2500);
     assert.equal(jobGapMs("people"), 5000);
     assert.equal(jobGapMs("people-recheck"), 5000);
-    assert.equal(jobGapMs("people-recheck", 7), 1000);
-    assert.equal(jobGapMs("people-recheck", 14), 1000);
-    assert.equal(jobGapMs("people-recheck", 31), 2000);
-    assert.equal(jobGapMs("people-recheck", 32), 2000);
+    assert.equal(jobGapMs("people-recheck", 7), 2000);
+    assert.equal(jobGapMs("people-recheck", 14), 2000);
+    assert.equal(jobGapMs("people-recheck", 31), 2500);
+    assert.equal(jobGapMs("people-recheck", 32), 2500);
     assert.equal(jobGapMs("people-recheck", 92), 3000);
     assert.equal(jobGapMs("people-recheck", 182), 4000);
     assert.equal(jobGapMs("people-recheck", 1095), 5000);
     assert.equal(jobGapMs("people-recheck", 2555), 5000);
     assert.equal(jobGapMs("people-recheck", 4000), 5000);
-    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 7 }), 1000);
-    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 14 }), 1000);
-    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 32 }), 2000);
-    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 32, dateFrom: "2026-08-13", dateTo: "2026-10-16" }), 2000);
+    assert.equal(jobGapLabel(2500), "пауза 2.5 с");
+    assert.equal(jobGapLabel(2000), "пауза 2 с");
+    assert.equal(jobGapLabel(5000), "пауза 5 с");
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 7 }), 2000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 14 }), 2000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 32 }), 2500);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 32, dateFrom: "2026-08-13", dateTo: "2026-10-16" }), 2500);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 92 }), 3000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 182 }), 4000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 1095 }), 5000);
@@ -358,9 +402,9 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapOf({ mode: "person", recheck: true, recheckDays: 92 }), 3000);
     assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 92 }), 3000);
     assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 182 }), 4000);
-    assert.equal(jobGapOf({ mode: "people", recheck: true, recheckDays: 32 }), 2000);
+    assert.equal(jobGapOf({ mode: "people", recheck: true, recheckDays: 32 }), 2500);
     assert.equal(jobGapOf({ mode: "people", recheck: true, recheckDays: 92 }), 3000);
-    assert.equal(jobGapOf({ mode: "roster-recheck", recheck: true, recheckDays: 32 }), 2000);
+    assert.equal(jobGapOf({ mode: "roster-recheck", recheck: true, recheckDays: 32 }), 2500);
     assert.equal(jobGapOf({ mode: "people", recheck: false, dateFrom: "2015-01-01" }), 5000);
     assert.equal(jobGapOf({ mode: "people-slow", recheck: false, dateFrom: "2015-01-01" }), 5000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: false, dateFrom: "2015-01-01" }), 5000);
@@ -368,7 +412,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapMs("catalog"), 5000);
     assert.equal(jobGapMs("audit"), 5000);
     assert.equal(jobGapMs("roster"), 5000);
-    assert.equal(jobGapMs("roster-recheck", 32), 2000);
+    assert.equal(jobGapMs("roster-recheck", 32), 2500);
     assert.match(readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8"), /moreCash[\s\S]{0,900}live\.recheck \? jobGapOf\(live\) : 0/);
   });
 
@@ -467,15 +511,19 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /касса · \$\{item.name\}/);
     assert.match(job, /берём следующего/);
     assert.match(job, /peopleNeedCashLoad\(row\)/);
-    assert.match(job, /сбой · ещё этот/);
+    assert.match(job, /сбой · ещё этот|перепись не дошла/);
     assert.doesNotMatch(job, /Остановились на «\$\{item\.name\}»\. Нажмите ещё раз/);
-    assert.match(job, /if \(waits > JOB_WAIT_CAP\)/);
+    assert.match(job, /bumpJobWaits/);
     assert.match(job, /skipAfterCap/);
     assert.match(job, /finishWaveOrStop/);
-    assert.match(job, /wave: isRecheckWaveMode\(job.mode\) \? "right2"/);
+    assert.match(job, /wave: isRecheckWaveMode\(job.mode\) \? "left2"/);
     assert.match(job, /dateTo: job.dateTo/);
     assert.match(job, /iceWindowOrNow/);
     assert.match(job, /ensureJobIce/);
+    assert.match(job, /freezeIce/);
+    assert.match(job, /defer/);
+    assert.match(core, /export function bumpJobWaits/);
+    assert.match(core, /mergeDeferItems/);
     assert.match(core, /dateTo: ""/);
     assert.match(core, /export function isRecheckWaveMode/);
     assert.match(core, /export function jobHasIce/);

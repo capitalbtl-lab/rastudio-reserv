@@ -1170,7 +1170,7 @@ async function pullOneGroup(
 export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32, dateTo = "") {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, studentProtectLessonIds } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, studentProtectLessonIds, studentCardBranches } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const reset0 = String(customerSyncOf(cid).lessonsResetAt || "");
@@ -1191,6 +1191,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       paysMore: false,
       rechecked: false,
       paysRechecked: false,
+      censusOk: false,
     };
   };
   const mark = (disk: number, alfa: number, probedOk: boolean, census = false) => {
@@ -1224,25 +1225,39 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   let lessons = 0;
   let seated = 0;
   let droppedN = 0;
+  let censusClosed = false;
+  let censusErr = "";
   let disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
   if (!balance) {
   if (!recheck) {
     const range = studentCensusRange(customerSyncOf(cid));
     const first = await probeCustomerLessons(branchId, cid, { dateFrom: range.from, dateTo: range.to }).catch(() => ({ total: 0, ok: false as const, ids: [] as number[] }));
     if (abortedByReset()) return resetStop();
+    const censusOk = Boolean(first.ok && range.full);
+    censusClosed = censusOk;
+    if (!first.ok) {
+      censusErr = "перепись не дошла";
+      stampCustomerSync(cid, {
+        lessonsFull: false,
+        lessonsRecheckAt: "",
+        lessonsHoleN: Math.max(Number(customerSyncOf(cid).lessonsHoleN) || 0, 1),
+      });
+    }
     if (first.ok) {
       const prevSeen = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
       const seen = range.full
         ? uniquePositiveIds(first.ids || [])
         : uniquePositiveIds([...prevSeen, ...(first.ids || [])]);
       if (seen.length) stampCustomerSync(cid, { lessonsSeenIds: seen, ...(range.full ? {} : { lessonsWindowDays: range.days }) });
+      if (censusOk && !Boolean(customerSyncOf(cid).journalHoleApprovedAt)) {
+        applyCustomerLessonCensus(cid, seen, true, "", "");
+        disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
+      }
     }
     const alfaKeep = Number(customerSyncOf(cid).lessonsAlfa) || 0;
     const alfa0 = first.ok ? first.total : 0;
-    const censusOk = Boolean(first.ok && range.full);
     const alfaGate = censusOk ? alfa0 : Math.max(alfa0, alfaKeep);
     const weak = Boolean(first.ok && !censusOk && alfaKeep > 0 && alfa0 < alfaKeep);
-    const extra0 = lessonsCountExtra(disk, alfaGate, first.ok || alfaKeep > 0);
     const shortByIds = (diskN: number, alfaN: number, probedOk: boolean) => {
       const cur = customerSyncOf(cid);
       const have = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
@@ -1257,7 +1272,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     );
     const seenReady = (customerSyncOf(cid).lessonsSeenIds || []).length > 0;
     const setsClosed = seenReady && !(Number(gap0.lessonsHoleN) || 0) && !(Number(gap0.lessonsExtraN) || 0);
-    if (first.ok && !weak && (setsClosed || (!seenReady && disk >= alfaGate && !extra0))) {
+    if (first.ok && !weak && setsClosed) {
       const hit = mark(disk, alfa0, true, censusOk);
       if (hit.closed) stampCustomerSync(cid, { lessonsWindowDays: 0 });
       if (!balance)
@@ -1275,6 +1290,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           paysMore: false,
           rechecked: Boolean(customerSyncOf(cid).lessonsRecheckAt) && hit.closed,
           paysRechecked: false,
+          censusOk: true,
         };
     } else {
       const have0 = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
@@ -1282,6 +1298,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       if (shortByIds(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0) && !missing.length && !first.ok) {
         const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: range.from, dateTo: range.to }).catch(() => ({ ids: [] as number[], ok: false as const }));
         if (census.ok) {
+          censusClosed = true;
           const prev = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
           stampCustomerSync(cid, { lessonsSeenIds: uniquePositiveIds([...prev, ...census.ids]) });
           missing = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []).filter((n) => !have0.has(n));
@@ -1315,7 +1332,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         if (abortedByReset() || res.skipped === "reset") return resetStop();
         lessons += Number(res.count) || 0;
         if ("skipped" in res && res.skipped === "busy") {
-          return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
+          return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false, censusOk: false };
         }
         disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
         if (!shortByIds(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) break;
@@ -1329,6 +1346,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         } else {
           const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: range.from, dateTo: range.to }).catch(() => ({ ids: [] as number[], ok: false as const }));
           if (census.ok) {
+            censusClosed = true;
             const prev = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
             stampCustomerSync(cid, { lessonsSeenIds: uniquePositiveIds([...prev, ...census.ids]) });
             missing = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []).filter((n) => !have.has(n));
@@ -1353,7 +1371,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     }
   } else {
     if (!(await waitLockStudentAlfa(cid, 20000))) {
-      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
+      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false, censusOk: false };
     }
     try {
     const win = iceWindowOrNow(true, from, dateTo, recheckDays);
@@ -1361,25 +1379,44 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const windowTo = win.to;
     const censusFrom = windowFrom || from;
     const fullWin = recheckWindowFull(windowFrom);
+    const cardOnly = !fullWin && (Number(recheckDays) || 32) < 1095;
     const seatRounds = fullWin ? 80 : 20;
-    const census = await censusCustomerLessonIds(branchId, cid, censusFrom ? { dateFrom: censusFrom, ...(windowTo ? { dateTo: windowTo } : {}) } : {}).catch(() => ({ ids: [] as number[], ok: false as const }));
+    const censusOpts = {
+      ...(censusFrom ? { dateFrom: censusFrom, ...(windowTo ? { dateTo: windowTo } : {}) } : {}),
+      ...(cardOnly ? { branches: studentCardBranches(cid, branchId) } : {}),
+    };
+    const census = await censusCustomerLessonIds(branchId, cid, censusOpts).catch(() => ({ ids: [] as number[], ok: false as const, error: "Alfa не ответила" }));
     disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
     if (!census.ok) {
       mark(disk, 0, false);
-      if (!holeApproved && census.ids.length) {
-        const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
-        const missing = census.ids.filter((n) => !have.has(n));
-        if (missing.length) {
-          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: seatRounds, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
-          if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
-          lessons += Number(gap.count) || 0;
-          seated += Number(gap.count) || 0;
-          droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
-          disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
-        }
-      }
+      stampCustomerSync(cid, {
+        lessonsFull: false,
+        lessonsRecheckAt: "",
+        lessonsHoleN: Math.max(Number(customerSyncOf(cid).lessonsHoleN) || 0, 1),
+      });
+      return {
+        cid,
+        lessons: disk,
+        done: false,
+        pays: 0,
+        tariffs: 0,
+        alfa: Number(customerSyncOf(cid).lessonsAlfa) || 0,
+        short: true,
+        dups: false,
+        blocked: false,
+        paysOk: false,
+        paysMore: false,
+        rechecked: false,
+        paysRechecked: false,
+        seated: 0,
+        dropped: 0,
+        holeApproved,
+        censusOk: false,
+        censusErr: String((census as { error?: string }).error || "перепись не дошла"),
+      };
     } else if (holeApproved) {
+      censusClosed = true;
       mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || 0, true);
     } else {
       const haveBefore = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
@@ -1387,6 +1424,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       if (!applied.ok) {
         mark(disk, 0, false);
       } else {
+      censusClosed = true;
       disk = applied.disk;
       const haveAfter = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
       const gone = windowFrom ? windowGoneLessonIds(haveBefore, haveAfter) : [];
@@ -1451,7 +1489,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const pendingPay = payFillPending(cid);
     const held = recheck && !pendingPay ? await waitLockStudentAlfa(cid, 20000) : true;
     if (!held) {
-      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
+      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false, censusOk: false };
     }
     try {
     const { token, request } = await import("./alfacrm");
@@ -1510,6 +1548,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     seated,
     dropped: droppedN,
     holeApproved: Boolean(sync.journalHoleApprovedAt),
+    censusOk: censusClosed,
+    censusErr,
   };
 }
 
@@ -2446,7 +2486,9 @@ export async function journalPull(opts: {
       total: people.length,
       rows: merged,
     };
-    store.note = row.payFail
+    store.note = row.censusOk === false && !balance
+      ? `${who}: ${name} · перепись не дошла`
+      : row.payFail
       ? `${who}: ${name} · Alfa не ответила, нажмите снова`
       : row.short
       ? `${who}: ${name} · на диске ${countAlfaLessonUniq(loadCustomerCalendar(one.cid))} · в Alfa ${row.alfa} — не хватает, добрать`
@@ -2459,9 +2501,11 @@ export async function journalPull(opts: {
       : `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · не попал в выдачу${row.done ? " (Alfa пусто)" : " (обрыв)"}`;
     store.at = new Date().toISOString();
     saveStore(store);
+    const censusFailed = !balance && row.censusOk === false;
     return {
-      ok: true as const,
+      ok: censusFailed ? (false as const) : (true as const),
       extra: store.note,
+      error: censusFailed ? String(row.censusErr || "перепись не дошла") : undefined,
       count: row.lessons,
       scanned: 1,
       more: !wanted,

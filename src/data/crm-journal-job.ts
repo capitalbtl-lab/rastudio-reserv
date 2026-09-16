@@ -27,6 +27,9 @@ import {
   shouldRetryShortPeople,
   recheckBusyErr,
   capRecheckAction,
+  bumpJobWaits,
+  resetJobWaits,
+  is429Err,
   tryHistoryTickLock,
   touchHistoryTickLock,
   releaseHistoryTickLock,
@@ -35,7 +38,6 @@ import {
   stoppedJobMsg,
   shouldResumeStalledJob,
   jobRetryGapMs,
-  RECHECK_STALL_MS,
   JOB_WAIT_CAP,
   isRecheckWaveMode,
   jobHasIce,
@@ -443,6 +445,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   const study = opts.study === "2" ? "2" : "1";
   const skipLeads = Boolean(opts.skipLeads) || /(?:^|&)leads=0(?:&|$)/.test(String(opts.name || ""));
   let recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
+  const freezeIce = recheck && mode !== "roster-recheck";
   let items = buildItems({ ...opts, kind, recheck, skipLeads });
   let wave: RecheckWave = "";
   let follow: JournalJobItem[] = [];
@@ -504,7 +507,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   }
   const first = items[0];
   const days = clampRecheckDays(opts.recheckDays);
-  const ice = iceWindowOrNow(recheck, opts.dateFrom, recheck ? undefined : "", days);
+  const ice = iceWindowOrNow(freezeIce, opts.dateFrom, freezeIce ? undefined : "", days);
   const job: JournalJob = {
     ...emptyJournalJob(),
     id: `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -529,6 +532,8 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     items,
     idx: 0,
     waits: 0,
+    wait429: 0,
+    waitOther: 0,
     cur: first?.name || "",
     n: 0,
     total: loopPullKind(mode) ? 0 : items.length,
@@ -864,6 +869,8 @@ function peekJobWave(job: JournalJob): ReturnType<typeof peopleRecheckAdvance> |
       job.kind === "balance" ? "balance" : "students",
       job.wave,
       job.follow,
+      job.defer,
+      job.skip,
     );
   }
   if (mode === "groups-recheck") {
@@ -903,10 +910,14 @@ function advanceJobWave(job: JournalJob): { done: false; gap: number } | null {
     id: job.id,
     items: nxt.items,
     follow: nxt.follow,
+    defer: job.defer,
+    skip: job.skip,
     wave: nxt.wave,
     recheck: nxt.recheck,
     idx: 0,
     waits: 0,
+    wait429: 0,
+    waitOther: 0,
     n: job.n,
     total: job.n + nxt.items.length,
     running: true,
@@ -923,8 +934,10 @@ function finishWaveOrStop(job: JournalJob, msg: string, n = job.n): { done: true
     n,
     idx: Math.max(Number(job.idx) || 0, (job.items || []).length),
     waits: 0,
+    wait429: 0,
+    waitOther: 0,
     running: false,
-    wave: isRecheckWaveMode(job.mode) ? "right2" : job.wave,
+    wave: isRecheckWaveMode(job.mode) ? "left2" : job.wave,
     follow: isRecheckWaveMode(job.mode) ? [] : job.follow,
     cur: "",
     fill: null,
@@ -961,6 +974,16 @@ function finishWaveOrStop(job: JournalJob, msg: string, n = job.n): { done: true
 function skipAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; gap: number; msg?: string } {
   const idx = job.idx + 1;
   const moreItems = idx < job.items.length;
+  const peopleBlue = job.mode === "people-recheck";
+  const defer =
+    peopleBlue && job.recheck
+      ? [...(job.defer || []).filter((x) => Number(x.cid) !== Number(item.cid)), item]
+      : job.defer || [];
+  const skip =
+    peopleBlue && !job.recheck
+      ? [...(job.skip || []).filter((x) => Number(x.cid) !== Number(item.cid)), item]
+      : job.skip || [];
+  const waits = resetJobWaits();
   if (moreItems) {
     const nextName = job.items[idx]?.name || "";
     const msg = `«${item.name}»: Alfa не отвечает, берём следующего.`;
@@ -977,7 +1000,9 @@ function skipAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; g
       id: job.id,
       idx,
       n: job.n,
-      waits: 0,
+      defer,
+      skip,
+      ...waits,
       running: true,
       cur: `${pauseTxt(job)} · дальше ${nextName}`,
       fill: fillOf(job.mode, job.kind, job.items[idx]),
@@ -985,9 +1010,9 @@ function skipAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; g
     });
     return { done: false, gap: jobGapOf(job) };
   }
-  const more = advanceJobWave({ ...job, idx, waits: 0 });
+  const more = advanceJobWave({ ...job, idx, defer, skip, ...waits });
   if (more) return more;
-  return finishWaveOrStop({ ...job, idx, waits: 0 }, `Alfa не отвечает на «${item.name}». Остановились.`);
+  return finishWaveOrStop({ ...job, idx, defer, skip, ...waits }, `Alfa не отвечает на «${item.name}». Остановились.`);
 }
 
 /** Синий календарь: после cap — в конец очереди, не выкинуть навсегда. */
@@ -1053,6 +1078,11 @@ function loopLabel(
 }
 
 function ensureJobIce(job: JournalJob): JournalJob {
+  if (isRecheckWaveMode(job.mode) && job.mode !== "roster-recheck") {
+    if (jobHasIce(job)) return job;
+    const win = recheckWindowYmd(job.recheckDays);
+    return patch({ id: job.id, dateFrom: win.from, dateTo: win.to });
+  }
   if (!job.recheck) {
     if (String(job.dateTo || "")) return patch({ id: job.id, dateTo: "" });
     return job;
@@ -1193,7 +1223,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       id,
       items: rot.items,
       idx: rot.idx,
-      waits: 0,
+      ...resetJobWaits(),
       n: live.n,
       running: true,
       cur: same ? `касса · ещё «${item.name}»` : `${pauseTxt(live)} · дальше ${next?.name || ""}`,
@@ -1204,57 +1234,52 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     });
     return { done: false, gap: live.recheck ? jobGapOf(live) : 0 };
   }
+  const err = String(res.error || res.extra || "");
+  const busy = recheckBusyErr(err);
   const cashRetry = shouldRetryCash(pullKind, live.recheck, res);
   const openRetry = shouldRetryOpenRecheck(live.recheck, pullKind, res);
   const shortRetry = shouldRetryShortPeople(mode, live.recheck, pullKind, res);
-  const retry = cashRetry || openRetry || shortRetry;
-  if (retry) {
-    const err = String(res.extra || res.error || "");
-    const busy = recheckBusyErr(err);
-    const holdOpen = Boolean(live.recheck && pullKind === "students" && (openRetry || shortRetry) && !busy);
-    if (holdOpen) {
-      patch({
-        id,
-        waits: 0,
-        cur: `${pauseTxt(live)} · ещё «${item.name}»`,
-        fill: fillOf(mode, job.kind, item),
-        msg: openRetry
-          ? `«${item.name}»: перепись не закрыта, ещё этот.`
-          : `«${item.name}»: не хватает, ещё этот.`,
-      });
-      return { done: false, gap: jobGapOf(live) };
-    }
-    const waits = (live.waits || 0) + 1;
-    if (waits > JOB_WAIT_CAP) {
-      return afterWaitCap(live, item, pullKind);
-    }
-    const cur = pullKind === "balance" && !live.recheck && !busy ? `касса · ещё «${item.name}»` : `${pauseTxt(live)} · ещё «${item.name}»`;
+  const censusMiss = !res.ok || (pullKind === "students" && busy && !res.ok);
+  if (shortRetry && res.ok && !busy) {
     patch({
       id,
-      waits,
-      cur,
+      ...resetJobWaits(),
+      cur: `${pauseTxt(live)} · ещё «${item.name}»`,
       fill: fillOf(mode, job.kind, item),
-      msg: openRetry
-        ? `«${item.name}»: перепись не закрыта, ещё этот.`
-        : shortRetry
-          ? `«${item.name}»: не хватает, ещё этот.`
-          : String(res.extra || res.error || `«${item.name}»: касса не дочитана.`),
+      msg: `«${item.name}»: не хватает, ещё этот.`,
     });
-    return { done: false, gap: jobRetryGapMs(err, live.recheck ? jobPeriodDays(live) : 0) };
+    return { done: false, gap: jobGapOf(live) };
   }
-  if (!res.ok) {
-    const waits = (live.waits || 0) + 1;
-    if (waits <= JOB_WAIT_CAP) {
-      patch({
-        id,
-        waits,
-        cur: `${pauseTxt(live)} · ещё «${item.name}»`,
-        fill: fillOf(mode, job.kind, item),
-        msg: `«${item.name}»: сбой · ещё этот.`,
-      });
-      return { done: false, gap: live.recheck ? RECHECK_STALL_MS : jobGapOf(live) };
+  if (openRetry && res.ok && !busy) {
+    patch({
+      id,
+      ...resetJobWaits(),
+      cur: `${pauseTxt(live)} · ещё «${item.name}»`,
+      fill: fillOf(mode, job.kind, item),
+      msg: `«${item.name}»: перепись не закрыта, ещё этот.`,
+    });
+    return { done: false, gap: jobGapOf(live) };
+  }
+  if (censusMiss || cashRetry || !res.ok) {
+    const bumped = bumpJobWaits(live.wait429 || 0, live.waitOther || 0, err || (res.ok ? "" : "перепись не дошла"));
+    if (bumped.cap) {
+      return afterWaitCap({ ...live, ...bumped }, item, pullKind);
     }
-    return afterWaitCap(live, item, pullKind);
+    const stay429 = is429Err(err);
+    patch({
+      id,
+      wait429: bumped.wait429,
+      waitOther: bumped.waitOther,
+      waits: bumped.waits,
+      cur: pullKind === "balance" && !live.recheck && !busy ? `касса · ещё «${item.name}»` : `${pauseTxt(live)} · ещё «${item.name}»`,
+      fill: fillOf(mode, job.kind, item),
+      msg: stay429
+        ? `«${item.name}»: 429, ждём 2 мин, ещё этот.`
+        : cashRetry
+          ? String(res.extra || res.error || `«${item.name}»: касса не дочитана.`)
+          : `«${item.name}»: перепись не дошла · ещё этот.`,
+    });
+    return { done: false, gap: jobRetryGapMs(err || "перепись не дошла", live.recheck ? jobPeriodDays(live) : 0) };
   }
   if (mode === "details" && res.more) {
     patch({
@@ -1275,7 +1300,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       id,
       n,
       idx,
-      waits: 0,
+      ...resetJobWaits(),
       cur: pauseCur,
       fill: live.fill,
       msg: pauseCur,
@@ -1283,7 +1308,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     });
     return { done: false, gap: jobGapOf(live) };
   }
-  const more = advanceJobWave({ ...live, n, idx, waits: 0 });
+  const more = advanceJobWave({ ...live, n, idx, ...resetJobWaits() });
   if (more) return more;
   const finished = { ...live, n, idx };
   return finishWaveOrStop(finished, doneMsg(finished), n);

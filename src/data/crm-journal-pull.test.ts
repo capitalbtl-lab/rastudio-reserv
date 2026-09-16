@@ -384,7 +384,8 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(core, /if \(k > 0 && a < k\) return \{ write: false, alfa: k, probed: true \}/);
     assert.match(pull, /keepAlfaProbe\(keep, alfaRaw, probed.ok, Boolean\(probed.ok\)\)/);
     assert.match(pull, /lessonsSeenIds: ids/);
-    assert.match(pull, /setsClosed \|\| \(!seenReady && disk >= alfaGate && !extra0\)/);
+    assert.match(pull, /setsClosed/);
+    assert.doesNotMatch(pull, /disk >= alfaGate && !extra0/);
     assert.doesNotMatch(pull, /lessonsAlfaAt: ""/);
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
     assert.match(inbound, /censusSeatLessonId\(item\)/);
@@ -514,6 +515,8 @@ describe("ручной журнал с Alfa", () => {
     const oneEnd = pull.indexOf("export async function journalPull", oneAt);
     const one = pull.slice(oneAt, oneEnd > oneAt ? oneEnd : oneAt + 14000);
     assert.match(one, /studentCensusRange\(customerSyncOf\(cid\)\)/);
+    assert.match(one, /studentCardBranches/);
+    assert.match(one, /censusOk/);
     assert.match(one, /dateFrom: range.from, dateTo: range.to/);
     assert.match(one, /uniquePositiveIds\(first.ids \|\| \[\]\)/);
     assert.doesNotMatch(one, /prevSeen = range.full \? \[\]/);

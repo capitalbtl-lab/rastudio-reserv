@@ -81,7 +81,7 @@ describe("штамп входа ученика", () => {
     assert.equal(lessonsCountExtra(84, 47, true), true);
     assert.equal(lessonsCountShort(0, 71, true), true);
     assert.equal(lessonsCountShort(5, 20, true), true);
-    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 8, lessonsDisk: 8 }), true);
+    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 8, lessonsDisk: 8 }), false);
     assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 273, lessonsDisk: 329 }), false);
     assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 47, lessonsDisk: 84, lessonsFull: true, lessonsAttend: true }), false);
     assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 71, lessonsDisk: 0 }), false);
@@ -89,7 +89,7 @@ describe("штамп входа ученика", () => {
     assert.equal(lessonsJournalReady({ lessonsDisk: 47 }), false);
     assert.equal(wasLessonGreen({ lessonsRecheckAt: "x" }), true);
     assert.equal(wasLessonGreen({ lessonsFull: true }), true);
-    assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 491 }), true);
+    assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 491 }), false);
     assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 495 }), false);
     assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 400 }), false);
     assert.equal(wasLessonGreen({}), false);

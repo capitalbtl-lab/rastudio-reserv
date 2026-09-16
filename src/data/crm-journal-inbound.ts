@@ -444,30 +444,60 @@ async function pullLessonPage(
   body: Record<string, unknown>,
   t: string,
   tries = 3,
-): Promise<{ ok: true; items: LessonIndexItem[]; total: number } | { ok: false }> {
+): Promise<{ ok: true; items: LessonIndexItem[]; total: number } | { ok: false; error: string }> {
   const { request } = await import("./alfacrm");
+  let last = "Alfa не ответила";
   for (let i = 0; i < tries; i += 1) {
     try {
       const raw = await request<unknown>(`/v2api/${bid}/lesson/index`, body, t);
       const pack = crmUnwrapIndex(raw);
       return { ok: true as const, items: (pack.items || []) as LessonIndexItem[], total: Number(pack.total) || 0 };
-    } catch {
-      if (i + 1 >= tries) return { ok: false as const };
+    } catch (e) {
+      last = e instanceof Error && e.message ? e.message : "Alfa не ответила";
+      if (i + 1 >= tries) return { ok: false as const, error: last };
       await pauseMs(800 * (i + 1));
     }
   }
-  return { ok: false as const };
+  return { ok: false as const, error: last };
+}
+
+/** Филиалы с карточки: groupLinks + домашний. Пусто — все четыре. */
+export function studentCardBranches(cid: number, home = 0): number[] {
+  const d = findDossier({ crmId: cid });
+  const homeN = Number(home) || Number(d?.branchId) || 1;
+  const bids = new Set<number>();
+  if (homeN >= 1 && homeN <= 4) bids.add(homeN);
+  for (const link of d?.groupLinks || []) {
+    const b = Number((link as { branchId?: number }).branchId) || 0;
+    if (b >= 1 && b <= 4) bids.add(b);
+  }
+  const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+  if (have.size) {
+    for (const link of d?.groupLinks || []) {
+      const gid = Number((link as { id?: number }).id) || 0;
+      const bid = Number((link as { branchId?: number }).branchId) || Number(d?.branchId) || 0;
+      if (!gid || bid < 1 || bid > 4) continue;
+      const card = loadGroupCard(bid, gid);
+      if ((card?.calendar || []).some((l) => have.has(Number(l.lessonId) || 0))) bids.add(bid);
+    }
+  }
+  if (!bids.size) return uniqueBranches(homeN);
+  return uniqueBranches(homeN).filter((b) => bids.has(b));
 }
 
 /** Сколько занятий у ученика в Alfa: перепись уникальных номеров. Пустой catch ≠ конец. Полная страница на потолке — не закрыта. */
-export async function censusCustomerLessonIds(branch: number, customerId: number, opts?: { dateFrom?: string; dateTo?: string; token?: string }) {
+export async function censusCustomerLessonIds(
+  branch: number,
+  customerId: number,
+  opts?: { dateFrom?: string; dateTo?: string; token?: string; branches?: number[] },
+) {
   const id = Number(customerId) || 0;
-  if (id <= 0) return { ids: [] as number[], ok: false as const, pages: 0 };
+  if (id <= 0) return { ids: [] as number[], ok: false as const, pages: 0, error: "нет id" };
   const { token } = await import("./alfacrm");
   const t = opts?.token || (await token());
   const dateFrom = ymd(opts?.dateFrom) || "2015-01-01";
   const dateTo = ymd(opts?.dateTo) || ymd(ruShift(90));
-  const branches = uniqueBranches(branch);
+  const branches = opts?.branches?.length ? opts.branches : uniqueBranches(branch);
   const ids = new Set<number>();
   const noDate: number[] = [];
   let pages = 0;
@@ -484,7 +514,7 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
           t,
         );
         pages += 1;
-        if (!live.ok) return { ids: uniquePositiveIds(ids), ok: false as const, pages };
+        if (!live.ok) return { ids: uniquePositiveIds(ids), ok: false as const, pages, error: live.error };
         for (const item of live.items) {
           const lid = censusSeatLessonId(item);
           if (lid) ids.add(lid);

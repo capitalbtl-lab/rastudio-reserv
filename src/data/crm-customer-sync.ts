@@ -173,30 +173,23 @@ export function lessonsStampExtra(sync: CustomerSyncStamp) {
   return lessonsCountExtra(diskN, alfaN, true);
 }
 
-/** Журнал готов по множествам id. Длина без hole/extra — запас, если переписи ещё нет. */
+/** Журнал готов по множествам id. Цифру 491/491 не смотрим. */
 export function lessonsJournalReady(sync: CustomerSyncStamp) {
-  const probed = Boolean(sync.lessonsAlfaAt);
-  const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
-  const diskN = Number(sync.lessonsDisk) || 0;
   if (lessonsStampShort(sync)) return false;
   if (lessonsStampExtra(sync)) return false;
   if (sync.lessonsHoleN != null && sync.lessonsExtraN != null) {
-    return Boolean(probed || (sync.lessonsFull && sync.lessonsAttend));
+    return Boolean(sync.lessonsAlfaAt || (sync.lessonsFull && sync.lessonsAttend));
   }
-  if (sync.lessonsFull && sync.lessonsAttend) return !probed || diskN === alfaN;
-  return probed && diskN === alfaN;
+  return Boolean(sync.lessonsFull && sync.lessonsAttend);
 }
 
 /** Уже сходился: short/extra нет. Окно синей от этого не зависит — extra тоже ±дни. */
 export function wasLessonGreen(sync: CustomerSyncStamp) {
-  const probed = Boolean(sync.lessonsAlfaAt);
-  const alfa = Number(sync.lessonsAlfa) || 0;
-  const disk = Number(sync.lessonsDisk) || 0;
   if (lessonsStampExtra(sync)) return false;
   if (lessonsStampShort(sync)) return false;
   if (sync.lessonsRecheckAt) return true;
   if (sync.lessonsFull) return true;
-  return probed && alfa > 0 && disk === alfa;
+  return false;
 }
 
 export const LESSON_WINDOW_STEPS = [30, 90, 180] as const;
