@@ -13,6 +13,8 @@ import {
   rotateUnfinished,
   shouldRetryOpenRecheck,
   shouldRetryShortPeople,
+  recheckBusyErr,
+  capRecheckAction,
   jobGapMs,
   jobGapOf,
   JOURNAL_WINDOW_GAP_MS,
@@ -187,6 +189,8 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: false } }), true);
     assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: false, dups: true } }), true);
     assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: true } }), false);
+    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: true, short: true } }), true);
+    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: true, short: false } }), false);
     assert.equal(shouldRetryOpenRecheck(false, "students", { ok: true, student: { rechecked: false } }), false);
     assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { rechecked: true, paysRechecked: false } }), true);
     assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { paysRechecked: true } }), false);
@@ -203,6 +207,11 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryShortPeople("people-slow", false, "students", { ok: true, student: { short: true, seated: 50 } }), false);
     assert.equal(shouldRetryShortPeople("people-recheck", false, "students", { ok: true, student: { short: true, seated: 8 } }), true);
     assert.equal(shouldRetryShortPeople("people-recheck", true, "students", { ok: true, student: { short: true, seated: 8 } }), false);
+    assert.equal(recheckBusyErr("429 Too Many Requests"), true);
+    assert.equal(recheckBusyErr("на диске 12 · в Alfa 40 — не хватает, добрать"), false);
+    assert.equal(capRecheckAction(true, "students"), "rotate");
+    assert.equal(capRecheckAction(true, "balance"), "skip");
+    assert.equal(capRecheckAction(false, "students"), "skip");
     const jobSrc = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
     assert.match(jobSrc, /people-slow/);
     assert.match(jobSrc, /slowFill: mode === "people-slow"/);
@@ -212,6 +221,9 @@ describe("фон истории из Alfa", () => {
     assert.doesNotMatch(jobSrc, /skipLeads: kind === "balance"/);
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
+    assert.match(jobSrc, /holdOpen/);
+    assert.match(jobSrc, /rotateAfterCap/);
+    assert.match(jobSrc, /в конец очереди/);
     assert.match(jobSrc, /peopleSlowAdvance/);
     assert.match(jobSrc, /ещё круг/);
     assert.equal(JOB_WAIT_CAP, 8);

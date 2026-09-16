@@ -25,6 +25,8 @@ import {
   shouldRetryCash,
   shouldRetryOpenRecheck,
   shouldRetryShortPeople,
+  recheckBusyErr,
+  capRecheckAction,
   tryHistoryTickLock,
   touchHistoryTickLock,
   releaseHistoryTickLock,
@@ -988,6 +990,42 @@ function skipAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; g
   return finishWaveOrStop({ ...job, idx, waits: 0 }, `Alfa не отвечает на «${item.name}». Остановились.`);
 }
 
+/** Синий календарь: после cap — в конец очереди, не выкинуть навсегда. */
+function rotateAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; gap: number; msg?: string } {
+  const rot = rotateUnfinished(job.items, job.idx);
+  const next = rot.items[rot.idx];
+  const same = rot.items.length < 2 || (next && next.cid === item.cid && next.branchId === item.branchId);
+  const msg = same
+    ? `«${item.name}»: Alfa не отвечает, ещё этот.`
+    : `«${item.name}»: Alfa не отвечает, в конец очереди. Дальше ${next?.name || ""}.`;
+  notePlan({
+    kind: "fail",
+    text: msg,
+    who: item.name,
+    cid: Number(item.cid) || 0,
+    mode: job.mode,
+    reason: "cap-rotate",
+    jobId: job.id,
+  });
+  patch({
+    id: job.id,
+    items: rot.items,
+    idx: rot.idx,
+    n: job.n,
+    waits: 0,
+    running: true,
+    cur: same ? `${pauseTxt(job)} · ещё «${item.name}»` : `${pauseTxt(job)} · дальше ${next?.name || ""}`,
+    fill: fillOf(job.mode, job.kind, next || item),
+    msg,
+  });
+  return { done: false, gap: jobGapOf(job) };
+}
+
+function afterWaitCap(job: JournalJob, item: JournalJobItem, kind: string) {
+  if (capRecheckAction(Boolean(job.recheck), kind) === "rotate") return rotateAfterCap(job, item);
+  return skipAfterCap(job, item);
+}
+
 function loopLabel(
   pullKind: "archiveCatalog" | "life" | "archives" | "archivesPupils",
   res: {
@@ -1172,10 +1210,23 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   const retry = cashRetry || openRetry || shortRetry;
   if (retry) {
     const err = String(res.extra || res.error || "");
-    const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
+    const busy = recheckBusyErr(err);
+    const holdOpen = Boolean(live.recheck && pullKind === "students" && (openRetry || shortRetry) && !busy);
+    if (holdOpen) {
+      patch({
+        id,
+        waits: 0,
+        cur: `${pauseTxt(live)} · ещё «${item.name}»`,
+        fill: fillOf(mode, job.kind, item),
+        msg: openRetry
+          ? `«${item.name}»: перепись не закрыта, ещё этот.`
+          : `«${item.name}»: не хватает, ещё этот.`,
+      });
+      return { done: false, gap: jobGapOf(live) };
+    }
     const waits = (live.waits || 0) + 1;
     if (waits > JOB_WAIT_CAP) {
-      return skipAfterCap(live, item);
+      return afterWaitCap(live, item, pullKind);
     }
     const cur = pullKind === "balance" && !live.recheck && !busy ? `касса · ещё «${item.name}»` : `${pauseTxt(live)} · ещё «${item.name}»`;
     patch({
@@ -1203,7 +1254,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       });
       return { done: false, gap: live.recheck ? RECHECK_STALL_MS : jobGapOf(live) };
     }
-    return skipAfterCap(live, item);
+    return afterWaitCap(live, item, pullKind);
   }
   if (mode === "details" && res.more) {
     patch({

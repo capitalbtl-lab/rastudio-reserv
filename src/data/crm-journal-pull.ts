@@ -1360,6 +1360,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const windowFrom = win.from;
     const windowTo = win.to;
     const censusFrom = windowFrom || from;
+    const fullWin = recheckWindowFull(windowFrom);
+    const seatRounds = fullWin ? 80 : 20;
     const census = await censusCustomerLessonIds(branchId, cid, censusFrom ? { dateFrom: censusFrom, ...(windowTo ? { dateTo: windowTo } : {}) } : {}).catch(() => ({ ids: [] as number[], ok: false as const }));
     disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
@@ -1369,7 +1371,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
         const missing = census.ids.filter((n) => !have.has(n));
         if (missing.length) {
-          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: seatRounds, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
           if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
           lessons += Number(gap.count) || 0;
           seated += Number(gap.count) || 0;
@@ -1381,7 +1383,6 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || 0, true);
     } else {
       const haveBefore = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
-      const fullWin = recheckWindowFull(windowFrom);
       const applied = applyCustomerLessonCensus(cid, census.ids, true, fullWin ? "" : windowFrom, fullWin ? "" : windowTo);
       if (!applied.ok) {
         mark(disk, 0, false);
@@ -1397,7 +1398,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       }
       const новые = windowFrom ? windowNewLessonIds(census.ids, haveBefore) : [];
       if (новые.length) {
-        const gap = await inboundMissingUntilSeated(branchId, cid, новые, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+        const gap = await inboundMissingUntilSeated(branchId, cid, новые, { take: 50, rounds: seatRounds, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
         if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
         lessons += Number(gap.count) || 0;
         seated += Number(gap.count) || 0;
@@ -1424,7 +1425,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       if (short) {
         const missing = census.ids.filter((n) => !have.has(n));
         if (missing.length) {
-          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0 }));
+          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: seatRounds, resetAt: reset0 }).catch(() => ({ count: 0 }));
           if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
           lessons += Number(gap.count) || 0;
           seated += Number(gap.count) || 0;

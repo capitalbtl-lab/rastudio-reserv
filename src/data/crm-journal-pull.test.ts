@@ -472,6 +472,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /windowNewLessonIds/);
     assert.match(rec, /windowAlfaLive/);
     assert.match(rec, /recheckWindowFull\(windowFrom\)/);
+    assert.match(rec, /seatRounds = fullWin \? 80 : 20/);
     assert.match(rec, /const новые = windowFrom \? windowNewLessonIds/);
     assert.match(rec, /windowAlfaKeep/);
     assert.match(rec, /seatedNew/);

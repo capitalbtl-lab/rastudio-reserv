@@ -532,7 +532,7 @@ export function shouldRetryCash(
 export function shouldRetryOpenRecheck(
   recheck: boolean,
   kind: string,
-  res: { ok?: boolean; student?: { rechecked?: boolean; paysRechecked?: boolean; holeApproved?: boolean; dups?: boolean; paysMore?: boolean } } | null,
+  res: { ok?: boolean; student?: { rechecked?: boolean; paysRechecked?: boolean; holeApproved?: boolean; dups?: boolean; paysMore?: boolean; short?: boolean } } | null,
 ) {
   if (!recheck) return false;
   if (kind !== "students" && kind !== "balance") return false;
@@ -542,7 +542,18 @@ export function shouldRetryOpenRecheck(
   if (s.holeApproved) return false;
   if (kind === "balance") return Boolean(s.paysMore) || !s.paysRechecked;
   if (s.dups) return true;
+  if (s.short) return true;
   return !s.rechecked;
+}
+
+/** 429 / нет входа — считаем к cap. Дырка 2015 — нет. */
+export function recheckBusyErr(err: string) {
+  return /уже грузим|нет входа|429|502|нет ответа/i.test(String(err || ""));
+}
+
+/** 8 сбоев Alfa на синем календаре: в конец очереди, не выкинуть. */
+export function capRecheckAction(recheck: boolean, kind: string): "rotate" | "skip" {
+  return recheck && kind === "students" ? "rotate" : "skip";
 }
 
 /** Красная: дырка жива и этот шаг что-то посадил — не брать следующего. */
