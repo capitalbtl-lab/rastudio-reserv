@@ -1,0 +1,20 @@
+name: apply-step2
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patches and push
+        run: |
+          set -euo pipefail
+          git apply --verbose scripts/patches/*.patch
+          git add src
+          git config user.name "capitalbtl-lab"
+          git config user.email "309436821+capitalbtl-lab@users.noreply.github.com"
+          git status --short
+          git commit -m "Шаг 2: жёлтая по ID, волна 2 все зелёные, обрыв справа на левую."
+          git push origin HEAD:main
