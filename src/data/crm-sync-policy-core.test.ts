@@ -9,6 +9,7 @@ import {
   fromMsk,
   markPlanDue,
   mergePolicyKeepRun,
+  mergePolicyRunStamps,
   mskWall,
   nextSlotAt,
   pickDueRule,
@@ -38,6 +39,8 @@ describe("пульт Истории", () => {
     assert.match(src, /Europe\/Moscow/);
     assert.match(src, /id: "auto"/);
     assert.match(src, /AUTO_PIPE/);
+    assert.match(src, /AUTO_PIPE_FULL/);
+    assert.match(src, /mergePolicyRunStamps/);
   });
 
   it("завод — автомат выкл, план пуст", () => {
@@ -112,12 +115,14 @@ describe("пульт Истории", () => {
     assert.equal(job.recheckDays, 7);
   });
 
-  it("автомат в слот жмёт шаги 1–5", () => {
+  it("автомат в слот жмёт полный прогон живых", () => {
     const r = scheduleOf({ id: "a", mode: "auto", when: { kind: "daily" }, at: "04:00", dateFromId: "1" });
     assert.equal(r.mode, "auto");
     const job = planRuleToJob(r, msk(2026, 8, 15, 12, 0));
     assert.equal(job.mode, "roster");
-    assert.deepEqual(job.pipe, ["people", "groups", "balance", "audit"]);
+    assert.deepEqual(job.pipe, ["people", "groups", "archivesPupils", "groups-archived", "balance", "audit"]);
+    const arch = scheduleOf({ id: "b", mode: "auto", study: "2", when: { kind: "daily" }, at: "04:00", dateFromId: "1" });
+    assert.deepEqual(planRuleToJob(arch).pipe, ["people", "groups", "balance", "audit"]);
     assert.match(job.dateFrom, /^\d{4}-\d{2}-\d{2}$/);
   });
 
@@ -159,6 +164,26 @@ describe("пульт Истории", () => {
     assert.equal(merged.plan[0].on, false);
     assert.equal(merged.plan[0].dueAt, "2026-09-15T01:00:00.000Z");
     assert.equal(merged.plan[0].lastFiredAt, "prev");
+  });
+
+  it("воркер не затирает тумблер и новые карточки", () => {
+    const disk = policyOf({
+      planEnabled: false,
+      plan: [
+        { id: "n", on: true, mode: "people", when: { kind: "daily" }, at: "04:00" },
+        { id: "new", on: true, mode: "audit", when: { kind: "daily" }, at: "05:00" },
+      ],
+    });
+    const run = policyOf({
+      planEnabled: true,
+      plan: [{ id: "n", on: true, mode: "people", when: { kind: "daily" }, at: "04:00", dueAt: "2026-09-16T01:00:00.000Z", lastSkip: "hands" }],
+    });
+    const merged = mergePolicyRunStamps(disk, run.plan);
+    assert.equal(merged.planEnabled, false);
+    assert.equal(merged.plan.length, 2);
+    assert.equal(merged.plan[0].dueAt, "2026-09-16T01:00:00.000Z");
+    assert.equal(merged.plan[0].lastSkip, "hands");
+    assert.equal(merged.plan[1].id, "new");
   });
 
   it("чужой джоб не считает карточку сработавшей", () => {

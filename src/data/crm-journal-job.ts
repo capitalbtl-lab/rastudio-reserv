@@ -4,8 +4,8 @@ import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } f
 import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
 import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd } from "./crm-inbound-core.ts";
-import { loadSyncPolicy, saveSyncPolicy } from "./crm-sync-policy.ts";
-import { appendPlanLog } from "./crm-sync-plan-log.ts";
+import { loadSyncPolicy, saveSyncPolicyRun } from "./crm-sync-policy.ts";
+import { appendPlanLog, loadPlanLog } from "./crm-sync-plan-log.ts";
 import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, scheduleOf, stampPlanFired, stampPlanSkip } from "./crm-sync-policy-core.ts";
 import {
   emptyJournalJob,
@@ -29,6 +29,7 @@ import {
   touchHistoryTickLock,
   releaseHistoryTickLock,
   historyWorkerSilent,
+  stampHistoryWorkerBeat,
   stoppedJobMsg,
   shouldResumeStalledJob,
   jobRetryGapMs,
@@ -483,6 +484,17 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
       jobId: saved.id,
     });
     continueAutoPipe(saved);
+    const live = loadJournalJob();
+    if (!live.running && !(live.pipe || []).length) {
+      notePlan({
+        kind: "done",
+        text: `Готово с пропусками · ${emptyMsg(mode, recheck)}`,
+        mode,
+        jobId: saved.id,
+        reason: "empty",
+        src: opts.src || "hands",
+      });
+    }
     return loadJournalJob();
   }
   const first = items[0];
@@ -611,7 +623,7 @@ function continueAutoPipe(job: JournalJob) {
     recheck: opts.recheck,
     recheckDays: opts.recheckDays,
     dateFrom: job.dateFrom || opts.dateFrom,
-    archived: job.archived,
+    archived: opts.archived,
     pipe: rest.slice(1),
     src: "plan",
     fromPipe: true,
@@ -620,16 +632,21 @@ function continueAutoPipe(job: JournalJob) {
 
 export function stopJournalJob() {
   const j = loadJournalJob();
+  if (!j.running && !j.stop) {
+    return j;
+  }
   const who = String(j.cur || j.items?.[j.idx]?.name || "");
-  notePlan({
-    kind: "stop",
-    text: `Стоп${who ? ` · на «${who}»` : ""} · прошло ${j.n || 0} из ${j.total || 0}.`,
-    who,
-    cid: Number(j.items?.[j.idx]?.cid || j.customerId) || 0,
-    mode: j.mode,
-    jobId: j.id,
-    reason: "stop",
-  });
+  if (j.running) {
+    notePlan({
+      kind: "stop",
+      text: `Стоп${who ? ` · на «${who}»` : ""} · прошло ${j.n || 0} из ${j.total || 0}.`,
+      who,
+      cid: Number(j.items?.[j.idx]?.cid || j.customerId) || 0,
+      mode: j.mode,
+      jobId: j.id,
+      reason: "stop",
+    });
+  }
   return saveJournalJob({
     ...j,
     stop: true,
@@ -647,7 +664,7 @@ export function tickHistoryPlan(now = new Date()) {
   const curPol = loadSyncPolicy();
   const marked = markPlanDue(curPol, now);
   const dueChanged = JSON.stringify(marked.plan.map((r) => [r.id, r.dueAt, r.lastSkip])) !== JSON.stringify(curPol.plan.map((r) => [r.id, r.dueAt, r.lastSkip]));
-  const pol = dueChanged ? (saveSyncPolicy(marked).ok ? loadSyncPolicy() : marked) : marked;
+  if (dueChanged) saveSyncPolicyRun(marked.plan);
   if (dueChanged) {
     for (const r of marked.plan) {
       const prev = curPol.plan.find((x) => x.id === r.id);
@@ -662,11 +679,12 @@ export function tickHistoryPlan(now = new Date()) {
       }
     }
   }
+  const pol = loadSyncPolicy();
   const job = loadJournalJob();
   if (job.running && !job.stop) {
     const skipped = stampPlanSkip(pol, "hands");
     if (JSON.stringify(skipped.plan.map((r) => r.lastSkip)) !== JSON.stringify(pol.plan.map((r) => r.lastSkip))) {
-      saveSyncPolicy(skipped);
+      saveSyncPolicyRun(skipped.plan);
       const who = String(job.cur || "");
       notePlan({
         kind: "skip",
@@ -700,7 +718,7 @@ export function tickHistoryPlan(now = new Date()) {
   if (dec === "hands") {
     const skipped = stampPlanSkip(live, "hands");
     if (JSON.stringify(skipped.plan.map((r) => r.lastSkip)) !== JSON.stringify(live.plan.map((r) => r.lastSkip))) {
-      saveSyncPolicy(skipped);
+      saveSyncPolicyRun(skipped.plan);
       notePlan({
         kind: "skip",
         text: `${rule.label || modeRu(rule.mode)}: слот пропущен, руки заняли очередь.`,
@@ -711,7 +729,7 @@ export function tickHistoryPlan(now = new Date()) {
     }
     return;
   }
-  saveSyncPolicy(stampPlanFired(live, rule.id, started.id || "", now));
+  saveSyncPolicyRun(stampPlanFired(live, rule.id, started.id || "", now).plan);
 }
 
 export function startJournalJobWatch() {
@@ -719,11 +737,13 @@ export function startJournalJobWatch() {
   if (!isHistoryWorker()) return;
   if (g.__raJournalWatch) return;
   g.__raJournalWatch = setInterval(() => {
+    stampHistoryWorkerBeat();
     resumeJournalJobFromDisk();
     resumeStalledRecheck();
     tickHistoryPlan();
   }, 1000);
   setTimeout(() => {
+    stampHistoryWorkerBeat();
     resumeJournalJobFromDisk();
     resumeStalledRecheck();
     tickHistoryPlan();
@@ -873,14 +893,30 @@ function finishWaveOrStop(job: JournalJob, msg: string, n = job.n): { done: true
     msg,
   });
   const fail = /Alfa не отвечает|не ответила|Сбой фоновой|нет входа/i.test(msg);
-  notePlan({
-    kind: fail ? "fail" : "done",
-    text: msg,
-    mode: job.mode,
-    jobId: job.id,
-    who: job.items?.[Math.min(job.idx, Math.max((job.items || []).length - 1, 0))]?.name || "",
-    reason: fail ? "alfa" : "done",
-  });
+  const morePipe = !fail && (job.pipe || []).length > 0;
+  if (fail) {
+    notePlan({
+      kind: "fail",
+      text: msg,
+      mode: job.mode,
+      jobId: job.id,
+      who: job.items?.[Math.min(job.idx, Math.max((job.items || []).length - 1, 0))]?.name || "",
+      reason: "alfa",
+    });
+  } else if (!morePipe) {
+    const log = loadPlanLog();
+    const startAt = log.findIndex((e) => e.kind === "start");
+    const window = startAt < 0 ? log : log.slice(0, startAt + 1);
+    const recent = window.filter((e) => e.kind === "fail" || (e.kind === "skip" && e.reason === "empty"));
+    const who = recent.find((e) => e.who)?.who || "";
+    notePlan({
+      kind: "done",
+      text: recent.length ? `Готово с пропусками${who ? ` · ${who}` : ""} · ${msg}` : msg,
+      mode: job.mode,
+      jobId: job.id,
+      reason: recent.length ? "skips" : "done",
+    });
+  }
   return { done: true, gap: 0, msg };
 }
 

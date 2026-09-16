@@ -4,8 +4,10 @@ import {
   POLICY_FACTORY,
   canSavePolicy,
   mergePolicyKeepRun,
+  mergePolicyRunStamps,
   policyOf,
   type CrmSyncPolicy,
+  type HistorySchedule,
 } from "./crm-sync-policy-core.ts";
 
 export type { CrmSyncPolicy, HistorySchedule, HistoryPlanMode, HistoryWhen } from "./crm-sync-policy-core.ts";
@@ -17,6 +19,7 @@ export {
   canSavePolicy,
   emptyDraft,
   mergePolicyKeepRun,
+  mergePolicyRunStamps,
   nextSlotAt,
   planFireDecision,
   planModeMeta,
@@ -66,4 +69,13 @@ export function saveSyncPolicy(
       .catch(() => undefined);
   }
   return { ok: true, policy: next };
+}
+
+/** Воркер: только due/lastFired/lastSkip. Тумблер и карточки не трогает. */
+export function saveSyncPolicyRun(run: HistorySchedule[]) {
+  const next = mergePolicyRunStamps(loadSyncPolicy(), run);
+  const file = fileOf();
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(next, null, 2) + "\n", "utf8");
+  return next;
 }

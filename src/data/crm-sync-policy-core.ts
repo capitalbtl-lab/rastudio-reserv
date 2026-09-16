@@ -1,7 +1,7 @@
 /** Пульт автомата Истории. Без fs, без Alfa. */
 
 export const HISTORY_PLAN_MODES = [
-  { id: "auto", label: "Автомат · шаги 1–5", recheck: false, step: "roster" },
+  { id: "auto", label: "Автомат · полный прогон", recheck: false, step: "roster" },
   { id: "roster", label: "Шаг 1 · загрузить состав", recheck: false, step: "roster" },
   { id: "roster-recheck", label: "Шаг 1 · перепроверить состав", recheck: true, step: "roster" },
   { id: "people", label: "Шаг 2 · загрузить календарь", recheck: false, step: "students" },
@@ -18,6 +18,8 @@ export type HistoryPlanMode = (typeof HISTORY_PLAN_MODES)[number]["id"];
 
 /** После состава: календарь → группы → касса → сверка. */
 export const AUTO_PIPE: HistoryPlanMode[] = ["people", "groups", "balance", "audit"];
+/** Живые: плюс архив групп действующих, потом касса. */
+export const AUTO_PIPE_FULL: string[] = ["people", "groups", "archivesPupils", "groups-archived", "balance", "audit"];
 
 export const PLAN_RECHECK_OPTS = [
   { days: 7 as const, label: "± неделя" },
@@ -266,7 +268,7 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
       recheckDays: 32,
       dateFrom: planDateFrom(fromId, now),
       archived: rule.study === "2",
-      pipe: [...AUTO_PIPE],
+      pipe: rule.study === "2" ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL],
     };
   }
   const meta = planModeMeta(rule.mode);
@@ -463,6 +465,25 @@ export function stampPlanSkip(policy: CrmSyncPolicy, reason: string): CrmSyncPol
   return {
     ...policy,
     plan: policy.plan.map((r) => (r.dueAt && !r.lastSkip ? { ...r, lastSkip: reason } : r)),
+  };
+}
+
+/** Воркер ставит due/lastFired, карточки и тумблер — с диска (экран). */
+export function mergePolicyRunStamps(disk: CrmSyncPolicy, run: HistorySchedule[]): CrmSyncPolicy {
+  const byId = new Map(run.map((r) => [r.id, r]));
+  return {
+    planEnabled: disk.planEnabled,
+    plan: disk.plan.map((s) => {
+      const p = byId.get(s.id);
+      if (!p) return s;
+      return {
+        ...s,
+        dueAt: p.dueAt,
+        lastFiredAt: p.lastFiredAt,
+        lastJobId: p.lastJobId,
+        lastSkip: p.lastSkip,
+      };
+    }),
   };
 }
 

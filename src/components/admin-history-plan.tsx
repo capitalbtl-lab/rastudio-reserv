@@ -321,7 +321,7 @@ function DraftForm({
           Сохранить расписание
         </button>
       </div>
-      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. Режим «Автомат · шаги 1–5» в слот жмёт состав → календарь → группы → кассу → сверку.</p>
+      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. «Автомат · полный прогон»: состав → календарь → живые группы → архив групп действующих → касса → сверка. Лиды — как галка «Запомнить» на шаге 1.</p>
     </div>
   );
 }
@@ -331,6 +331,7 @@ export function HistoryPlanPanel({
   job,
   busy,
   planLog,
+  historyWorker,
   onSave,
   onRunAuto,
 }: {
@@ -338,6 +339,7 @@ export function HistoryPlanPanel({
   job?: JobSnap | null;
   busy?: boolean;
   planLog?: PlanLogRow[];
+  historyWorker?: { at?: string; silent?: boolean };
   onSave: (next: CrmSyncPolicy) => void;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
 }) {
@@ -395,16 +397,23 @@ export function HistoryPlanPanel({
         </button>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight">Синхронизация расписания</p>
-          <p className="h-5 truncate text-[0.72rem] leading-5 text-muted">
-            {run
-              ? `Сейчас: ${job?.cur || job?.mode || "работаем"} · ${job?.n || 0}/${job?.total || 0}`
-              : policy.planEnabled
-                ? policy.plan.some((r) => r.dueAt)
-                  ? "вкл · ждёт слот"
-                  : policy.plan.some((r) => r.on)
-                    ? `вкл · ${nextLine.replace(/^следующее:\s*/i, "")}`
-                    : "вкл · расписаний нет"
-                : "выкл · только руками"}
+          <p
+            className={cn(
+              "h-5 truncate text-[0.72rem] leading-5",
+              historyWorker?.silent ? "font-semibold text-red-800" : "text-muted",
+            )}
+          >
+            {historyWorker?.silent
+              ? "процесс истории молчит больше 2 мин"
+              : run
+                ? `Сейчас: ${job?.cur || job?.mode || "работаем"} · ${job?.n || 0}/${job?.total || 0}`
+                : policy.planEnabled
+                  ? policy.plan.some((r) => r.dueAt)
+                    ? "вкл · ждёт слот"
+                    : policy.plan.some((r) => r.on)
+                      ? `вкл · ${nextLine.replace(/^следующее:\s*/i, "")}`
+                      : "вкл · расписаний нет"
+                  : "выкл · только руками"}
           </p>
         </div>
         <button
@@ -439,7 +448,7 @@ export function HistoryPlanPanel({
               Живые группы
             </Chip>
             <Chip on={runLeads} onClick={() => setRunLeads((v) => !v)}>
-              Лиды
+              Лиды · как шаг 1
             </Chip>
             <Chip on={runArchGroups} onClick={() => setRunArchGroups((v) => !v)}>
               Архивные группы действующих
@@ -459,7 +468,7 @@ export function HistoryPlanPanel({
           onClick={() => {
             if (!onRunAuto) return;
             if (run) return;
-            if (!window.confirm("Запустить шаги 1–5 сейчас? Состав → календарь → группы → касса → сверка. Расписание не нужно.")) return;
+            if (!window.confirm("Запустить полный прогон сейчас? Состав → календарь → группы → архив групп действующих (если чип) → касса → сверка. Галка лидов на шаге 1 не меняется.")) return;
             onRunAuto({
               study: runStudy,
               dateFromId: runStudy === "2" && runFrom !== "1" && runFrom !== "2" ? "1" : runFrom,
@@ -607,6 +616,7 @@ export function HistoryPlanModal({
   onSave,
   onRunAuto,
   planLog,
+  historyWorker,
 }: {
   open: boolean;
   onClose: () => void;
@@ -616,6 +626,7 @@ export function HistoryPlanModal({
   onSave: (next: CrmSyncPolicy) => void;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
   planLog?: PlanLogRow[];
+  historyWorker?: { at?: string; silent?: boolean };
 }) {
   useEffect(() => {
     if (!open) return;
@@ -640,7 +651,7 @@ export function HistoryPlanModal({
             <p id="history-plan-title" className="font-display text-[1.2rem] leading-tight">
               Пульт синхронизации
             </p>
-            <p className="mt-1 text-[0.82rem] text-muted">Расписание — само в слот. «Запустить шаги 1–5 сейчас» — полный автомат руками, тумблер не нужен. Состав → календарь → группы → касса → сверка.</p>
+            <p className="mt-1 text-[0.82rem] text-muted">Расписание — само в слот. «Запустить шаги 1–5 сейчас» — полный прогон руками, тумблер не нужен. Лиды — как на шаге 1, галку не затираем.</p>
           </div>
           <button
             type="button"
@@ -651,7 +662,7 @@ export function HistoryPlanModal({
             Закрыть
           </button>
         </div>
-        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} onSave={onSave} onRunAuto={onRunAuto} />
+        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} historyWorker={historyWorker} onSave={onSave} onRunAuto={onRunAuto} />
       </div>
     </div>
   );

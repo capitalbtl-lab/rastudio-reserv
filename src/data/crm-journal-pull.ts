@@ -16,7 +16,7 @@ import { balanceOf } from "./crm-pay-core";
 import { writeoffSumOf } from "./crm-ledger-core";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, parseArchiveUiFilters, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
-import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
+import { journalJobSnapshot, parseJobItems, historyWorkerBeat } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { loadPlanLog } from "./crm-sync-plan-log";
 import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady } from "./crm-inbound-core";
@@ -978,6 +978,7 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
     job: journalJobSnapshot(),
     rosterPolicy: loadRosterPolicy(),
     planLog: loadPlanLog(),
+    historyWorker: historyWorkerBeat(),
   };
 }
 
@@ -1039,6 +1040,7 @@ function litePullState() {
     schools: journalPullSchools(),
     rosterPolicy: loadRosterPolicy(),
     planLog: loadPlanLog(),
+    historyWorker: historyWorkerBeat(),
   };
 }
 
@@ -1546,16 +1548,11 @@ export async function journalPull(opts: {
       return journalJobView();
     }
     if (opts.jobMode === "auto") {
-      const { AUTO_PIPE } = await import("./crm-sync-policy-core");
+      const { AUTO_PIPE, AUTO_PIPE_FULL } = await import("./crm-sync-policy-core");
       const study = opts.study === "2" ? "2" : "1";
       const raw = String(opts.name || "");
-      const leads = study === "1" && /leads=1/.test(raw);
       const archGroups = study === "1" && /archGroups=1/.test(raw);
-      if (study === "1") {
-        const { saveRosterPolicy } = await import("./crm-roster");
-        saveRosterPolicy({ leads, archiveInLive: true });
-      }
-      const pipe = archGroups ? ["people", "groups", "archivesPupils", "groups-archived", "balance", "audit"] : [...AUTO_PIPE];
+      const pipe = study === "1" && archGroups ? [...AUTO_PIPE_FULL] : [...AUTO_PIPE];
       startJournalJob({
         mode: "roster",
         kind: "roster",

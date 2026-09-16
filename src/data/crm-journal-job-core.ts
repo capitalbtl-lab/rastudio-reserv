@@ -179,9 +179,33 @@ export function saveJournalJob(job: JournalJob) {
 }
 
 const TICK_LOCK = () => join(process.cwd(), "storage", "crm-history-tick.lock");
+const WORKER_BEAT = () => join(process.cwd(), "storage", "crm-history-worker.json");
 export const HISTORY_WORKER_SILENT_MS = 30_000;
+export const PLAN_WORKER_SILENT_MS = 120_000;
 export const RECHECK_STALL_MS = 30_000;
 export const RECHECK_429_GAP_MS = 120_000;
+
+export function stampHistoryWorkerBeat() {
+  try {
+    mkdirSync(dirname(WORKER_BEAT()), { recursive: true });
+    writeFileSync(WORKER_BEAT(), JSON.stringify({ at: new Date().toISOString(), pid: process.pid }) + "\n", "utf8");
+  } catch {
+    /* */
+  }
+}
+
+export function historyWorkerBeat(now = Date.now()) {
+  try {
+    if (!existsSync(WORKER_BEAT())) return { at: "", ageMs: Number.POSITIVE_INFINITY, silent: true };
+    const raw = JSON.parse(readFileSync(WORKER_BEAT(), "utf8")) as { at?: string };
+    const at = String(raw.at || "");
+    const t = Date.parse(at);
+    const ageMs = Number.isFinite(t) ? now - t : Number.POSITIVE_INFINITY;
+    return { at, ageMs, silent: ageMs > PLAN_WORKER_SILENT_MS };
+  } catch {
+    return { at: "", ageMs: Number.POSITIVE_INFINITY, silent: true };
+  }
+}
 
 export function historyWorkerSilent(job = loadJournalJob(), ms = HISTORY_WORKER_SILENT_MS) {
   if (!job.running) return false;
