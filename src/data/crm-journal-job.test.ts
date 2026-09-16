@@ -427,6 +427,7 @@ describe("фон истории из Alfa", () => {
     assert.match(eco, /ts-ext-register\.mjs/);
     assert.match(deploy, /pm2 restart rastudio-history/);
     assert.match(ui, /F5 ничего не сбрасывает/);
+    assert.match(ui, /HINT\.plan/);
     assert.match(ui, /вкладку можно закрыть|страницу можно закрыть/);
     assert.match(job, /historyLoadOne/);
     assert.match(job, /mode === "count"/);
