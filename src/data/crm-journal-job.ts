@@ -975,14 +975,12 @@ function skipAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; g
   const idx = job.idx + 1;
   const moreItems = idx < job.items.length;
   const peopleBlue = job.mode === "people-recheck";
-  const defer =
-    peopleBlue && job.recheck
-      ? [...(job.defer || []).filter((x) => Number(x.cid) !== Number(item.cid)), item]
-      : job.defer || [];
-  const skip =
-    peopleBlue && !job.recheck
-      ? [...(job.skip || []).filter((x) => Number(x.cid) !== Number(item.cid)), item]
-      : job.skip || [];
+  const skip = peopleBlue
+    ? [...(job.skip || []).filter((x) => Number(x.cid) !== Number(item.cid)), item]
+    : job.skip || [];
+  const defer = peopleBlue
+    ? (job.defer || []).filter((x) => Number(x.cid) !== Number(item.cid))
+    : job.defer || [];
   const waits = resetJobWaits();
   if (moreItems) {
     const nextName = job.items[idx]?.name || "";

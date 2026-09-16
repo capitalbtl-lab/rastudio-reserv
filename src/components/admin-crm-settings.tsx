@@ -514,6 +514,7 @@ type StudentHit = {
   alfa?: number;
   short?: boolean;
   holeN?: number;
+  extraN?: number;
   dups?: boolean;
   holeApproved?: boolean;
 };
@@ -527,6 +528,7 @@ type PeopleRow = {
   alfa?: number;
   short?: boolean;
   holeN?: number;
+  extraN?: number;
   dups?: boolean;
   holeApproved?: boolean;
   journal?: boolean;
@@ -1138,8 +1140,7 @@ function peopleHoleOk(row: PeopleRow) {
 }
 
 function confirmHole(row: PeopleRow, on: boolean) {
-  const alfa = row.alfa;
-  const line = alfa != null ? peopleLessonsLine({ disk: Number(row.lessons) || 0, alfa }).line : `на диске ${row.lessons}`;
+  const line = peopleLessonsLine({ hole: row.holeN, extra: row.extraN, at: row.at }).line || `№${row.cid}`;
   const ask = on
     ? `${line}\nжурнал не закроется, снять только вручную.`
     : `${line}\nснять отметку? карточка вернётся в «требуют».`;
@@ -1342,16 +1343,16 @@ function patchPeopleSide(
     const rechecked = hit.rechecked != null ? Boolean(hit.rechecked) : p.rechecked;
     const paysRechecked = hit.paysRechecked != null ? Boolean(hit.paysRechecked) : p.paysRechecked;
     const extra = hit.paysMore
-      ? `касса: ещё страницы, нажмите снова · ${alfa != null ? peopleLessonsLine({ disk, alfa }).line : `на диске ${disk}`}`
-      : alfa != null
-        ? peopleLessonsLine({ disk, alfa }).line
-        : p.extra;
+      ? `касса: ещё страницы, нажмите снова`
+      : peopleLessonsLine({ hole: hit.holeN ?? p.holeN, extra: hit.extraN ?? p.extraN }).line || p.extra;
     return {
       ...p,
       lessons: disk,
       alfa,
       short,
       dups,
+      holeN: hit.holeN != null ? Number(hit.holeN) : p.holeN,
+      extraN: hit.extraN != null ? Number(hit.extraN) : p.extraN,
       holeApproved: hit.holeApproved != null ? Boolean(hit.holeApproved) : p.holeApproved,
       journal,
       pays,
@@ -1621,8 +1622,8 @@ function PeopleFillList({
     const packSt = packMemo.current[row.cid];
     const plus = packSt?.active ? Math.max(0, (Number(row.lessons) || 0) - packSt.before) : packSt && packSt.plus != null ? packSt.plus : undefined;
     const nums =
-      kind === "students" && alfaShown != null
-        ? peopleLessonsLine({ disk: Number(row.lessons) || 0, alfa: alfaShown, hole: row.holeN, pack: PEOPLE_PACK, plus, at: row.at, running: active })
+      kind === "students"
+        ? peopleLessonsLine({ hole: row.holeN, extra: row.extraN, pack: PEOPLE_PACK, plus, at: row.at, running: active })
         : null;
     const numsHint = peopleStudentHint({ short, dups, holeApproved: approved, lineHint: nums?.hint || "" });
     const act = kind === "balance" ? (full ? "recheck" : "load") : peopleStudentAction({ short, dups, journal: Boolean(row.journal), holeApproved: approved });
@@ -1632,19 +1633,17 @@ function PeopleFillList({
       : short
         ? nums
           ? numsHint || "добрать"
-          : `на диске ${row.lessons} · в Alfa ${row.alfa} — добрать`
+          : "добрать"
         : dups
         ? nums
           ? numsHint
-          : `на диске ${row.lessons} · в Alfa ${row.alfa} — дубли, снять`
+          : "лишние id · снять"
         : full
         ? kind === "balance"
           ? "Касса на месте"
           : nums
             ? nums.hint || "Календарь на месте"
-            : row.alfa
-              ? `на диске ${row.lessons} · в Alfa ${row.alfa}`
-              : "Календарь на месте"
+            : "Календарь на месте"
         : kind === "balance"
           ? row.paysMore
             ? "касса: ещё страницы, нажмите снова"
@@ -1711,8 +1710,6 @@ function PeopleFillList({
         <FillBar pct={pct} run={active} done={full && !needsRecheck && !dups && !approved} warn={needsRecheck || short || dups || approved} />
         <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
           {(row.groups || []).slice(0, 2).join(" · ") || "групп на карточке нет"}
-          {!nums && row.lessons ? ` · на диске ${row.lessons}` : ""}
-          {!nums && row.alfa ? ` · в Alfa ${row.alfa}` : ""}
         </p>
         {nums ? (
           <>
@@ -1828,7 +1825,7 @@ function PeopleFillList({
           <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[0.72rem] leading-snug ring-1 ring-black/10">
             <CheckLine on={Boolean(row.journal) && !short} text="календарь загружен" />
             <CheckLine on={Boolean(row.rechecked) && !dups} text="календарь перепроверен" />
-            <CheckLine on={row.alfa != null && !short && !dups} text={nums ? nums.line : row.alfa != null ? `счёт: диск ${row.lessons} · Alfa ${row.alfa}` : "счёт с Alfa ещё не сверяли"} />
+            <CheckLine on={row.holeN != null || row.extraN != null} text={nums ? nums.line : "набор id ещё не сверяли"} />
             <CheckLine on={Boolean(row.rechecked) && !dups && !short} text="дубликатов нет" />
             {kind === "balance" ? (
               <>

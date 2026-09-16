@@ -71,6 +71,7 @@ type StudentHit = {
   alfa?: number;
   short?: boolean;
   holeN?: number;
+  extraN?: number;
   dups?: boolean;
   seated?: number;
   holeApproved?: boolean;
@@ -786,7 +787,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       const glist = groupsOfStudent(p.cid).slice(0, 3);
       const gnames = glist.join(", ") || own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
       if (journal) journalDone += 1;
-      else missJ.push({ id: p.cid, name, extra: short ? `на диске ${diskN}, в Alfa ${alfaN}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
+      else missJ.push({ id: p.cid, name, extra: short ? `дырка ${Number(sync.lessonsHoleN) || 0}` : dups ? `лишние ${Number(sync.lessonsExtraN) || 0}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
       if (pays || paysScanned) cardDone += 1;
       else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : gnames || (own.length ? "группы ещё не сверены" : "нет явки") });
       peopleRows.push({
@@ -799,6 +800,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         short,
         holeApproved: Boolean(sync.journalHoleApprovedAt),
         holeN: sync.lessonsHoleN,
+        extraN: sync.lessonsExtraN,
         dups,
         journal,
         pays,
@@ -808,7 +810,11 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         ...cashCardOf(p.cid),
         rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
         paysRechecked: Boolean(sync.paysRecheckAt),
-        extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : gnames,
+        extra: short
+          ? `дырка ${Number(sync.lessonsHoleN) || 0}`
+          : dups
+            ? `лишние ${Number(sync.lessonsExtraN) || 0}`
+            : gnames,
         at: sync.lessonsAt || "",
       });
     }
@@ -911,7 +917,11 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
       ...cashCardOf(p.cid),
       rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
       paysRechecked: Boolean(sync.paysRecheckAt),
-      extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : groupsOfStudent(p.cid).slice(0, 2).join(", "),
+      extra: short
+        ? `дырка ${Number(sync.lessonsHoleN) || 0}`
+        : dups
+          ? `лишние ${Number(sync.lessonsExtraN) || 0}`
+          : groupsOfStudent(p.cid).slice(0, 2).join(", "),
       at: sync.lessonsAt || "",
     };
   });
@@ -1550,6 +1560,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     holeApproved: Boolean(sync.journalHoleApprovedAt),
     censusOk: censusClosed,
     censusErr,
+    holeN: sync.lessonsHoleN,
+    extraN: sync.lessonsExtraN,
   };
 }
 
@@ -1682,7 +1694,7 @@ export async function journalPull(opts: {
     const short = lessonsCountShort(hit.disk, alfa, probed);
     return {
       ok: hit.ok,
-      extra: `№${cid}: диск ${hit.disk} · Alfa 0 · дальше «Добрать»`,
+      extra: `№${cid}: стёрли занятия · дальше «Добрать»`,
       more: false,
       student: {
         cid,
@@ -2425,7 +2437,7 @@ export async function journalPull(opts: {
       });
       const name = fioOf(one.cid);
       store.note = probed.ok
-        ? `${name}: на диске ${disk} · в Alfa ${held.alfa}${short ? " — не хватает, добрать" : dups ? " — дубли, снять" : disk ? " — счёт сошёлся" : ""}`
+        ? `${name}: ${short ? `дырка ${Number(gap.lessonsHoleN) || 0} — добрать` : dups ? `лишние ${Number(gap.lessonsExtraN) || 0} — снять` : "набор id сошёлся"}`
         : `${name}: Alfa не ответила на сверку`;
       store.at = new Date().toISOString();
       saveStore(store);
@@ -2473,6 +2485,8 @@ export async function journalPull(opts: {
       alfa: row.alfa,
       short: row.short,
       dups: row.dups,
+      holeN: row.holeN,
+      extraN: row.extraN,
       seated: Number(row.seated) || 0,
       holeApproved: Boolean(customerSyncOf(one.cid).journalHoleApprovedAt),
     };
@@ -2491,13 +2505,13 @@ export async function journalPull(opts: {
       : row.payFail
       ? `${who}: ${name} · Alfa не ответила, нажмите снова`
       : row.short
-      ? `${who}: ${name} · на диске ${countAlfaLessonUniq(loadCustomerCalendar(one.cid))} · в Alfa ${row.alfa} — не хватает, добрать`
+      ? `${who}: ${name} · дырка ${Number(customerSyncOf(one.cid).lessonsHoleN) || Number(row.holeN) || 0} — добрать`
       : row.dups
-      ? `${who}: ${name} · на диске ${countAlfaLessonUniq(loadCustomerCalendar(one.cid))} · в Alfa ${row.alfa} — дубли, снять`
+      ? `${who}: ${name} · лишние ${Number(customerSyncOf(one.cid).lessonsExtraN) || Number(row.extraN) || 0} — снять`
       : row.paysMore
       ? `${who}: ${name} · касса: ещё страницы, нажмите снова`
       : landed
-      ? `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.${row.alfa ? ` · Alfa ${row.alfa}` : ""}${balance && row.paysOk ? " · касса готова" : ""}`
+      ? `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""}${balance && row.paysOk ? " · касса готова" : ""}`
       : `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · не попал в выдачу${row.done ? " (Alfa пусто)" : " (обрыв)"}`;
     store.at = new Date().toISOString();
     saveStore(store);

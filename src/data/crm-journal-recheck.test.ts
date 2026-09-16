@@ -164,6 +164,8 @@ describe("перепроверка журнала", () => {
     assert.match(inbound, /export async function probeCustomerLessons/);
     assert.match(inbound, /export async function censusCustomerLessonIds/);
     assert.match(inbound, /studentCardBranches/);
+    assert.match(inbound, /add\(Number\(l.branchId\)/);
+    assert.match(inbound, /loadCustomerCalendar\(cid\)/);
     assert.match(inbound, /opts\?\.branches/);
     assert.match(inbound, /applyCustomerLessonCensus/);
     assert.match(inbound, /pullLessonPage/);

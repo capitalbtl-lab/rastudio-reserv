@@ -1,4 +1,4 @@
-/** Строка шага 2: диск / Alfa · осталось · пачка · +K · ЧЧ:ММ. Не диск, не второй счёт. */
+/** Строка шага 2: дырка/лишние по id · пачка · +K · ЧЧ:ММ. Цифру диск/Alfa не смотрим. */
 
 import { LESSON_INBOUND_RUN } from "./crm-customer-sync.ts";
 
@@ -32,25 +32,28 @@ function ruPacks(n: number) {
 }
 
 export function peopleLessonsLine(opts: {
-  disk: number;
+  disk?: number;
   alfa?: number;
   hole?: number;
+  extra?: number;
   pack?: number;
   plus?: number;
   at?: string;
   running?: boolean;
 }): { line: string; hint: string; packsLeft?: number } {
-  const disk = Math.max(0, Number(opts.disk) || 0);
-  const alfaKnown = opts.alfa != null && Number.isFinite(Number(opts.alfa));
-  const alfa = alfaKnown ? Math.max(0, Number(opts.alfa) || 0) : 0;
+  void opts.disk;
+  void opts.alfa;
   const holeKnown = opts.hole != null && Number.isFinite(Number(opts.hole));
-  const left = holeKnown ? Math.max(0, Number(opts.hole) || 0) : alfaKnown ? Math.max(0, alfa - disk) : 0;
+  const extraKnown = opts.extra != null && Number.isFinite(Number(opts.extra));
+  const hole = holeKnown ? Math.max(0, Number(opts.hole) || 0) : 0;
+  const extra = extraKnown ? Math.max(0, Number(opts.extra) || 0) : 0;
+  const left = holeKnown ? hole : 0;
   const pack = Number(opts.pack) > 0 ? Number(opts.pack) : PEOPLE_PACK;
   const hasPlus = opts.plus != null && Number.isFinite(Number(opts.plus));
   const k = hasPlus ? Math.max(0, Math.floor(Number(opts.plus))) : 0;
   const parts: string[] = [];
-  if (alfaKnown) parts.push(`${disk} / ${alfa}`, `осталось ${left}`);
-  else parts.push(String(disk));
+  if (holeKnown && hole > 0) parts.push(`дырка ${hole}`);
+  if (extraKnown && extra > 0) parts.push(`лишние ${extra}`);
   parts.push(`пачка ${pack}`);
   if (hasPlus) parts.push(`+${k}`);
   const clock = peopleClock(opts.at);
@@ -58,7 +61,7 @@ export function peopleLessonsLine(opts: {
 
   let hint = "";
   let packsLeft: number | undefined;
-  if (alfaKnown && left === 0) {
+  if (holeKnown && hole === 0 && (!extraKnown || extra === 0)) {
     hint = "ничего нового";
   } else if (hasPlus && k > 0 && left > 0) {
     packsLeft = Math.ceil(left / k);

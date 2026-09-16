@@ -461,24 +461,39 @@ async function pullLessonPage(
   return { ok: false as const, error: last };
 }
 
-/** Филиалы с карточки: groupLinks + домашний. Пусто — все четыре. */
+/** Филиалы с карточки: группы + уроки на диске. Пусто — все четыре. */
 export function studentCardBranches(cid: number, home = 0): number[] {
   const d = findDossier({ crmId: cid });
   const homeN = Number(home) || Number(d?.branchId) || 1;
   const bids = new Set<number>();
-  if (homeN >= 1 && homeN <= 4) bids.add(homeN);
-  for (const link of d?.groupLinks || []) {
-    const b = Number((link as { branchId?: number }).branchId) || 0;
-    if (b >= 1 && b <= 4) bids.add(b);
+  const add = (b: number) => {
+    const n = Number(b) || 0;
+    if (n >= 1 && n <= 4) bids.add(n);
+  };
+  add(homeN);
+  const links = d?.groupLinks || [];
+  for (const link of links) add(Number((link as { branchId?: number }).branchId) || 0);
+  const cal = loadCustomerCalendar(cid) || [];
+  const have = new Set(cal.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+  const gids = new Set<number>();
+  for (const l of cal) {
+    add(Number(l.branchId) || 0);
+    for (const raw of l.groupIds || []) {
+      const gid = Number(raw) || 0;
+      if (gid) gids.add(gid);
+    }
   }
-  const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+  for (const link of links) {
+    const gid = Number((link as { id?: number }).id) || 0;
+    if (gid) gids.add(gid);
+  }
   if (have.size) {
-    for (const link of d?.groupLinks || []) {
-      const gid = Number((link as { id?: number }).id) || 0;
-      const bid = Number((link as { branchId?: number }).branchId) || Number(d?.branchId) || 0;
-      if (!gid || bid < 1 || bid > 4) continue;
-      const card = loadGroupCard(bid, gid);
-      if ((card?.calendar || []).some((l) => have.has(Number(l.lessonId) || 0))) bids.add(bid);
+    for (const gid of gids) {
+      for (const bid of uniqueBranches(homeN)) {
+        const card = loadGroupCard(bid, gid);
+        if (!card) continue;
+        if ((card.calendar || []).some((x) => have.has(Number(x.lessonId) || 0))) add(bid);
+      }
     }
   }
   if (!bids.size) return uniqueBranches(homeN);

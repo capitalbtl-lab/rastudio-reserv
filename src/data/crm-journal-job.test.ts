@@ -230,7 +230,10 @@ describe("фон истории из Alfa", () => {
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
     assert.match(jobSrc, /перепись не дошла/);
-    assert.match(jobSrc, /skipAfterCap/);
+    const capFn = jobSrc.slice(jobSrc.indexOf("function skipAfterCap"), jobSrc.indexOf("function rotateAfterCap"));
+    assert.match(capFn, /const skip = peopleBlue/);
+    assert.doesNotMatch(capFn, /peopleBlue && job\.recheck/);
+    assert.doesNotMatch(capFn, /peopleBlue && !job\.recheck/);
     assert.match(jobSrc, /peopleSlowAdvance/);
     assert.match(jobSrc, /ещё круг/);
     assert.equal(JOB_WAIT_CAP, 8);
