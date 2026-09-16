@@ -73,12 +73,12 @@ export function peopleLessonsLine(opts: {
   return { line: parts.join(" · "), hint, packsLeft };
 }
 
-/** Шаг 2: дырка важнее дублей. Short → «Добрать», не окно ±месяц. */
+/** Шаг 2: дырка слева «Добрать». Только лишние — направо, синяя. */
 export type PeopleStudentAction = "dobrat" | "recheck" | "load";
 export type PeopleStudentBadge = "approved" | "short" | "dups" | "recheck" | "done" | "need";
 
 export function peopleStudentAction(opts: { short?: boolean; dups?: boolean; journal?: boolean; holeApproved?: boolean }): PeopleStudentAction {
-  if ((opts.short || opts.dups) && !opts.holeApproved) return "dobrat";
+  if (opts.short && !opts.holeApproved) return "dobrat";
   if (opts.dups || opts.journal || opts.holeApproved) return "recheck";
   return "load";
 }

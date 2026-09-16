@@ -63,7 +63,7 @@ describe("карточка шага 2: дырка/лишние по id · пач
 
   it("short важнее dups: Баукина — Добрать, бейдж «в Alfa больше»", () => {
     assert.equal(peopleStudentAction({ short: true, dups: true, journal: false }), "dobrat");
-    assert.equal(peopleStudentAction({ short: false, dups: true, journal: true }), "dobrat");
+    assert.equal(peopleStudentAction({ short: false, dups: true, journal: true }), "recheck");
     assert.equal(peopleStudentBadge({ short: true, dups: true, full: false }), "short");
     assert.equal(peopleStudentHint({ short: true, dups: true, lineHint: "пачка прошла · не сели · не жать ещё раз" }), "пачка прошла · не сели · не жать ещё раз");
     assert.equal(peopleStudentHint({ short: true, dups: true }), "добрать · есть дубли");
@@ -103,7 +103,9 @@ describe("карточка шага 2: дырка/лишние по id · пач
     const fin = ui.slice(ui.indexOf("function peopleFinished"), ui.indexOf("function peopleQueue"));
     assert.match(fin, /if \(kind === "balance"\) return Boolean\(row\.paysScanned \|\| row\.pays\)/);
     assert.match(fin, /if \(row\.short\) return false/);
-    assert.match(fin, /if \(row\.dups\) return false/);
+    assert.doesNotMatch(fin, /if \(row\.dups\) return false/);
     assert.match(fin, /return Boolean\(row\.journal\)/);
+    assert.match(ui, /confirmHole\(row, on, alfaShown\)/);
+    assert.match(ui, /alfa: alfa \?\? row.alfa/);
   });
 });

@@ -109,8 +109,8 @@ describe("фон истории из Alfa", () => {
     ];
     assert.deepEqual(peopleJobQueue(people, "students", false).map((x) => x.cid), [1, 4]);
     assert.deepEqual(peopleJobQueue(people, "students", true).map((x) => x.cid), [3]);
-    assert.deepEqual(peopleJobQueue([{ ...people[1], dups: true }], "students", true).map((x) => x.cid), []);
-    assert.deepEqual(peopleJobQueue([{ ...people[1], dups: true }], "students", false).map((x) => x.cid), [2]);
+    assert.deepEqual(peopleJobQueue([{ ...people[1], dups: true }], "students", true).map((x) => x.cid), [2]);
+    assert.deepEqual(peopleJobQueue([{ ...people[1], dups: true }], "students", false).map((x) => x.cid), []);
     assert.equal(peopleJobFinished(people[1], "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: true, short: true }, "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false }, "balance"), false);
@@ -130,6 +130,15 @@ describe("фон истории из Alfa", () => {
     );
     assert.equal(peopleJobFinished(people[3], "students"), false);
     assert.equal(peopleJobFinished({ cid: 6, branchId: 2, name: "Е", journal: false, pays: false, dups: true }, "students"), false);
+    assert.equal(peopleJobFinished({ cid: 6, branchId: 2, name: "Е", journal: true, pays: false, dups: true }, "students"), true);
+    assert.deepEqual(
+      peopleJobQueue([{ cid: 6, branchId: 2, name: "Е", journal: true, pays: false, dups: true }], "students", false).map((x) => x.cid),
+      [],
+    );
+    assert.deepEqual(
+      peopleJobQueue([{ cid: 6, branchId: 2, name: "Е", journal: true, pays: false, dups: true }], "students", true).map((x) => x.cid),
+      [6],
+    );
     assert.equal(peopleJobFinished({ cid: 6176, branchId: 1, name: "Баукина", journal: false, pays: false, short: true, dups: true }, "students"), false);
     assert.deepEqual(
       peopleJobQueue([{ cid: 6176, branchId: 1, name: "Баукина", journal: false, pays: false, short: true, dups: true }], "students", false).map((x) => x.cid),

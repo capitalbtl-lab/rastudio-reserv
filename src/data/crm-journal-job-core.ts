@@ -371,7 +371,6 @@ export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance
   if (kind === "balance") return Boolean(row.paysScanned || row.pays);
   if (row.short && row.holeApproved) return true;
   if (row.short) return false;
-  if (row.dups) return false;
   return Boolean(row.journal);
 }
 

@@ -1111,7 +1111,6 @@ function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
   if (kind === "balance") return Boolean(row.paysScanned || row.pays);
   if (row.short && row.holeApproved) return true;
   if (row.short) return false;
-  if (row.dups) return false;
   return Boolean(row.journal);
 }
 
@@ -1137,8 +1136,8 @@ function peopleHoleOk(row: PeopleRow) {
   return Boolean(row.short && row.holeApproved);
 }
 
-function confirmHole(row: PeopleRow, on: boolean) {
-  const line = peopleLessonsLine({ disk: row.lessons, alfa: row.alfa, hole: row.holeN, extra: row.extraN, at: row.at }).line || `№${row.cid}`;
+function confirmHole(row: PeopleRow, on: boolean, alfa?: number) {
+  const line = peopleLessonsLine({ disk: row.lessons, alfa: alfa ?? row.alfa, hole: row.holeN, extra: row.extraN, at: row.at }).line || `№${row.cid}`;
   const ask = on
     ? `${line}\nжурнал не закроется, снять только вручную.`
     : `${line}\nснять отметку? карточка вернётся в «требуют».`;
@@ -1669,7 +1668,7 @@ function PeopleFillList({
                       e.stopPropagation();
                       const on = e.target.checked;
                       e.target.checked = approved;
-                      if (!confirmHole(row, on)) return;
+                      if (!confirmHole(row, on, alfaShown)) return;
                       onHole?.(row, on);
                     }}
                   />,
@@ -1795,7 +1794,7 @@ function PeopleFillList({
                   className={BTN_GHOST_SM}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!confirmHole(row, false)) return;
+                    if (!confirmHole(row, false, alfaShown)) return;
                     onHole(row, false);
                   }}
                 >
