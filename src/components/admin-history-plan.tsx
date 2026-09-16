@@ -31,6 +31,35 @@ type JobSnap = {
   msg?: string;
 };
 
+type PlanLogRow = {
+  at?: string;
+  kind?: string;
+  text?: string;
+  who?: string;
+  cid?: number;
+  mode?: string;
+  reason?: string;
+  src?: string;
+};
+
+const LOG_KIND: Record<string, string> = {
+  start: "Старт",
+  skip: "Пропуск",
+  fail: "Сбой",
+  stop: "Стоп",
+  done: "Готово",
+  pipe: "Шаг",
+  toggle: "Пульт",
+};
+
+function logWhen(at?: string) {
+  if (!at) return "";
+  const d = new Date(at);
+  if (!Number.isFinite(d.getTime())) return "";
+  const w = mskWall(d);
+  return `${pad2(w.d)}.${pad2(w.mo)} ${pad2(w.h)}:${pad2(w.min)}`;
+}
+
 const DAYS = [
   { n: 1, t: "Пн" },
   { n: 2, t: "Вт" },
@@ -301,12 +330,14 @@ export function HistoryPlanPanel({
   policy,
   job,
   busy,
+  planLog,
   onSave,
   onRunAuto,
 }: {
   policy: CrmSyncPolicy;
   job?: JobSnap | null;
   busy?: boolean;
+  planLog?: PlanLogRow[];
   onSave: (next: CrmSyncPolicy) => void;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
 }) {
@@ -441,6 +472,48 @@ export function HistoryPlanPanel({
         </button>
       </div>
 
+      <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
+        <p className="text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Последние синхронизации</p>
+        {(() => {
+          const rows = (planLog || []).filter((e) => e.kind === "start" || e.kind === "done").slice(0, 10);
+          if (!rows.length) return <p className="mt-2 text-[0.78rem] text-muted">Ещё не было. Старт, стоп и сбои появятся здесь.</p>;
+          return (
+            <ul className="mt-2 space-y-1.5">
+              {rows.map((e, i) => (
+                <li key={`${e.at}-${e.kind}-${i}`} className="text-[0.78rem] leading-snug">
+                  <span className="font-semibold">{logWhen(e.at)}</span>
+                  <span className="text-muted"> · {LOG_KIND[e.kind || ""] || e.kind}</span>
+                  {e.src === "plan" ? <span className="text-muted"> · слот</span> : e.src === "hands" ? <span className="text-muted"> · руками</span> : null}
+                  <span> · {e.text}</span>
+                  {e.who ? <span className="text-muted"> · {e.who}{e.cid ? ` №${e.cid}` : ""}</span> : null}
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
+        <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">События</p>
+        {!(planLog || []).length ? (
+          <p className="mt-2 text-[0.78rem] text-muted">Пусто. Почему соскочило — будет строкой: ребёнок, причина, шаг.</p>
+        ) : (
+          <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">
+            {(planLog || []).slice(0, 24).map((e, i) => (
+              <li
+                key={`${e.at}-${e.kind}-ev-${i}`}
+                className={cn(
+                  "text-[0.78rem] leading-snug",
+                  e.kind === "fail" || e.kind === "stop" ? "text-red-800" : e.kind === "skip" ? "text-amber-800" : "",
+                )}
+              >
+                <span className="font-semibold">{logWhen(e.at)}</span>
+                <span className="text-muted"> · {LOG_KIND[e.kind || ""] || e.kind}</span>
+                <span> · {e.text}</span>
+                {e.who && !String(e.text || "").includes(e.who) ? <span> · {e.who}{e.cid ? ` №${e.cid}` : ""}</span> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {!policy.plan.length && !adding ? (
         <p className="text-sm text-muted">Расписаний нет. Синхронизация расписания молчит. Кнопки шагов как были.</p>
       ) : null}
@@ -533,6 +606,7 @@ export function HistoryPlanModal({
   busy,
   onSave,
   onRunAuto,
+  planLog,
 }: {
   open: boolean;
   onClose: () => void;
@@ -541,6 +615,7 @@ export function HistoryPlanModal({
   busy?: boolean;
   onSave: (next: CrmSyncPolicy) => void;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
+  planLog?: PlanLogRow[];
 }) {
   useEffect(() => {
     if (!open) return;
@@ -576,7 +651,7 @@ export function HistoryPlanModal({
             Закрыть
           </button>
         </div>
-        <HistoryPlanPanel policy={policy} job={job} busy={busy} onSave={onSave} onRunAuto={onRunAuto} />
+        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} onSave={onSave} onRunAuto={onRunAuto} />
       </div>
     </div>
   );

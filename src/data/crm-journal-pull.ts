@@ -18,6 +18,7 @@ import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlap
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, parseArchiveUiFilters, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
+import { loadPlanLog } from "./crm-sync-plan-log";
 import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady } from "./crm-inbound-core";
 import { dossierAuditRole } from "./crm-person-role";
 
@@ -976,6 +977,7 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
     lastAudit: store.lastAudit || null,
     job: journalJobSnapshot(),
     rosterPolicy: loadRosterPolicy(),
+    planLog: loadPlanLog(),
   };
 }
 
@@ -1036,6 +1038,7 @@ function litePullState() {
     students: { all: live + archive, live, archive },
     schools: journalPullSchools(),
     rosterPolicy: loadRosterPolicy(),
+    planLog: loadPlanLog(),
   };
 }
 
@@ -1562,6 +1565,7 @@ export async function journalPull(opts: {
         archived: study === "2",
         pipe,
         name: raw,
+        src: "hands",
       });
       return journalJobView();
     }

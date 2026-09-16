@@ -5,6 +5,7 @@ import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
 import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd } from "./crm-inbound-core.ts";
 import { loadSyncPolicy, saveSyncPolicy } from "./crm-sync-policy.ts";
+import { appendPlanLog } from "./crm-sync-plan-log.ts";
 import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, scheduleOf, stampPlanFired, stampPlanSkip } from "./crm-sync-policy-core.ts";
 import {
   emptyJournalJob,
@@ -66,6 +67,25 @@ const g = globalThis as { __raJournalJobTick?: boolean; __raJournalWatch?: Retur
 
 function pauseTxt(job: { mode?: JournalJobMode | ""; recheck?: boolean; recheckDays?: number; dateFrom?: string }) {
   return jobGapLabel(jobGapOf(job));
+}
+
+function notePlan(e: Parameters<typeof appendPlanLog>[0]) {
+  try {
+    appendPlanLog(e);
+  } catch {
+    /* диск лога не должен рвать очередь */
+  }
+}
+
+function modeRu(mode: string, kind = "") {
+  if (kind === "balance" || mode === "balance") return "шаг 4 · касса";
+  if (mode === "roster" || mode === "roster-recheck") return "шаг 1 · состав";
+  if (mode === "people" || mode === "people-recheck" || mode === "people-slow") return "шаг 2 · календарь";
+  if (mode === "groups" || mode === "groups-recheck" || mode === "group-one") return "шаг 3 · группы";
+  if (mode === "audit") return "шаг 5 · сверка";
+  if (mode === "archivesPupils") return "архив групп действующих";
+  if (mode === "archives") return "архивные группы";
+  return mode || "очередь";
 }
 
 /** Только процесс rastudio-history крутит очередь. Сайт пишет файл и читает статус. */
@@ -183,6 +203,7 @@ export type StartJournalJobOpts = {
   items?: JournalJobItem[];
   archived?: boolean;
   pipe?: string[];
+  src?: "hands" | "plan";
 };
 
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
@@ -452,6 +473,14 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
       msg: emptyMsg(mode, recheck),
       lastAt: nowIso(),
     });
+    notePlan({
+      kind: "skip",
+      text: emptyMsg(mode, recheck),
+      mode,
+      reason: "empty",
+      src: opts.src || (saved.pipe.length ? "plan" : "hands"),
+      jobId: saved.id,
+    });
     continueAutoPipe(saved);
     return loadJournalJob();
   }
@@ -514,6 +543,15 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     pipe: Array.isArray(opts.pipe) ? opts.pipe.map(String).filter(Boolean) : [],
   };
   saveJournalJob(job);
+  notePlan({
+    kind: "start",
+    text: `${modeRu(mode, kind)} · ${study === "2" ? "архив" : "ходят"} · ${first?.name || "очередь"}${job.total ? ` · ${job.total}` : ""}${job.pipe.length ? ` · дальше ${job.pipe.length}` : ""}`,
+    who: first?.name || "",
+    cid: Number(first?.cid) || 0,
+    mode,
+    jobId: job.id,
+    src: opts.src || (job.pipe.length ? "plan" : "hands"),
+  });
   kickHistoryTick();
   return job;
 }
@@ -531,6 +569,14 @@ function continueAutoPipe(job: JournalJob) {
   const rest = job.pipe.map(String).filter(Boolean);
   const next = rest[0];
   if (!next) return;
+  notePlan({
+    kind: "pipe",
+    text: `Дальше ${modeRu(next === "groups-archived" ? "groups" : next, next === "groups-archived" ? "group" : "")}.`,
+    mode: next,
+    jobId: job.id,
+    src: "plan",
+    reason: "pipe",
+  });
   if (next === "archivesPupils" || next === "archives" || next === "groups-archived") {
     const archGroups = next === "groups-archived" || next === "archives";
     startJournalJob({
@@ -541,6 +587,7 @@ function continueAutoPipe(job: JournalJob) {
       dateFrom: job.dateFrom,
       archived: archGroups || job.archived,
       pipe: rest.slice(1),
+      src: "plan",
     });
     return;
   }
@@ -562,11 +609,22 @@ function continueAutoPipe(job: JournalJob) {
     dateFrom: job.dateFrom || opts.dateFrom,
     archived: job.archived,
     pipe: rest.slice(1),
+    src: "plan",
   });
 }
 
 export function stopJournalJob() {
   const j = loadJournalJob();
+  const who = String(j.cur || j.items?.[j.idx]?.name || "");
+  notePlan({
+    kind: "stop",
+    text: `Стоп${who ? ` · на «${who}»` : ""} · прошло ${j.n || 0} из ${j.total || 0}.`,
+    who,
+    cid: Number(j.items?.[j.idx]?.cid || j.customerId) || 0,
+    mode: j.mode,
+    jobId: j.id,
+    reason: "stop",
+  });
   return saveJournalJob({
     ...j,
     stop: true,
@@ -585,11 +643,35 @@ export function tickHistoryPlan(now = new Date()) {
   const marked = markPlanDue(curPol, now);
   const dueChanged = JSON.stringify(marked.plan.map((r) => [r.id, r.dueAt, r.lastSkip])) !== JSON.stringify(curPol.plan.map((r) => [r.id, r.dueAt, r.lastSkip]));
   const pol = dueChanged ? (saveSyncPolicy(marked).ok ? loadSyncPolicy() : marked) : marked;
+  if (dueChanged) {
+    for (const r of marked.plan) {
+      const prev = curPol.plan.find((x) => x.id === r.id);
+      if (r.lastSkip === "expired" && prev?.lastSkip !== "expired") {
+        notePlan({
+          kind: "skip",
+          text: `${r.label || modeRu(r.mode)}: слот сгорел (старше 36 ч).`,
+          mode: r.mode,
+          reason: "expired",
+          src: "plan",
+        });
+      }
+    }
+  }
   const job = loadJournalJob();
   if (job.running && !job.stop) {
     const skipped = stampPlanSkip(pol, "hands");
     if (JSON.stringify(skipped.plan.map((r) => r.lastSkip)) !== JSON.stringify(pol.plan.map((r) => r.lastSkip))) {
       saveSyncPolicy(skipped);
+      const who = String(job.cur || "");
+      notePlan({
+        kind: "skip",
+        text: `Слот пропущен: уже идёт${who ? ` «${who}»` : " загрузка"}.`,
+        who,
+        mode: job.mode,
+        reason: "hands",
+        src: "plan",
+        jobId: job.id,
+      });
     }
     return;
   }
@@ -606,6 +688,7 @@ export function tickHistoryPlan(now = new Date()) {
     dateFrom: opts.dateFrom,
     archived: opts.archived,
     pipe: opts.pipe,
+    src: "plan",
   });
   const dec = planFireDecision(before, started);
   const live = loadSyncPolicy();
@@ -613,6 +696,13 @@ export function tickHistoryPlan(now = new Date()) {
     const skipped = stampPlanSkip(live, "hands");
     if (JSON.stringify(skipped.plan.map((r) => r.lastSkip)) !== JSON.stringify(live.plan.map((r) => r.lastSkip))) {
       saveSyncPolicy(skipped);
+      notePlan({
+        kind: "skip",
+        text: `${rule.label || modeRu(rule.mode)}: слот пропущен, руки заняли очередь.`,
+        mode: rule.mode,
+        reason: "hands",
+        src: "plan",
+      });
     }
     return;
   }
@@ -777,6 +867,15 @@ function finishWaveOrStop(job: JournalJob, msg: string, n = job.n): { done: true
     fill: null,
     msg,
   });
+  const fail = /Alfa не отвечает|не ответила|Сбой фоновой|нет входа/i.test(msg);
+  notePlan({
+    kind: fail ? "fail" : "done",
+    text: msg,
+    mode: job.mode,
+    jobId: job.id,
+    who: job.items?.[Math.min(job.idx, Math.max((job.items || []).length - 1, 0))]?.name || "",
+    reason: fail ? "alfa" : "done",
+  });
   return { done: true, gap: 0, msg };
 }
 
@@ -786,6 +885,15 @@ function skipAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; g
   if (moreItems) {
     const nextName = job.items[idx]?.name || "";
     const msg = `«${item.name}»: Alfa не отвечает, берём следующего.`;
+    notePlan({
+      kind: "fail",
+      text: msg,
+      who: item.name,
+      cid: Number(item.cid) || 0,
+      mode: job.mode,
+      reason: "cap",
+      jobId: job.id,
+    });
     patch({
       id: job.id,
       idx,
@@ -877,6 +985,13 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
         return { done: false, gap: jobGapOf(job) };
       }
       patch({ id, running: false, n, cur: "", fill: null, waits: 0, msg: String(res.error || "Alfa не ответила.") });
+      notePlan({
+        kind: "fail",
+        text: String(res.error || "Alfa не ответила."),
+        mode: job.mode,
+        jobId: id,
+        reason: "alfa",
+      });
       return { done: true, gap: 0, msg: String(res.error || "") };
     }
     patch({
@@ -1097,6 +1212,14 @@ async function tickJob() {
   } catch (e) {
     const now = loadJournalJob();
     if (now.id === id || !id) patch({ id: now.id || id, running: false, cur: "", fill: null, msg: e instanceof Error ? e.message : "Сбой фоновой загрузки." });
+    notePlan({
+      kind: "fail",
+      text: e instanceof Error ? e.message : "Сбой фоновой загрузки.",
+      who: String(now.cur || ""),
+      mode: now.mode,
+      jobId: now.id || id,
+      reason: "crash",
+    });
   } finally {
     g.__raJournalJobTick = false;
     releaseHistoryTickLock();

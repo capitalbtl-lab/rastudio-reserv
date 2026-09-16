@@ -54,5 +54,16 @@ export function saveSyncPolicy(
   const file = fileOf();
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(next, null, 2) + "\n", "utf8");
+  if (cur.planEnabled !== next.planEnabled) {
+    void import("./crm-sync-plan-log.ts")
+      .then(({ appendPlanLog }) =>
+        appendPlanLog({
+          kind: "toggle",
+          text: next.planEnabled ? "Синхронизация расписания включена." : "Синхронизация расписания выключена.",
+          reason: next.planEnabled ? "on" : "off",
+        }),
+      )
+      .catch(() => undefined);
+  }
   return { ok: true, policy: next };
 }

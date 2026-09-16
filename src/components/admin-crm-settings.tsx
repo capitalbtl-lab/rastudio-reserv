@@ -2478,6 +2478,7 @@ export function AdminCrmSettings() {
       }[];
     } | null;
     rosterPolicy?: { leads?: boolean; archiveInLive?: boolean; attendDays?: number };
+    planLog?: { at?: string; kind?: string; text?: string; who?: string; cid?: number; mode?: string; reason?: string; src?: string }[];
     job?: {
       running?: boolean;
       stop?: boolean;
@@ -3958,6 +3959,7 @@ export function AdminCrmSettings() {
                 policy={syncPolicy}
                 job={journal?.job}
                 busy={busy}
+                planLog={journal?.planLog}
                 onSave={(next) => void saveSyncPolicy(next)}
                 onRunAuto={(opts) =>
                   void startHistJob({

@@ -387,6 +387,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /export async function runHistoryWorker/);
     assert.match(job, /kickHistoryTick/);
     assert.match(job, /tickHistoryPlan/);
+    assert.match(job, /appendPlanLog/);
     assert.match(job, /markPlanDue/);
     assert.match(job, /planFireDecision/);
     assert.match(job, /const moreCash = pullKind === "balance" && Boolean\(res.student\?\.paysMore\)/);
@@ -477,6 +478,7 @@ describe("фон истории из Alfa", () => {
     assert.match(plan, /Годы календаря/);
     assert.match(plan, /Сброс настроек/);
     assert.match(plan, /Синхронизация расписания/);
+    assert.match(plan, /Последние синхронизации/);
     assert.match(plan, /role="switch"/);
     assert.match(plan, /appearance-none/);
     assert.match(plan, /translate-x-5/);
