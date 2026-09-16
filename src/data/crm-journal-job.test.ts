@@ -378,6 +378,7 @@ describe("фон истории из Alfa", () => {
     const eco = readFileSync(new URL("../../ecosystem.config.cjs", import.meta.url), "utf8");
     const worker = readFileSync(new URL("../../scripts/crm-history-worker.mjs", import.meta.url), "utf8");
     const deploy = readFileSync(new URL("../../scripts/beget-deploy.sh", import.meta.url), "utf8");
+    const plan = readFileSync(new URL("../components/admin-history-plan.tsx", import.meta.url), "utf8");
     assert.match(job, /export function startJournalJob/);
     assert.match(job, /export function stopJournalJob/);
     assert.match(job, /export function startJournalJobWatch/);
@@ -469,6 +470,10 @@ describe("фон истории из Alfa", () => {
     assert.match(api, /if \(kind !== "jobStatus"\) logAdmin/);
     assert.match(ui, /kind: "jobStart"/);
     assert.match(ui, /kind: "jobStatus"/);
+    assert.match(ui, /jobMode: "auto"/);
+    assert.match(plan, /Запустить шаги 1–5 сейчас/);
+    assert.match(pull, /opts.jobMode === "auto"/);
+    assert.match(pull, /pipe: \[\.\.\.AUTO_PIPE\]/);
     assert.match(ui, /function ServerJobStrip/);
     assert.match(ui, /На сервере:/);
     assert.match(ui, /setInterval\(\(\) => void tick\(\), 1200\)/);

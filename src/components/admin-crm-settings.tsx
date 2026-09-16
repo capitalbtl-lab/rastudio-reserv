@@ -14,7 +14,7 @@ import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-period
 import { keepAlfa, peopleLessonsLine, peopleStudentAction, peopleStudentBadge, peopleStudentHint, PEOPLE_PACK } from "@/data/crm-people-line";
 import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 import { RECHECK_DAY_OPTS, clampRecheckDays, type RecheckDays } from "@/data/crm-inbound-core";
-import { POLICY_FACTORY, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
+import { POLICY_FACTORY, planDateFrom, planFromIdOf, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
 import { HistoryPlanModal } from "@/components/admin-history-plan";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
@@ -3959,6 +3959,14 @@ export function AdminCrmSettings() {
                 job={journal?.job}
                 busy={busy}
                 onSave={(next) => void saveSyncPolicy(next)}
+                onRunAuto={(opts) =>
+                  void startHistJob({
+                    jobMode: "auto",
+                    study: opts.study,
+                    dateFrom: planDateFrom(planFromIdOf(opts.study, opts.dateFromId)),
+                    archived: opts.study === "2",
+                  })
+                }
               />
               {histTab === "roster" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">

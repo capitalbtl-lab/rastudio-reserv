@@ -302,13 +302,17 @@ export function HistoryPlanPanel({
   job,
   busy,
   onSave,
+  onRunAuto,
 }: {
   policy: CrmSyncPolicy;
   job?: JobSnap | null;
   busy?: boolean;
   onSave: (next: CrmSyncPolicy) => void;
+  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId }) => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const [runStudy, setRunStudy] = useState<"1" | "2">("1");
+  const [runFrom, setRunFrom] = useState<PlanFromId>("2015");
   const nextLine = useMemo(() => {
     if (!policy.planEnabled) return "автомат выкл — слоты не стартуют";
     const soon = policy.plan
@@ -365,6 +369,39 @@ export function HistoryPlanPanel({
           }}
         >
           Как было
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2.5 ring-1 ring-black/8">
+        <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Ручной запуск</p>
+        <Chip on={runStudy === "1"} onClick={() => setRunStudy("1")}>
+          Сейчас ходят
+        </Chip>
+        <Chip
+          on={runStudy === "2"}
+          onClick={() => {
+            setRunStudy("2");
+            if (runFrom !== "1" && runFrom !== "2") setRunFrom("1");
+          }}
+        >
+          Архив
+        </Chip>
+        {(runStudy === "2" ? PLAN_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PLAN_FROM_OPTS).map((o) => (
+          <Chip key={o.id} on={runFrom === o.id} onClick={() => setRunFrom(o.id)}>
+            {o.label}
+          </Chip>
+        ))}
+        <button
+          type="button"
+          className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+          disabled={busy || run || !onRunAuto}
+          onClick={() => {
+            if (!onRunAuto) return;
+            if (run) return;
+            if (!window.confirm("Запустить шаги 1–5 сейчас? Состав → календарь → группы → касса → сверка. Расписание не нужно.")) return;
+            onRunAuto({ study: runStudy, dateFromId: runStudy === "2" && runFrom !== "1" && runFrom !== "2" ? "1" : runFrom });
+          }}
+        >
+          Запустить шаги 1–5 сейчас
         </button>
       </div>
 
@@ -459,6 +496,7 @@ export function HistoryPlanModal({
   job,
   busy,
   onSave,
+  onRunAuto,
 }: {
   open: boolean;
   onClose: () => void;
@@ -466,6 +504,7 @@ export function HistoryPlanModal({
   job?: JobSnap | null;
   busy?: boolean;
   onSave: (next: CrmSyncPolicy) => void;
+  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId }) => void;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -490,7 +529,7 @@ export function HistoryPlanModal({
             <p id="history-plan-title" className="font-display text-[1.2rem] leading-tight">
               Пульт синхронизации
             </p>
-            <p className="mt-1 text-[0.82rem] text-muted">Сервер жмёт те же кнопки шагов сам. Режим «Автомат · шаги 1–5» — очередь 1→5 в один слот. Без карточки и без тумблера — молчит.</p>
+            <p className="mt-1 text-[0.82rem] text-muted">Расписание — само в слот. «Запустить шаги 1–5 сейчас» — полный автомат руками, тумблер не нужен. Состав → календарь → группы → касса → сверка.</p>
           </div>
           <button
             type="button"
@@ -501,7 +540,7 @@ export function HistoryPlanModal({
             Закрыть
           </button>
         </div>
-        <HistoryPlanPanel policy={policy} job={job} busy={busy} onSave={onSave} />
+        <HistoryPlanPanel policy={policy} job={job} busy={busy} onSave={onSave} onRunAuto={onRunAuto} />
       </div>
     </div>
   );

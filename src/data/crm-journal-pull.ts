@@ -1542,6 +1542,20 @@ export async function journalPull(opts: {
       stopJournalJob();
       return journalJobView();
     }
+    if (opts.jobMode === "auto") {
+      const { AUTO_PIPE } = await import("./crm-sync-policy-core");
+      const study = opts.study === "2" ? "2" : "1";
+      startJournalJob({
+        mode: "roster",
+        kind: "roster",
+        study,
+        recheck: false,
+        dateFrom: String(opts.dateFrom || "2015-01-01"),
+        archived: study === "2",
+        pipe: [...AUTO_PIPE],
+      });
+      return journalJobView();
+    }
     startJournalJob({
       mode: (opts.jobMode || "people") as import("./crm-journal-job-core").JournalJobMode,
       kind:
