@@ -41,7 +41,7 @@ const STRIPS = [
     title: "Важные дела",
     text: home.paragraphs[8],
     image: {
-      src: "/media/imported/4e33b6_e73db66828c94e8f87ddd27602c4138b_mv2.png",
+      src: "/media/imported/4e33b6_e73db66828c94e8f87ddd27602c4138b_mv2.jpg",
       alt: "Благотворительные проекты Студии Развивайся",
       filename: "BlagoVsem.png",
     },

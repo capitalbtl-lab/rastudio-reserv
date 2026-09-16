@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ type Props = {
 export function SiteVideo({ src, title, className, poster }: Props) {
   const ref = useRef<HTMLVideoElement>(null);
   const [on, setOn] = useState(false);
+  const [armed, setArmed] = useState(false);
   if (!src) return null;
 
   function mute(el: HTMLVideoElement) {
@@ -22,7 +23,8 @@ export function SiteVideo({ src, title, className, poster }: Props) {
     el.volume = 0;
   }
 
-  async function start() {
+  useEffect(() => {
+    if (!armed) return;
     const el = ref.current;
     if (!el) return;
     mute(el);
@@ -31,34 +33,20 @@ export function SiteVideo({ src, title, className, poster }: Props) {
     } catch {
       /* */
     }
-    try {
-      await el.play();
-      setOn(true);
-    } catch {
-      setOn(false);
-    }
-  }
+    void el.play().then(() => setOn(true)).catch(() => setOn(false));
+  }, [armed]);
 
   return (
     <div className={cn("relative overflow-hidden bg-header", className)}>
       <video
         ref={ref}
-        src={src}
+        src={armed ? src : undefined}
         poster={poster}
         className="h-full w-full object-cover"
         muted
         playsInline
-        preload="metadata"
+        preload="none"
         controls={on}
-        onLoadedMetadata={() => {
-          const el = ref.current;
-          if (!el || on) return;
-          try {
-            if (el.currentTime < 0.05) el.currentTime = 0.1;
-          } catch {
-            /* первый кадр */
-          }
-        }}
         onPlay={() => {
           if (ref.current) mute(ref.current);
           setOn(true);
@@ -81,7 +69,7 @@ export function SiteVideo({ src, title, className, poster }: Props) {
         <button
           type="button"
           className="absolute inset-0 grid place-items-center bg-header/30"
-          onClick={() => void start()}
+          onClick={() => setArmed(true)}
           aria-label={title ? `Смотреть: ${title}` : "Смотреть видео"}
         >
           <span className="grid size-16 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-border-hover)] transition-transform duration-[var(--motion-fast)] hover:scale-105">

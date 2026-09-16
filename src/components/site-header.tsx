@@ -41,6 +41,7 @@ export function SiteHeader() {
             height={289}
             className="h-8 w-auto max-w-[10.25rem] object-contain object-left outline-none sm:h-11 sm:max-w-[16rem] md:h-[3.35rem] md:max-w-[20rem]"
             loading="eager"
+            fetchPriority="high"
             decoding="async"
           />
         </PageLink>

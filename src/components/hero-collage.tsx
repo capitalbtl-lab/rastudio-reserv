@@ -19,7 +19,7 @@ function nextFree(len: number, current: number[], slot: number) {
   return i;
 }
 
-function ShotCard({ shots, index }: { shots: CollageShot[]; index: number }) {
+function ShotCard({ shots, index, eager }: { shots: CollageShot[]; index: number; eager?: boolean }) {
   const [shown, setShown] = useState(index);
   const [incoming, setIncoming] = useState<number | null>(null);
 
@@ -44,7 +44,8 @@ function ShotCard({ shots, index }: { shots: CollageShot[]; index: number }) {
         filename={current.filename}
         className="h-full w-full"
         imgClassName="h-full w-full object-cover"
-        loading="eager"
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : undefined}
       />
       {next ? (
         <SeoImage
@@ -101,20 +102,21 @@ export function HeroCollage({ shots }: { shots?: CollageShot[] }) {
         <div className="photo-stack">
           {slots.map((index, slot) => (
             <div key={slot} className="shot">
-              <ShotCard shots={pack} index={index} />
+              <ShotCard shots={pack} index={index} eager={slot === 0} />
             </div>
           ))}
         </div>
       </div>
       <div className="snap-row lg:hidden">
-        {pack.slice(0, 4).map((shot) => {
+        {pack.slice(0, 4).map((shot, i) => {
           const card = (
             <SeoImage
               src={shot.src}
               alt={shot.alt}
               filename={shot.filename}
               className="aspect-4/5"
-              loading="eager"
+              loading={i === 0 ? "eager" : "lazy"}
+              fetchPriority={i === 0 ? "high" : undefined}
             />
           );
           return shot.href ? (

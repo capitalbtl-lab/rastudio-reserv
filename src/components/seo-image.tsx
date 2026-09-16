@@ -11,6 +11,7 @@ type Props = {
   width?: number;
   height?: number;
   loading?: "lazy" | "eager";
+  fetchPriority?: "high" | "low" | "auto";
 };
 
 export { imageTitle };
@@ -24,6 +25,7 @@ export function SeoImage({
   width,
   height,
   loading = "lazy",
+  fetchPriority,
 }: Props) {
   const label = cleanWixAlt(alt, filename);
   const title = imageTitle(filename, label);
@@ -36,6 +38,7 @@ export function SeoImage({
         width={width}
         height={height}
         loading={loading}
+        fetchPriority={fetchPriority}
         decoding="async"
         className={cn("h-full w-full object-cover", imgClassName)}
       />

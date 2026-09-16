@@ -44,6 +44,9 @@ describe("page-media", () => {
     assert.doesNotMatch(player, /autoPlay/);
     assert.match(player, /el\.currentTime = 0/);
     assert.match(player, /el\.muted = true/);
+    assert.match(player, /preload="none"/);
+    assert.match(player, /armed \? src/);
+    assert.doesNotMatch(player, /preload="metadata"/);
     assert.match(player, /Смотреть/);
     const robot = readFileSync(new URL("../components/robot-videos.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(robot, /autoPlay/);

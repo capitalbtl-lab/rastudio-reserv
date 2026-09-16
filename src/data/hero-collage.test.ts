@@ -23,5 +23,8 @@ describe("чёрный герой страниц", () => {
     const hero = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
     assert.match(hero, /HeroCollage/);
     assert.match(hero, /lg:min-h-\[88dvh\]/);
+    const collage = readFileSync(new URL("../components/hero-collage.tsx", import.meta.url), "utf8");
+    assert.match(collage, /eager=\{slot === 0\}/);
+    assert.match(collage, /loading=\{eager \? "eager" : "lazy"\}/);
   });
 });
