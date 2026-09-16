@@ -231,9 +231,9 @@ describe("фон истории из Alfa", () => {
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
     assert.match(jobSrc, /перепись не дошла/);
     const capFn = jobSrc.slice(jobSrc.indexOf("function skipAfterCap"), jobSrc.indexOf("function rotateAfterCap"));
-    assert.match(capFn, /const skip = peopleBlue/);
+    assert.match(capFn, /groups-recheck/);
+    assert.match(capFn, /const skip = waveBlue/);
     assert.doesNotMatch(capFn, /peopleBlue && job\.recheck/);
-    assert.doesNotMatch(capFn, /peopleBlue && !job\.recheck/);
     assert.match(jobSrc, /peopleSlowAdvance/);
     assert.match(jobSrc, /ещё круг/);
     assert.equal(JOB_WAIT_CAP, 8);
@@ -343,8 +343,15 @@ describe("фон истории из Alfa", () => {
     const g2 = groupsRecheckAdvance([gRight, gLeft], "right", [], false);
     assert.equal(g2.wave, "left");
     assert.deepEqual(g2.items.map((x) => x.groupId), [11]);
-    const g3 = groupsRecheckAdvance([{ ...gLeft, finished: true, needRecheck: true }, gRight], "left", g2.follow, false);
-    assert.deepEqual(g3.items.map((x) => x.groupId), [11]);
+    const skippedG = groupsRecheckAdvance(
+      [{ groupId: 12, branchId: 1, name: "жёлтая", finished: false, needRecheck: false }],
+      "preleft",
+      [],
+      false,
+      [],
+      [{ groupId: 12, branchId: 1, name: "жёлтая" }],
+    );
+    assert.ok(!skippedG.items.some((x) => x.groupId === 12));
   });
 
   it("патч: Стоп липкий, чужой id не затирает диск", () => {

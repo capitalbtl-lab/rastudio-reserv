@@ -874,7 +874,7 @@ function peekJobWave(job: JournalJob): ReturnType<typeof peopleRecheckAdvance> |
     );
   }
   if (mode === "groups-recheck") {
-    return groupsRecheckAdvance(groupRowsFor({ school: job.school, archived: job.archived, grain: job.grain }), job.wave, job.follow, false);
+    return groupsRecheckAdvance(groupRowsFor({ school: job.school, archived: job.archived, grain: job.grain }), job.wave, job.follow, false, job.defer, job.skip);
   }
   if (mode === "roster-recheck") {
     return groupsRecheckAdvance(rosterRowsFor({ school: job.school, archived: job.archived }), job.wave, job.follow, true);
@@ -975,11 +975,15 @@ function skipAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; g
   const idx = job.idx + 1;
   const moreItems = idx < job.items.length;
   const peopleBlue = job.mode === "people-recheck";
-  const skip = peopleBlue
-    ? [...(job.skip || []).filter((x) => Number(x.cid) !== Number(item.cid)), item]
+  const groupBlue = job.mode === "groups-recheck";
+  const waveBlue = peopleBlue || groupBlue;
+  const itemKey = peopleBlue ? Number(item.cid) || 0 : Number(item.groupId) || 0;
+  const keyOf = (x: JournalJobItem) => (peopleBlue ? Number(x.cid) || 0 : Number(x.groupId) || 0);
+  const skip = waveBlue
+    ? [...(job.skip || []).filter((x) => keyOf(x) !== itemKey), item]
     : job.skip || [];
-  const defer = peopleBlue
-    ? (job.defer || []).filter((x) => Number(x.cid) !== Number(item.cid))
+  const defer = waveBlue
+    ? (job.defer || []).filter((x) => keyOf(x) !== itemKey)
     : job.defer || [];
   const waits = resetJobWaits();
   if (moreItems) {

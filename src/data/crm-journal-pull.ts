@@ -1124,7 +1124,6 @@ async function pullOneGroup(
   const beforeCard = loadGroupCard(g.branchId, g.groupId);
   const days = clampRecheckDays(recheckDays);
   const win = iceWindowOrNow(recheck, iceFrom || period.from, iceTo || (recheck ? "" : period.to), days);
-  const beforeAll = (beforeCard?.calendar || []).length;
   const beforeWin = (beforeCard?.calendar || []).filter((l) => inPeriod(l.date, win.from, win.to)).length;
   const { inboundJournalGroup } = await import("./crm-journal-inbound");
   const res = await inboundJournalGroup(g.branchId, g.groupId, {
@@ -1151,7 +1150,7 @@ async function pullOneGroup(
     diskUniq,
     censusN,
     diskRows,
-    allowExtra: !recheck,
+    allowExtra: false,
   });
   const weak = !ok || !ready;
   const keys = period.keys?.length ? period.keys : [period.key];
@@ -1166,12 +1165,11 @@ async function pullOneGroup(
     checksum: String(res.checksum || ""),
   });
   const added = Math.max(0, n - beforeWin);
-  const afterAll = Array.isArray(res.calendar) ? res.calendar.length : beforeAll;
   const extra = ok
     ? !pagesComplete
       ? `«${g.name}»: ${period.label} · ${n} зан.${holeN ? ` · дырок ${holeN}` : ""}${added ? `, +${added}` : ""} · пакет оборвался, нажмите ещё раз`
       : recheck
-        ? `перепроверка «${g.name}»: ${period.label} · в окне было ${beforeWin}, стало ${n} · на диске ${afterAll}${added ? `, дозаписали ${added}` : ""}${holeN ? `, дырок ${holeN}` : ""}${goneN ? `, ушло из окна ${goneN}` : holeN || goneN ? "" : ", дырок нет"}`
+        ? `перепроверка «${g.name}»: ${period.label}${holeN ? ` · дырка ${holeN}` : ""}${goneN ? ` · лишние ${goneN}` : !holeN && !goneN ? " · набор id сошёлся" : ""}`
         : `«${g.name}»: ${period.label} · ${n} зан. за порцию${holeN ? ` · дырок ${holeN}` : ""}`
     : String(res.extra || `«${g.name}»: ${period.label} — Alfa не ответила`);
   return { extra, count: n, ok, capped: weak };

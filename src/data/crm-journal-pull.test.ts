@@ -42,8 +42,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /Определено/);
     assert.match(pull, /recheck/);
     assert.match(pull, /пакет оборвался|дозаписали/);
-    assert.match(pull, /в окне было \$\{beforeWin\}, стало \$\{n\} · на диске \$\{afterAll\}/);
-    assert.match(pull, /ушло из окна/);
+    assert.match(pull, /набор id сошёлся/);
+    assert.match(pull, /лишние \$\{goneN\}/);
     assert.doesNotMatch(pull, /было \$\{before\}, стало \$\{n\}/);
     assert.match(pull, /journalFill: \{/);
     assert.match(pull, /journalIdsChecksum/);
@@ -57,9 +57,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /applyHydrateFills/);
     assert.match(pull, /groupName: g\.name/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
-    assert.match(inbound, /Promise\.all/);
+    assert.doesNotMatch(inbound, /Promise\.all/);
     assert.match(inbound, /opts\?\.groupName/);
-    assert.match(inbound, /opts\?\.lite \|\| windowed/);
+    assert.doesNotMatch(inbound, /opts\?\.lite \|\| windowed/);
     assert.match(inbound, /date_from: ymd\(date_from\)/);
     assert.match(inbound, /date_to: ymd\(date_to\)/);
     assert.match(inbound, /byKey.set\(`id:\$\{lid\}`/);

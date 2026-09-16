@@ -273,14 +273,9 @@ export async function inboundJournalGroup(
     if (total > 0 && got < total) hitCap = true;
     if (total > reported) reported = total;
   }
-  const windowed = Boolean(opts?.dateFrom && opts?.dateTo) || recheck;
-  if (opts?.lite || windowed) {
-    await Promise.all([pull(3, dateFrom, dateTo), pull(1, dateFrom, dateTo), pull(2, dateFrom, dateTo)]);
-  } else {
-    await pull(3, dateFrom, dateTo);
-    await pull(1, dateFrom, dateTo);
-    await pull(2, dateFrom, dateTo);
-  }
+  await pull(3, dateFrom, dateTo);
+  await pull(1, dateFrom, dateTo);
+  await pull(2, dateFrom, dateTo);
   if (!alfaOk) {
     return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила${lastErr ? ` (${lastErr.slice(0, 80)})` : ""}`, count: 0, calendar: cached?.calendar || [], capped: true, hole: [] as number[], gone: [] as number[], pagesComplete: false };
   }
@@ -306,7 +301,7 @@ export async function inboundJournalGroup(
     diskUniq,
     censusN,
     diskRows,
-    allowExtra: !recheck,
+    allowExtra: false,
   });
   const beforeIds = new Set((cached?.calendar || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
   const seatedNew = pulled.filter((l) => {

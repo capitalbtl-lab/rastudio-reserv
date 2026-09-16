@@ -472,14 +472,20 @@ export function groupsRecheckAdvance(
   finishedWave: RecheckWave,
   follow: JournalJobItem[],
   roster = false,
+  defer: JournalJobItem[] = [],
+  skip: JournalJobItem[] = [],
 ): { done: boolean; wave: RecheckWave; items: JournalJobItem[]; follow: JournalJobItem[]; recheck: boolean } {
   const toItem = (r: GroupWaveRow): JournalJobItem => ({ groupId: r.groupId, branchId: r.branchId, name: r.name });
   const onRight = (r: GroupWaveRow) => (roster ? Boolean(r.roster) : r.finished);
   const onLeft = (r: GroupWaveRow) => !onRight(r);
-  const leftNow = () => rows.filter(onLeft).map(toItem);
+  const skipSet = new Set((skip || []).map((d) => Number(d.groupId) || 0).filter(Boolean));
+  const deferSet = new Set((defer || []).map((d) => Number(d.groupId) || 0).filter(Boolean));
+  const leftNow = () => mergeDeferItems(rows.filter(onLeft).map(toItem), defer).filter((x) => !skipSet.has(Number(x.groupId) || 0));
   const rightNow = () => {
     const need = rows.filter((r) => (roster ? Boolean(r.roster) : r.needRecheck));
-    return (need.length ? need : rows.filter(onRight)).map(toItem);
+    return (need.length ? need : rows.filter(onRight))
+      .map(toItem)
+      .filter((x) => !skipSet.has(Number(x.groupId) || 0) && !deferSet.has(Number(x.groupId) || 0));
   };
   if (finishedWave === "left2") {
     return { done: true, wave: "left2", items: [], follow, recheck: true };
@@ -491,7 +497,10 @@ export function groupsRecheckAdvance(
   }
   if (finishedWave === "left") {
     const want = new Set(follow.map((f) => Number(f.groupId) || 0).filter(Boolean));
-    const items = rows.filter((r) => want.has(r.groupId) && onRight(r)).map(toItem);
+    const items = rows
+      .filter((r) => want.has(r.groupId) && onRight(r))
+      .map(toItem)
+      .filter((x) => !skipSet.has(Number(x.groupId) || 0));
     if (items.length) return { done: false, wave: "right2", items, follow, recheck: true };
     const leftover = leftNow();
     if (leftover.length) return { done: false, wave: "left2", items: leftover, follow: leftover, recheck: false };
