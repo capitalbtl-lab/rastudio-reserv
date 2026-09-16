@@ -366,11 +366,11 @@ export function HistoryPlanPanel({
           className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
           disabled={busy}
           onClick={() => {
-            if (!window.confirm("Вернуть завод: автомат выкл, расписаний нет?")) return;
+            if (!window.confirm("Сбросить настройки пульта? Автомат выкл, расписания удалятся. Текущая загрузка не остановится.")) return;
             patch({ planEnabled: false, plan: [] });
           }}
         >
-          Как было
+          Сброс настроек
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2.5 ring-1 ring-black/8">
@@ -389,6 +389,9 @@ export function HistoryPlanPanel({
         </Chip>
         {runStudy === "1" ? (
           <>
+            <Chip on>
+              Живые группы
+            </Chip>
             <Chip on={runLeads} onClick={() => setRunLeads((v) => !v)}>
               Лиды
             </Chip>
@@ -397,6 +400,7 @@ export function HistoryPlanPanel({
             </Chip>
           </>
         ) : null}
+        <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Годы календаря</p>
         {(runStudy === "2" ? PLAN_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PLAN_FROM_OPTS).map((o) => (
           <Chip key={o.id} on={runFrom === o.id} onClick={() => setRunFrom(o.id)}>
             {o.label}

@@ -473,6 +473,9 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /jobMode: "auto"/);
     assert.match(plan, /Запустить шаги 1–5 сейчас/);
     assert.match(plan, /Архивные группы действующих/);
+    assert.match(plan, /Живые группы/);
+    assert.match(plan, /Годы календаря/);
+    assert.match(plan, /Сброс настроек/);
     assert.match(plan, /Лиды/);
     assert.match(pull, /opts.jobMode === "auto"/);
     assert.match(pull, /archGroups=1/);
