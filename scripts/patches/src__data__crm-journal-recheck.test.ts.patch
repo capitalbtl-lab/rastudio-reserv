@@ -1,0 +1,32 @@
+diff --git a/src/data/crm-journal-recheck.test.ts b/src/data/crm-journal-recheck.test.ts
+index bd16608..9d23a25 100644
+--- a/src/data/crm-journal-recheck.test.ts
++++ b/src/data/crm-journal-recheck.test.ts
+@@ -118,7 +118,8 @@ describe("перепроверка журнала", () => {
+     assert.match(ui, /hit\.dups != null/);
+     assert.match(ui, /const journal = !short && Boolean\(hit.ok\)/);
+     assert.doesNotMatch(ui, /disk > 0 \|\| Boolean\(p\.journal\)/);
+-    assert.match(ui, /Number\(row.lessons\) === Number\(row.alfa\)/);
++    assert.doesNotMatch(ui, /Number\(disk\) === Number\(alfa\)\) dups = false/);
++    assert.doesNotMatch(ui, /Number\(row.lessons\) === Number\(row.alfa\) && !short/);
+     assert.match(ui, /Загрузить всю историю/);
+     assert.match(ui, /PEOPLE_FROM_OPTS/);
+     assert.match(ui, /YearsSelect/);
+@@ -149,7 +150,7 @@ describe("перепроверка журнала", () => {
+     assert.match(pullLock, /row\.blocked/);
+     assert.match(pullLock, /homeOnly: false/);
+     assert.match(pullLock, /if \(!recheck\) \{/);
+-    assert.match(pullLock, /first\.ok && !weak && \(setsClosed \|\| \(!seenReady && disk >= alfaGate && !extra0\)\)/);
++    assert.match(pullLock, /first\.ok && !weak && setsClosed/);
+     assert.match(pullLock, /keepAlfaProbe/);
+     assert.doesNotMatch(pullLock, /lessonsAlfaAt: ""/);
+     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+@@ -162,6 +163,8 @@ describe("перепроверка журнала", () => {
+     assert.doesNotMatch(inbound, /homeOnly\) \|\| Number\(opts\?\.take\)/);
+     assert.match(inbound, /export async function probeCustomerLessons/);
+     assert.match(inbound, /export async function censusCustomerLessonIds/);
++    assert.match(inbound, /studentCardBranches/);
++    assert.match(inbound, /opts\?\.branches/);
+     assert.match(inbound, /applyCustomerLessonCensus/);
+     assert.match(inbound, /pullLessonPage/);
+     assert.match(inbound, /aborted/);
