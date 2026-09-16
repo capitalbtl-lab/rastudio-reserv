@@ -42,3 +42,12 @@ export type CustomerSyncStamp = {
   /** Окно пробы жёлтых, у кого уже есть счёт: 30 → 90 → 180. Нет ключа — полное 2015. */
   lessonsWindowDays?: number;
 };
+
+type Store = { at: string; byId: Record<string, CustomerSyncStamp> };
+
+let mem: Store | null = null;
+let memMtime = 0;
+
+function fileOf() {
+  return join(process.cwd(), "storage", "crm-customer-sync.json");
+}
