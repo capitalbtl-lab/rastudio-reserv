@@ -400,7 +400,7 @@ function rosterRowsFor(opts: { school?: string; archived?: boolean }): GroupWave
 
 function waveStartMsg(wave: RecheckWave, name: string, recheck: boolean, job?: JournalJob) {
   const pause = jobGapLabel(jobGapOf({ ...(job || emptyJournalJob()), recheck }));
-  if (wave === "left") return `${name}: слева жёлтые, добираем. Потом ${pause}.`;
+  if (wave === "left" || wave === "preleft" || wave === "left2") return `${name}: слева, добираем. Потом ${pause}.`;
   if (wave === "right2") return `${name}: снова справа, те же после добора. Потом ${pause}.`;
   return recheck ? `${name}: справа, перепроверяем. Потом ${pause}.` : `${name}: грузим. Потом ${pause}.`;
 }

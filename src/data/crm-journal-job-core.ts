@@ -21,7 +21,7 @@ export const PEOPLE_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 export const CATALOG_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 export const AUDIT_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 
-export type RecheckWave = "" | "right" | "left" | "right2";
+export type RecheckWave = "" | "preleft" | "right" | "left" | "right2" | "left2";
 
 export type JournalJobMode =
   | "people"
@@ -378,14 +378,21 @@ export function peopleSlowAdvance(people: PeopleJobRow[]): { done: boolean; item
   return { done: !items.length, items };
 }
 
-/** Синяя «Перепроверить по одному»: справа → жёлтые слева → снова справа те же (даже если ещё short). */
+/** Синяя: сначала дырки слева, потом справа, снова дырки, те же справа, ещё раз слева если перекинуло. */
 export function peopleRecheckAdvance(
   people: PeopleJobRow[],
   kind: "students" | "balance",
   finishedWave: RecheckWave,
   follow: JournalJobItem[],
 ): { done: boolean; wave: RecheckWave; items: JournalJobItem[]; follow: JournalJobItem[]; recheck: boolean } {
+  const leftNow = () => peopleJobQueue(people, kind, false).map(asPeopleItem);
+  const rightNow = () => peopleJobQueue(people, kind, true).map(asPeopleItem);
+  if (finishedWave === "left2") {
+    return { done: true, wave: "left2", items: [], follow, recheck: true };
+  }
   if (finishedWave === "right2") {
+    const left = leftNow();
+    if (left.length) return { done: false, wave: "left2", items: left, follow: left, recheck: false };
     return { done: true, wave: "right2", items: [], follow, recheck: true };
   }
   if (finishedWave === "left") {
@@ -393,14 +400,20 @@ export function peopleRecheckAdvance(
     const items = people
       .filter((r) => want.has(r.cid) && !(kind === "students" && r.short && r.holeApproved))
       .map(asPeopleItem);
-    if (!items.length) return { done: true, wave: "right2", items: [], follow, recheck: true };
-    return { done: false, wave: "right2", items, follow, recheck: true };
+    if (items.length) return { done: false, wave: "right2", items, follow, recheck: true };
+    const leftover = leftNow();
+    if (leftover.length) return { done: false, wave: "left2", items: leftover, follow: leftover, recheck: false };
+    return { done: true, wave: "right2", items: [], follow, recheck: true };
   }
   if (finishedWave === "") {
-    const right = peopleJobQueue(people, kind, true).map(asPeopleItem);
+    const left = leftNow();
+    if (left.length) return { done: false, wave: "preleft", items: left, follow: left, recheck: false };
+  }
+  if (finishedWave === "" || finishedWave === "preleft") {
+    const right = rightNow();
     if (right.length) return { done: false, wave: "right", items: right, follow: [], recheck: true };
   }
-  const left = peopleJobQueue(people, kind, false).map(asPeopleItem);
+  const left = leftNow();
   if (left.length) return { done: false, wave: "left", items: left, follow: left, recheck: false };
   return { done: true, wave: finishedWave || "right", items: [], follow: [], recheck: true };
 }
@@ -416,21 +429,36 @@ export function groupsRecheckAdvance(
   const toItem = (r: GroupWaveRow): JournalJobItem => ({ groupId: r.groupId, branchId: r.branchId, name: r.name });
   const onRight = (r: GroupWaveRow) => (roster ? Boolean(r.roster) : r.finished);
   const onLeft = (r: GroupWaveRow) => !onRight(r);
+  const leftNow = () => rows.filter(onLeft).map(toItem);
+  const rightNow = () => {
+    const need = rows.filter((r) => (roster ? Boolean(r.roster) : r.needRecheck));
+    return (need.length ? need : rows.filter(onRight)).map(toItem);
+  };
+  if (finishedWave === "left2") {
+    return { done: true, wave: "left2", items: [], follow, recheck: true };
+  }
   if (finishedWave === "right2") {
+    const left = leftNow();
+    if (left.length) return { done: false, wave: "left2", items: left, follow: left, recheck: false };
     return { done: true, wave: "right2", items: [], follow, recheck: true };
   }
   if (finishedWave === "left") {
     const want = new Set(follow.map((f) => Number(f.groupId) || 0).filter(Boolean));
     const items = rows.filter((r) => want.has(r.groupId) && onRight(r)).map(toItem);
-    if (!items.length) return { done: true, wave: "right2", items: [], follow, recheck: true };
-    return { done: false, wave: "right2", items, follow, recheck: true };
+    if (items.length) return { done: false, wave: "right2", items, follow, recheck: true };
+    const leftover = leftNow();
+    if (leftover.length) return { done: false, wave: "left2", items: leftover, follow: leftover, recheck: false };
+    return { done: true, wave: "right2", items: [], follow, recheck: true };
   }
   if (finishedWave === "") {
-    const need = rows.filter((r) => (roster ? Boolean(r.roster) : r.needRecheck));
-    const right = (need.length ? need : rows.filter(onRight)).map(toItem);
+    const left = leftNow();
+    if (left.length) return { done: false, wave: "preleft", items: left, follow: left, recheck: false };
+  }
+  if (finishedWave === "" || finishedWave === "preleft") {
+    const right = rightNow();
     if (right.length) return { done: false, wave: "right", items: right, follow: [], recheck: true };
   }
-  const left = rows.filter(onLeft).map(toItem);
+  const left = leftNow();
   if (left.length) return { done: false, wave: "left", items: left, follow: left, recheck: false };
   return { done: true, wave: finishedWave || "right", items: [], follow: [], recheck: true };
 }

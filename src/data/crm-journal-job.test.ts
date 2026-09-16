@@ -238,14 +238,18 @@ describe("фон истории из Alfa", () => {
     assert.match(jobSrc, /peopleNeedProbe\(people\)/);
   });
 
-  it("перепроверка по одному: справа, потом слева, потом те же справа", () => {
+  it("перепроверка по одному: сначала слева, потом справа, дырки после перепроверки добираем", () => {
     const right = { cid: 1, branchId: 1, name: "справа", journal: true, pays: false, rechecked: false };
     const left = { cid: 2, branchId: 1, name: "жёлтая", journal: false, pays: false, short: true };
     const hole = { cid: 3, branchId: 1, name: "галка", journal: false, pays: false, short: true, holeApproved: true };
     const start = peopleRecheckAdvance([right, left, hole], "students", "", []);
-    assert.equal(start.wave, "right");
-    assert.deepEqual(start.items.map((x) => x.cid), [1]);
-    assert.equal(start.recheck, true);
+    assert.equal(start.wave, "preleft");
+    assert.deepEqual(start.items.map((x) => x.cid), [2]);
+    assert.equal(start.recheck, false);
+    const afterHoles = peopleRecheckAdvance([right, left, hole], "students", "preleft", start.follow);
+    assert.equal(afterHoles.wave, "right");
+    assert.deepEqual(afterHoles.items.map((x) => x.cid), [1]);
+    assert.equal(afterHoles.recheck, true);
     const afterRight = peopleRecheckAdvance([right, left, hole], "students", "right", []);
     assert.equal(afterRight.wave, "left");
     assert.deepEqual(afterRight.items.map((x) => x.cid), [2]);
@@ -260,19 +264,27 @@ describe("фон истории из Alfa", () => {
     assert.equal(afterLeft.wave, "right2");
     assert.deepEqual(afterLeft.items.map((x) => x.cid), [2]);
     assert.equal(afterLeft.recheck, true);
-    const done = peopleRecheckAdvance([right, loaded, hole], "students", "right2", afterLeft.follow);
-    assert.equal(done.done, true);
+    const thrown = { cid: 4, branchId: 1, name: "перекинуло", journal: false, pays: false, short: true };
+    const afterRight2 = peopleRecheckAdvance([right, loaded, hole, thrown], "students", "right2", afterLeft.follow);
+    assert.equal(afterRight2.wave, "left2");
+    assert.equal(afterRight2.recheck, false);
+    assert.deepEqual(afterRight2.items.map((x) => x.cid), [4]);
+    const afterLeft2 = peopleRecheckAdvance([right, loaded, hole, thrown], "students", "left2", afterRight2.follow);
+    assert.equal(afterLeft2.done, true);
     const onlyLeft = peopleRecheckAdvance([left], "students", "", []);
-    assert.equal(onlyLeft.wave, "left");
+    assert.equal(onlyLeft.wave, "preleft");
     assert.deepEqual(onlyLeft.items.map((x) => x.cid), [2]);
     const cashLeft = { cid: 9, branchId: 2, name: "касса", journal: true, pays: false };
     const cashStart = peopleRecheckAdvance([cashLeft], "balance", "", []);
-    assert.equal(cashStart.wave, "left");
+    assert.equal(cashStart.wave, "preleft");
     const gRight = { groupId: 10, branchId: 1, name: "г", finished: true, needRecheck: true };
     const gLeft = { groupId: 11, branchId: 1, name: "н", finished: false, needRecheck: false };
     const g1 = groupsRecheckAdvance([gRight, gLeft], "", [], false);
-    assert.equal(g1.wave, "right");
-    assert.deepEqual(g1.items.map((x) => x.groupId), [10]);
+    assert.equal(g1.wave, "preleft");
+    assert.deepEqual(g1.items.map((x) => x.groupId), [11]);
+    const gAfterPre = groupsRecheckAdvance([gRight, gLeft], "preleft", g1.follow, false);
+    assert.equal(gAfterPre.wave, "right");
+    assert.deepEqual(gAfterPre.items.map((x) => x.groupId), [10]);
     const g2 = groupsRecheckAdvance([gRight, gLeft], "right", [], false);
     assert.equal(g2.wave, "left");
     assert.deepEqual(g2.items.map((x) => x.groupId), [11]);
