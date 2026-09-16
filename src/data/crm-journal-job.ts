@@ -204,6 +204,7 @@ export type StartJournalJobOpts = {
   archived?: boolean;
   pipe?: string[];
   src?: "hands" | "plan";
+  fromPipe?: boolean;
 };
 
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
@@ -543,15 +544,17 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     pipe: Array.isArray(opts.pipe) ? opts.pipe.map(String).filter(Boolean) : [],
   };
   saveJournalJob(job);
-  notePlan({
-    kind: "start",
-    text: `${modeRu(mode, kind)} · ${study === "2" ? "архив" : "ходят"} · ${first?.name || "очередь"}${job.total ? ` · ${job.total}` : ""}${job.pipe.length ? ` · дальше ${job.pipe.length}` : ""}`,
-    who: first?.name || "",
-    cid: Number(first?.cid) || 0,
-    mode,
-    jobId: job.id,
-    src: opts.src || (job.pipe.length ? "plan" : "hands"),
-  });
+  if (!opts.fromPipe) {
+    notePlan({
+      kind: "start",
+      text: `${modeRu(mode, kind)} · ${study === "2" ? "архив" : "ходят"} · ${first?.name || "очередь"}${job.total ? ` · ${job.total}` : ""}${job.pipe.length ? ` · дальше ${job.pipe.length}` : ""}`,
+      who: first?.name || "",
+      cid: Number(first?.cid) || 0,
+      mode,
+      jobId: job.id,
+      src: opts.src || (job.pipe.length ? "plan" : "hands"),
+    });
+  }
   kickHistoryTick();
   return job;
 }
@@ -560,7 +563,7 @@ function pipeShouldContinue(job: JournalJob) {
   if (job.stop) return false;
   if (!(job.pipe || []).length) return false;
   const msg = String(job.msg || "");
-  if (/Alfa не ответила|нет входа|429|502|Сбой фоновой/i.test(msg)) return false;
+  if (/Alfa не ответил|нет входа|429|502|Сбой фоновой|Остановились/i.test(msg)) return false;
   return true;
 }
 
@@ -588,6 +591,7 @@ function continueAutoPipe(job: JournalJob) {
       archived: archGroups || job.archived,
       pipe: rest.slice(1),
       src: "plan",
+      fromPipe: true,
     });
     return;
   }
@@ -610,6 +614,7 @@ function continueAutoPipe(job: JournalJob) {
     archived: job.archived,
     pipe: rest.slice(1),
     src: "plan",
+    fromPipe: true,
   });
 }
 

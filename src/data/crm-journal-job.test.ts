@@ -456,6 +456,8 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /jobGapOf/);
     assert.match(load, /lite: true/);
     assert.match(job, /function continueAutoPipe/);
+    assert.match(job, /fromPipe: true/);
+    assert.match(job, /Alfa не ответил/);
     assert.match(job, /pipe: Array.isArray\(opts.pipe\)/);
     assert.match(core, /pipe: \[\]/);
     assert.doesNotMatch(job, /enqueueExport/);
