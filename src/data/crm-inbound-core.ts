@@ -198,7 +198,7 @@ export function pruneCalendarToAlfaIds<T extends { lessonId?: number; date?: str
   });
 }
 
-export type RecheckDays = 7 | 14 | 32 | 92 | 182 | 1095 | 2555 | 4000;
+export type RecheckDays = 7 | 14 | 32 | 92 | 182 | 365 | 730 | 1095 | 2555 | 4000;
 
 export const RECHECK_DAY_OPTS = [
   { days: 7 as const, label: "± неделя" },
@@ -213,7 +213,7 @@ export const RECHECK_DAY_OPTS = [
 
 export function clampRecheckDays(raw: unknown): RecheckDays {
   const n = Number(raw) || 0;
-  if (n === 7 || n === 14 || n === 92 || n === 182 || n === 1095 || n === 2555 || n === 4000) return n;
+  if (n === 7 || n === 14 || n === 92 || n === 182 || n === 365 || n === 730 || n === 1095 || n === 2555 || n === 4000) return n;
   return 32;
 }
 
@@ -221,7 +221,7 @@ function ymdOf(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** Окно синей перепроверки. ±32/92/182 — обе стороны. 3 года / 7 лет / 2015 — назад + 32 дня вперёд. */
+/** Синяя. Короткое окно — обе стороны. Год и длиннее — назад + 32 дня вперёд. */
 export function recheckWindowYmd(days: unknown, now = new Date()): { from: string; to: string } {
   const n = clampRecheckDays(days);
   const shift = (k: number) => {
@@ -235,6 +235,8 @@ export function recheckWindowYmd(days: unknown, now = new Date()): { from: strin
   if (n === 4000) return { from: "2015-01-01", to: shift(32) };
   if (n === 2555) return { from: yearsBack(7), to: shift(32) };
   if (n === 1095) return { from: yearsBack(3), to: shift(32) };
+  if (n === 730) return { from: yearsBack(2), to: shift(32) };
+  if (n === 365) return { from: yearsBack(1), to: shift(32) };
   return { from: shift(-n), to: shift(n) };
 }
 

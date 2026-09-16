@@ -206,6 +206,7 @@ export type StartJournalJobOpts = {
   pipe?: string[];
   src?: "hands" | "plan";
   fromPipe?: boolean;
+  skipLeads?: boolean;
 };
 
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
@@ -247,7 +248,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     const kind = opts.kind === "balance" ? "balance" : "students";
     if (given.length && mode !== "audit" && mode !== "people-slow" && mode !== "people-recheck") {
       if (kind === "balance" && mode === "people") {
-        const side = journalPeopleSide(study);
+        const side = journalPeopleSide(study, opts.skipLeads ? { skipLeads: true } : undefined);
         const by = new Map((side.people || []).map((p) => [p.cid, p as PeopleJobRow]));
         return given.filter((g) => {
           const row = by.get(g.cid);
@@ -256,7 +257,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       }
       return given;
     }
-    const side = journalPeopleSide(study);
+    const side = journalPeopleSide(study, opts.skipLeads ? { skipLeads: true } : undefined);
     const people = (side.people || []) as PeopleJobRow[];
     if (mode === "audit") {
       let queue = [...people];
@@ -353,8 +354,8 @@ function loopPullKind(mode: JournalJobMode | ""): "archiveCatalog" | "life" | "a
   return "";
 }
 
-function peopleRowsFor(study: "1" | "2", kind: string): PeopleJobRow[] {
-  const side = journalPeopleSide(study);
+function peopleRowsFor(study: "1" | "2", kind: string, skipLeads = false): PeopleJobRow[] {
+  const side = journalPeopleSide(study, skipLeads ? { skipLeads: true } : undefined);
   return (side.people || []) as PeopleJobRow[];
 }
 
@@ -438,13 +439,14 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
                 ? "roster"
                 : opts.kind || "students";
   const study = opts.study === "2" ? "2" : "1";
+  const skipLeads = Boolean(opts.skipLeads) || /(?:^|&)leads=0(?:&|$)/.test(String(opts.name || ""));
   let recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
-  let items = buildItems({ ...opts, kind, recheck });
+  let items = buildItems({ ...opts, kind, recheck, skipLeads });
   let wave: RecheckWave = "";
   let follow: JournalJobItem[] = [];
   const archived = Boolean(opts.archived);
   if (mode === "people-recheck") {
-    const nxt = peopleRecheckAdvance(peopleRowsFor(study, kind), kind === "balance" ? "balance" : "students", "", []);
+    const nxt = peopleRecheckAdvance(peopleRowsFor(study, kind, skipLeads), kind === "balance" ? "balance" : "students", "", []);
     items = nxt.items;
     wave = nxt.wave;
     follow = nxt.follow;
@@ -471,6 +473,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
       study,
       dateFrom: String(opts.dateFrom || ""),
       archived,
+      skipLeads,
       pipe: Array.isArray(opts.pipe) ? opts.pipe.map(String).filter(Boolean) : [],
       msg: emptyMsg(mode, recheck),
       lastAt: nowIso(),
@@ -520,6 +523,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     take: Number(opts.take) || 0,
     filter: String(opts.filter || ""),
     catalogFirst: mode === "catalog",
+    skipLeads,
     items,
     idx: 0,
     waits: 0,
@@ -600,6 +604,7 @@ function continueAutoPipe(job: JournalJob) {
     pipe: rest.slice(1),
     src: "plan" as const,
     fromPipe: true,
+    skipLeads: job.skipLeads,
   };
   if (next === "archivesPupils" || next === "archives") {
     startJournalJob({
@@ -657,6 +662,7 @@ function continueAutoPipe(job: JournalJob) {
     pipe: rest.slice(1),
     src: "plan",
     fromPipe: true,
+    skipLeads: job.skipLeads,
   });
 }
 
@@ -852,7 +858,7 @@ function peekJobWave(job: JournalJob): ReturnType<typeof peopleRecheckAdvance> |
   const mode = job.mode;
   if (mode === "people-recheck") {
     return peopleRecheckAdvance(
-      peopleRowsFor(job.study, job.kind),
+      peopleRowsFor(job.study, job.kind, job.skipLeads),
       job.kind === "balance" ? "balance" : "students",
       job.wave,
       job.follow,
@@ -870,7 +876,7 @@ function peekJobWave(job: JournalJob): ReturnType<typeof peopleRecheckAdvance> |
 function advanceJobWave(job: JournalJob): { done: false; gap: number } | null {
   const mode = job.mode;
   if (mode === "people-slow") {
-    const nxt = peopleSlowAdvance(peopleRowsFor(job.study, "students"));
+    const nxt = peopleSlowAdvance(peopleRowsFor(job.study, "students", job.skipLeads));
     if (nxt.done || !nxt.items.length) return null;
     const first = nxt.items[0];
     patch({

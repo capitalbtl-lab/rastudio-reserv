@@ -272,6 +272,8 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.equal(clampRecheckDays(1095), 1095);
     assert.equal(clampRecheckDays(2555), 2555);
     assert.equal(clampRecheckDays(4000), 4000);
+    assert.equal(clampRecheckDays(365), 365);
+    assert.equal(clampRecheckDays(730), 730);
     assert.equal(clampRecheckDays(7), 7);
     assert.equal(clampRecheckDays(14), 14);
     assert.equal(clampRecheckDays(8), 32);
@@ -279,6 +281,9 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.equal(recheckWindowYmd(4000, now).from, "2015-01-01");
     assert.equal(recheckWindowYmd(1095, now).from, "2023-09-14");
     assert.equal(recheckWindowYmd(2555, now).from, "2019-09-14");
+    assert.equal(recheckWindowYmd(365, now).from, "2025-09-14");
+    assert.equal(recheckWindowYmd(730, now).from, "2024-09-14");
+    assert.equal(recheckWindowYmd(365, now).to, "2026-10-16");
     assert.equal(recheckWindowYmd(32, now).from, "2026-08-13");
     assert.equal(recheckWindowYmd(32, now).to, "2026-10-16");
     const later = new Date(2026, 8, 15);

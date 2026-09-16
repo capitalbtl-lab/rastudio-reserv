@@ -208,7 +208,7 @@ describe("фон истории из Alfa", () => {
     assert.match(jobSrc, /slowFill: mode === "people-slow"/);
     assert.match(jobSrc, /mode !== "people-slow"/);
     assert.match(jobSrc, /peopleJobQueue\(people, "students", false\)/);
-    assert.doesNotMatch(jobSrc, /skipLeads: true/);
+    assert.match(jobSrc, /opts.skipLeads \? \{ skipLeads: true \}/);
     assert.doesNotMatch(jobSrc, /skipLeads: kind === "balance"/);
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
@@ -337,7 +337,8 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 92 }), 3000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 182 }), 4000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 1095 }), 5000);
-    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 4000 }), 5000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 365 }), 5000);
+    assert.equal(jobGapOf({ mode: "people-recheck", recheck: true, recheckDays: 730 }), 5000);
     assert.equal(jobGapOf({ mode: "person", recheck: true, recheckDays: 4000 }), 5000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: false, recheckDays: 4000 }), 5000);
     assert.equal(jobGapOf({ mode: "people-recheck", recheck: false, recheckDays: 1095 }), 5000);
@@ -495,6 +496,8 @@ describe("фон истории из Alfa", () => {
     assert.match(plan, /Активные группы/);
     assert.match(plan, /Лиды действующих групп/);
     assert.match(plan, /Окно перепроверки/);
+    assert.match(plan, /mode === "auto"/);
+    assert.match(plan, /planFromIdToRecheckDays/);
     assert.match(plan, /Сброс настроек/);
     assert.match(plan, /Синхронизация расписания/);
     assert.match(plan, /процесс истории молчит/);
@@ -508,7 +511,8 @@ describe("фон истории из Alfa", () => {
     assert.match(plan, /translate-x-5/);
     assert.match(plan, /Лиды/);
     assert.match(pull, /opts.jobMode === "auto"/);
-    assert.match(pull, /mode: "roster-recheck"/);
+    assert.match(job, /skipLeads/);
+    assert.match(pull, /leads=0/);
     assert.match(job, /mode: "people-recheck"/);
     assert.match(pull, /archGroups=1/);
     assert.match(job, /groups-archived/);

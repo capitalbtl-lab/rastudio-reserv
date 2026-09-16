@@ -10,6 +10,7 @@ import {
   mskWall,
   nextSlotAt,
   pad2,
+  planFromIdToRecheckDays,
   planModeMeta,
   whenLabel,
   type CrmSyncPolicy,
@@ -262,7 +263,18 @@ function DraftForm({
           onChange={(e) => setAt(e.target.value)}
         />
       </label>
-      {isRecheck(mode) ? (
+      {mode === "auto" ? (
+        <>
+          <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Окно перепроверки</p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {(study === "2" ? PLAN_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PLAN_FROM_OPTS).map((o) => (
+              <Chip key={o.id} on={fromId === o.id} onClick={() => setFromId(o.id)}>
+                {o.label}
+              </Chip>
+            ))}
+          </div>
+        </>
+      ) : isRecheck(mode) ? (
         <>
           <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Окно</p>
           <div className="mt-1 flex flex-wrap gap-1.5">
@@ -273,7 +285,7 @@ function DraftForm({
             ))}
           </div>
         </>
-      ) : mode === "auto" || mode === "people" || mode === "people-slow" || mode === "balance" ? (
+      ) : mode === "people" || mode === "people-slow" || mode === "balance" ? (
         <>
           <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Годы (красная качка)</p>
           <div className="mt-1 flex flex-wrap gap-1.5">
@@ -305,23 +317,24 @@ function DraftForm({
           type="button"
           disabled={busy || !canSave}
           className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
-          onClick={() =>
+          onClick={() => {
+            const from = study === "2" && fromId !== "1" && fromId !== "2" ? "1" : fromId;
             onSave({
               on: true,
               mode,
               when: when(),
               at,
-              recheckDays,
-              dateFromId: study === "2" && fromId !== "1" && fromId !== "2" ? "1" : fromId,
+              recheckDays: mode === "auto" ? planFromIdToRecheckDays(from) : recheckDays,
+              dateFromId: from,
               study,
               label,
-            })
-          }
+            });
+          }}
         >
           Сохранить расписание
         </button>
       </div>
-      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. «Автомат · перепроверить 1–5»: состав, календарь, группы, касса, сверка — как синие кнопки, всех на диске, не только дырки слева. Лиды действующих групп — как галка «Запомнить» на шаге 1.</p>
+      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. Автомат: сначала дырки слева, потом перепроверка. Окно — чипы лет на этой карточке. Лиды в ночном слоте — как галка шага 1.</p>
     </div>
   );
 }
@@ -523,7 +536,7 @@ export function HistoryPlanPanel({
           onClick={() => {
             if (!onRunAuto) return;
             if (run) return;
-            if (!window.confirm("Перепроверить всех на диске сейчас? Это не «дыры слева», а синяя перепроверка: состав → календарь → активные группы → архив действующих групп (если чип) → касса → сверка. Окно — чипы сверху. Пауза как у синей. Галка лидов на шаге 1 не меняется.")) return;
+            if (!window.confirm("Перепроверить сейчас? Сначала доберёт дырки слева, потом всех справа. Окно — чипы лет. Чип «Лиды действующих групп» режет только этот прогон, галку шага 1 не трогает.")) return;
             onRunAuto({
               study: runStudy,
               dateFromId: runStudy === "2" && runFrom !== "1" && runFrom !== "2" ? "1" : runFrom,

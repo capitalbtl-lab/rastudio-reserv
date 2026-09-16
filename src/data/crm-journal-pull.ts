@@ -1566,6 +1566,7 @@ export async function journalPull(opts: {
         pipe,
         name: raw,
         src: "hands",
+        skipLeads: /(?:^|&)leads=0(?:&|$)/.test(raw),
       });
       return journalJobView();
     }

@@ -113,6 +113,7 @@ export type JournalJob = {
   follow: JournalJobItem[];
   archived: boolean;
   pipe: string[];
+  skipLeads: boolean;
 };
 
 export function emptyJournalJob(): JournalJob {
@@ -149,6 +150,7 @@ export function emptyJournalJob(): JournalJob {
     follow: [],
     archived: false,
     pipe: [],
+    skipLeads: false,
   };
 }
 
@@ -162,8 +164,18 @@ export function loadJournalJob(): JournalJob {
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<JournalJob>;
     const follow = Array.isArray(raw.follow) ? raw.follow : [];
     const pipe = Array.isArray(raw.pipe) ? raw.pipe.map((x) => String(x || "")).filter(Boolean) : [];
-    const wave: RecheckWave = raw.wave === "right" || raw.wave === "left" || raw.wave === "right2" ? raw.wave : "";
-    return { ...emptyJournalJob(), ...raw, items: Array.isArray(raw.items) ? raw.items : [], follow, pipe, wave, archived: Boolean(raw.archived) };
+    const wave: RecheckWave =
+      raw.wave === "preleft" || raw.wave === "right" || raw.wave === "left" || raw.wave === "right2" || raw.wave === "left2" ? raw.wave : "";
+    return {
+      ...emptyJournalJob(),
+      ...raw,
+      items: Array.isArray(raw.items) ? raw.items : [],
+      follow,
+      pipe,
+      wave,
+      archived: Boolean(raw.archived),
+      skipLeads: Boolean(raw.skipLeads),
+    };
   } catch {
     return emptyJournalJob();
   }
@@ -569,7 +581,7 @@ export function jobGapMs(_mode?: JournalJobMode | "", periodDays?: number) {
   if (n > 0 && n <= 14) return JOURNAL_FORTNIGHT_GAP_MS;
   if (n === 32 || (n > 14 && n < 60)) return JOURNAL_WINDOW_GAP_MS;
   if (n === 92 || (n >= 60 && n < 140)) return JOURNAL_QUARTER_GAP_MS;
-  if (n === 182 || (n >= 140 && n < 400)) return JOURNAL_HALF_GAP_MS;
+  if (n === 182 || (n >= 140 && n < 300)) return JOURNAL_HALF_GAP_MS;
   return JOURNAL_ONE_GAP_MS;
 }
 
