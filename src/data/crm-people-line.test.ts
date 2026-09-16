@@ -24,40 +24,40 @@ describe("карточка шага 2: дырка/лишние по id · пач
     assert.equal(peopleClock(""), "");
   });
 
-  it("цифру диск/Alfa не рисуем — только дырка id", () => {
+  it("диск и Alfa на карточке, дырка по id", () => {
     const r = peopleLessonsLine({ disk: 602, alfa: 771, hole: 169, plus: 0, at: "2026-09-12T01:13:00.000Z" });
-    assert.equal(r.line, "дырка 169 · пачка 7 · +0 · 04:13");
+    assert.equal(r.line, "диск 602 · Alfa 771 · дырка 169 · пачка 7 · +0 · 04:13");
     assert.equal(r.hint, "пачка прошла · не сели · не жать ещё раз");
-    assert.equal(/602|771|осталось/.test(r.line), false);
+    assert.equal(/осталось/.test(r.line), false);
   });
 
-  it("дырка 1 — без 338/339", () => {
+  it("дырка 1 — диск 338 · Alfa 339, не 338/339 как закон", () => {
     const r = peopleLessonsLine({ disk: 338, alfa: 339, hole: 1, plus: 0, at: "2026-09-12T01:02:00.000Z" });
-    assert.equal(r.line, "дырка 1 · пачка 7 · +0 · 04:02");
+    assert.equal(r.line, "диск 338 · Alfa 339 · дырка 1 · пачка 7 · +0 · 04:02");
     assert.equal(r.hint, "пачка прошла · не сели · не жать ещё раз");
   });
 
-  it("качка живая: дырка / пачка", () => {
+  it("качка живая: диск / Alfa / дырка / пачка", () => {
     const r = peopleLessonsLine({ disk: 276, alfa: 286, hole: 10, plus: 8, at: "2026-09-12T01:20:00.000Z" });
-    assert.equal(r.line, "дырка 10 · пачка 7 · +8 · 04:20");
+    assert.equal(r.line, "диск 276 · Alfa 286 · дырка 10 · пачка 7 · +8 · 04:20");
     assert.equal(r.hint, "идёт · ещё 2 пачки");
     assert.equal(r.packsLeft, 2);
   });
 
   it("без дырки в штампе — не считаем Alfa − диск", () => {
     const idle = peopleLessonsLine({ disk: 602, alfa: 771, at: "2026-09-12T01:13:00.000Z" });
-    assert.equal(idle.line, "пачка 7 · 04:13");
+    assert.equal(idle.line, "диск 602 · Alfa 771 · пачка 7 · 04:13");
     assert.equal(idle.hint, "");
     const run = peopleLessonsLine({ disk: 602, alfa: 771, plus: 0, running: true, at: "2026-09-12T01:13:00.000Z" });
-    assert.equal(run.line, "пачка 7 · +0 · 04:13");
+    assert.equal(run.line, "диск 602 · Alfa 771 · пачка 7 · +0 · 04:13");
     assert.equal(run.hint, "");
   });
 
   it("лишние id на карточке", () => {
     const r = peopleLessonsLine({ disk: 141, alfa: 142, hole: 0, extra: 2, plus: 0, at: "2026-09-12T01:02:00.000Z" });
-    assert.equal(r.line, "лишние 2 · пачка 7 · +0 · 04:02");
+    assert.equal(r.line, "диск 141 · Alfa 142 · лишние 2 · пачка 7 · +0 · 04:02");
     const ok = peopleLessonsLine({ disk: 286, alfa: 286, hole: 0, extra: 0, plus: 8, at: "2026-09-12T01:20:00.000Z" });
-    assert.equal(ok.line, "пачка 7 · +8 · 04:20");
+    assert.equal(ok.line, "диск 286 · Alfa 286 · пачка 7 · +8 · 04:20");
     assert.equal(ok.hint, "ничего нового");
   });
 
@@ -72,9 +72,11 @@ describe("карточка шага 2: дырка/лишние по id · пач
     assert.equal(peopleStudentBadge({ short: false, dups: true, full: true }), "dups");
   });
 
-  it("экран: строка на карточке без 491/491", () => {
+  it("экран: диск/Alfa на карточке, закон — набор id", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /peopleLessonsLine/);
+    assert.match(ui, /disk: row.lessons/);
+    assert.match(ui, /alfa: alfaShown/);
     assert.match(ui, /hole: row.holeN/);
     assert.match(ui, /extra: row.extraN/);
     assert.match(ui, /keepAlfa/);

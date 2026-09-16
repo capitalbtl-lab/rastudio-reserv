@@ -1,4 +1,4 @@
-/** Строка шага 2: дырка/лишние по id · пачка · +K · ЧЧ:ММ. Цифру диск/Alfa не смотрим. */
+/** Строка шага 2: диск/Alfa — справка на карточке. Закон — набор id (дырка/лишние), не эти цифры. */
 
 import { LESSON_INBOUND_RUN } from "./crm-customer-sync.ts";
 
@@ -41,8 +41,6 @@ export function peopleLessonsLine(opts: {
   at?: string;
   running?: boolean;
 }): { line: string; hint: string; packsLeft?: number } {
-  void opts.disk;
-  void opts.alfa;
   const holeKnown = opts.hole != null && Number.isFinite(Number(opts.hole));
   const extraKnown = opts.extra != null && Number.isFinite(Number(opts.extra));
   const hole = holeKnown ? Math.max(0, Number(opts.hole) || 0) : 0;
@@ -52,6 +50,9 @@ export function peopleLessonsLine(opts: {
   const hasPlus = opts.plus != null && Number.isFinite(Number(opts.plus));
   const k = hasPlus ? Math.max(0, Math.floor(Number(opts.plus))) : 0;
   const parts: string[] = [];
+  const diskN = opts.disk != null && Number.isFinite(Number(opts.disk)) ? Math.max(0, Number(opts.disk) || 0) : null;
+  const alfaN = opts.alfa != null && Number.isFinite(Number(opts.alfa)) ? Math.max(0, Number(opts.alfa) || 0) : null;
+  if (diskN != null || alfaN != null) parts.push(`диск ${diskN ?? "—"} · Alfa ${alfaN ?? "—"}`);
   if (holeKnown && hole > 0) parts.push(`дырка ${hole}`);
   if (extraKnown && extra > 0) parts.push(`лишние ${extra}`);
   parts.push(`пачка ${pack}`);
