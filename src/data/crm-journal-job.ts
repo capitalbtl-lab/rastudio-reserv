@@ -3,7 +3,7 @@
 import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } from "./crm-journal-pull.ts";
 import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
-import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd } from "./crm-inbound-core.ts";
+import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd, groupJournalGreen } from "./crm-inbound-core.ts";
 import { loadSyncPolicy, saveSyncPolicyRun } from "./crm-sync-policy.ts";
 import { appendPlanLog, loadPlanLog } from "./crm-sync-plan-log.ts";
 import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, scheduleOf, stampPlanFired, stampPlanSkip } from "./crm-sync-policy-core.ts";
@@ -41,6 +41,7 @@ import {
   JOB_WAIT_CAP,
   isRecheckWaveMode,
   jobHasIce,
+  jobItemSkipped,
   type JournalJob,
   type JournalJobItem,
   type JournalJobMode,
@@ -149,7 +150,7 @@ function stoppedMsg(job?: JournalJob) {
   return stoppedJobMsg(Number(j.n) || 0, Number(j.total) || 0);
 }
 
-function packGrain(parts: { key: string; label: string; from: string; to: string; done: boolean; weak?: boolean; rechecked?: boolean; lessons?: number; needDetails?: number; conducted?: number; at?: string; err?: string }[], grain: Grain) {
+function packGrain(parts: { key: string; label: string; from: string; to: string; done: boolean; weak?: boolean; rechecked?: boolean; empty?: boolean; lessons?: number; needDetails?: number; conducted?: number; at?: string; err?: string }[], grain: Grain) {
   const list = parts || [];
   const byKey = new Map(list.map((p) => [p.key, p]));
   const have = new Set(list.map((p) => p.key));
@@ -160,21 +161,18 @@ function packGrain(parts: { key: string; label: string; from: string; to: string
       const done = present.every((k) => byKey.get(k)?.done);
       const weak = present.some((k) => byKey.get(k)?.weak);
       const rechecked = present.length > 0 && present.every((k) => byKey.get(k)?.rechecked);
-      return { key: c.key, label: c.label, done, weak, rechecked };
+      const empty = present.length > 0 && present.every((k) => byKey.get(k)?.empty);
+      return { key: c.key, label: c.label, done, weak, rechecked, empty };
     });
 }
 
 function nextGroupPart(
-  parts: { key: string; label: string; done: boolean; weak?: boolean; rechecked?: boolean; at?: string }[],
+  parts: { key: string; label: string; done: boolean; weak?: boolean; rechecked?: boolean; empty?: boolean; at?: string }[],
   grain: Grain,
   age?: string,
 ) {
   const chunks = packGrain(parts, clampGrain(age, grain));
-  const hole = chunks.find((c) => !c.done || c.weak);
-  if (hole) return hole;
-  const unverified = chunks.find((c) => !c.rechecked);
-  if (unverified) return unverified;
-  return chunks[0] || null;
+  return chunks.find((c) => !c.empty && (!c.done || c.weak)) || null;
 }
 
 function fillFinished(parts: { done: boolean; weak?: boolean }[], grain: Grain, age?: string) {
@@ -324,10 +322,23 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       return chunks.map((c) => ({ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: c.key, periodLabel: c.label }));
     }
     const rows = groups.map((g) => groupFillRow(g));
-    const need = rows.filter((r) => (mode === "groups-recheck" ? fillNeedsRecheck(r.parts || [], grain, r.age) : !fillFinished(r.parts || [], grain, r.age) || (r.parts || []).some((p) => p.weak)));
-    const done = rows.filter((r) => fillFinished(r.parts || [], grain, r.age));
-    const queue = mode === "groups-recheck" ? (need.length ? need : done) : need;
-    return queue.map((r) => ({ groupId: r.groupId, branchId: r.branchId, name: r.name }));
+    if (mode === "groups-recheck") {
+      const need = rows.filter((r) => !groupJournalGreen(r));
+      const done = rows.filter((r) => groupJournalGreen(r));
+      const queue = need.length || done.length ? [...need, ...done] : [];
+      return queue.map((r) => ({ groupId: r.groupId, branchId: r.branchId, name: r.name }));
+    }
+    const items: JournalJobItem[] = [];
+    for (const r of rows) {
+      if (groupJournalGreen(r)) continue;
+      const chunks = packGrain(r.parts || [], clampGrain(r.age, grain));
+      for (const c of chunks) {
+        if (c.empty) continue;
+        if (c.done && !c.weak) continue;
+        items.push({ groupId: r.groupId, branchId: r.branchId, name: r.name, periodKey: c.key, periodLabel: c.label });
+      }
+    }
+    return items;
   }
   if (mode === "catalog") return [{ name: "архив клиентов" }];
   if (mode === "life") return [{ name: "сроки групп" }];
@@ -366,19 +377,20 @@ function peopleRowsFor(study: "1" | "2", kind: string, skipLeads = false): Peopl
 function groupRowsFor(opts: { school?: string; archived?: boolean; grain?: Grain }): GroupWaveRow[] {
   const school = String(opts.school || "");
   const wantArch = Boolean(opts.archived);
-  const grain = (opts.grain || "quarter") as Grain;
+  void opts.grain;
   const groups = journalPullGroups().filter((g) => {
     if (school && g.school !== school) return false;
     return wantArch ? Boolean(g.archived) : !g.archived;
   });
   return groups.map((g) => {
     const row = groupFillRow(g);
+    const green = groupJournalGreen(row);
     return {
       groupId: row.groupId,
       branchId: row.branchId,
       name: row.name,
-      finished: fillFinished(row.parts || [], grain, row.age),
-      needRecheck: fillNeedsRecheck(row.parts || [], grain, row.age),
+      finished: green,
+      needRecheck: false,
       roster: Boolean(row.roster),
     };
   });
@@ -973,21 +985,25 @@ function finishWaveOrStop(job: JournalJob, msg: string, n = job.n): { done: true
 
 function skipAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; gap: number; msg?: string } {
   const idx = job.idx + 1;
-  const moreItems = idx < job.items.length;
   const peopleBlue = job.mode === "people-recheck";
-  const groupBlue = job.mode === "groups-recheck";
-  const waveBlue = peopleBlue || groupBlue;
+  const groupJob = job.mode === "groups" || job.mode === "groups-recheck" || job.mode === "group-one";
+  const waveBlue = peopleBlue || job.mode === "groups-recheck";
   const itemKey = peopleBlue ? Number(item.cid) || 0 : Number(item.groupId) || 0;
   const keyOf = (x: JournalJobItem) => (peopleBlue ? Number(x.cid) || 0 : Number(x.groupId) || 0);
-  const skip = waveBlue
-    ? [...(job.skip || []).filter((x) => keyOf(x) !== itemKey), item]
+  const skipItem = groupJob ? { groupId: item.groupId, branchId: item.branchId, name: item.name } : item;
+  const skip = waveBlue || groupJob
+    ? [...(job.skip || []).filter((x) => keyOf(x) !== itemKey), skipItem]
     : job.skip || [];
   const defer = waveBlue
     ? (job.defer || []).filter((x) => keyOf(x) !== itemKey)
     : job.defer || [];
   const waits = resetJobWaits();
+  const items = groupJob
+    ? (job.items || []).filter((x, i) => i < job.idx || Number(x.groupId) !== Number(item.groupId) || i === job.idx)
+    : job.items;
+  const moreItems = idx < items.length;
   if (moreItems) {
-    const nextName = job.items[idx]?.name || "";
+    const nextName = items[idx]?.name || "";
     const msg = `«${item.name}»: Alfa не отвечает, берём следующего.`;
     notePlan({
       kind: "fail",
@@ -1001,20 +1017,21 @@ function skipAfterCap(job: JournalJob, item: JournalJobItem): { done: boolean; g
     patch({
       id: job.id,
       idx,
+      items,
       n: job.n,
       defer,
       skip,
       ...waits,
       running: true,
       cur: `${pauseTxt(job)} · дальше ${nextName}`,
-      fill: fillOf(job.mode, job.kind, job.items[idx]),
+      fill: fillOf(job.mode, job.kind, items[idx]),
       msg,
     });
     return { done: false, gap: jobGapOf(job) };
   }
-  const more = advanceJobWave({ ...job, idx, defer, skip, ...waits });
+  const more = advanceJobWave({ ...job, idx, items, defer, skip, ...waits });
   if (more) return more;
-  return finishWaveOrStop({ ...job, idx, defer, skip, ...waits }, `Alfa не отвечает на «${item.name}». Остановились.`);
+  return finishWaveOrStop({ ...job, idx, items, defer, skip, ...waits }, `Alfa не отвечает на «${item.name}». Остановились.`);
 }
 
 /** Синий календарь: после cap — в конец очереди, не выкинуть навсегда. */
@@ -1164,8 +1181,18 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     if (more) return more;
     return finishWaveOrStop(job, doneMsg(job));
   }
+  while (job.idx < job.items.length && jobItemSkipped(job.items[job.idx], job.skip)) {
+    job = patch({ id, idx: job.idx + 1 });
+  }
+  if (job.idx >= job.items.length) {
+    const more = advanceJobWave(job);
+    if (more) return more;
+    return finishWaveOrStop(job, doneMsg(job));
+  }
   let item = job.items[job.idx];
-  if (mode === "groups" && item.groupId) {
+  const blue = mode === "groups-recheck";
+  const windowed = blue && job.recheck;
+  if (mode === "groups" && item.groupId && !item.periodKey) {
     const g = journalPullGroups().find((x) => x.groupId === item.groupId && x.branchId === item.branchId) || journalPullGroups().find((x) => x.groupId === item.groupId);
     if (g) {
       const row = groupFillRow(g);
@@ -1199,11 +1226,12 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       customerId: Number(item.cid) || 0,
       branchId: Number(item.branchId) || job.branchId,
       groupId: Number(item.groupId) || 0,
-      periodKey: item.periodKey || "",
+      periodKey: blue && !windowed ? "whole" : item.periodKey || "",
       grain: job.grain,
       recheck: Boolean(job.recheck) || (mode === "group-one" && !item.periodKey),
-      dateFrom: job.dateFrom,
-      dateTo: job.dateTo,
+      prune: blue,
+      dateFrom: blue ? (windowed ? job.dateFrom : "2015-01-01") : job.dateFrom,
+      dateTo: blue ? (windowed ? job.dateTo || "" : "") : job.dateTo,
       recheckDays: job.recheckDays,
       probe: mode === "probe",
       school: job.school || job.filter,
@@ -1241,7 +1269,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   const cashRetry = shouldRetryCash(pullKind, live.recheck, res);
   const openRetry = shouldRetryOpenRecheck(live.recheck, pullKind, res);
   const shortRetry = shouldRetryShortPeople(mode, live.recheck, pullKind, res);
-  const censusMiss = !res.ok || (pullKind === "students" && busy && !res.ok);
+  const censusMiss = !res.ok || res.pagesComplete === false || (pullKind === "students" && busy && !res.ok);
   if (shortRetry && res.ok && !busy) {
     patch({
       id,
@@ -1281,7 +1309,44 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
           ? String(res.extra || res.error || `«${item.name}»: касса не дочитана.`)
           : `«${item.name}»: перепись не дошла · ещё этот.`,
     });
-    return { done: false, gap: jobRetryGapMs(err || "перепись не дошла", live.recheck ? jobPeriodDays(live) : 0) };
+    return { done: false, gap: jobRetryGapMs(err || "перепись не дошла", blue || live.recheck ? jobPeriodDays({ ...live, recheck: true }) : 0) };
+  }
+  if (pullKind === "group") {
+    const holeN = Number(res.holeN) || 0;
+    const extraN = Number(res.extraN) || 0;
+    const seated = Number(res.seated) || 0;
+    const staySame = () => {
+      patch({
+        id,
+        ...resetJobWaits(),
+        cur: `${pauseTxt(live)} · ещё «${item.name}»`,
+        fill: fillOf(mode, job.kind, item),
+        msg: String(res.extra || `«${item.name}»: не хватает, ещё этот.`),
+      });
+      return { done: false as const, gap: jobGapOf(live) };
+    };
+    if ((mode === "groups" || mode === "group-one") && !blue && holeN && seated) return staySame();
+    if ((mode === "groups" || mode === "group-one") && !blue && holeN && !seated) {
+      const skip = [...(live.skip || []), { groupId: item.groupId, branchId: item.branchId, name: item.name, periodKey: item.periodKey, periodLabel: item.periodLabel }];
+      const idx = live.idx + 1;
+      const n = live.n + 1;
+      if (idx < live.items.length) {
+        patch({
+          id,
+          skip,
+          n,
+          idx,
+          ...resetJobWaits(),
+          cur: `${pauseTxt(live)} · дальше ${live.items[idx]?.name || ""}`,
+          fill: fillOf(mode, job.kind, live.items[idx]),
+          msg: `«${item.name}»: порция спрошена, дырка не села. Дальше.`,
+          running: true,
+        });
+        return { done: false, gap: jobGapOf(live) };
+      }
+      return finishWaveOrStop({ ...live, n, idx, skip, ...resetJobWaits() }, doneMsg({ ...live, n, idx }), n);
+    }
+    if (blue && !windowed && (holeN || extraN) && seated) return staySame();
   }
   if (mode === "details" && res.more) {
     patch({

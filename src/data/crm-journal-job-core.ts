@@ -378,6 +378,19 @@ export function peopleNeedCashLoad(row: PeopleJobRow) {
   return !peopleJobFinished(row, "balance");
 }
 
+/** Порция или вся группа снята с этой кнопки. Без periodKey — вся группа. */
+export function jobItemSkipped(item: JournalJobItem, skip: JournalJobItem[] = []) {
+  const gid = Number(item.groupId) || 0;
+  const cid = Number(item.cid) || 0;
+  const pk = String(item.periodKey || "");
+  return (skip || []).some((s) => {
+    if (cid && Number(s.cid) === cid) return true;
+    if (!gid || Number(s.groupId) !== gid) return false;
+    const sp = String(s.periodKey || "");
+    return !sp || sp === pk;
+  });
+}
+
 export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balance", recheck: boolean) {
   const needLoad = people.filter((r) => (kind === "balance" ? peopleNeedCashLoad(r) : !peopleJobFinished(r, kind)));
   const needRecheck = people.filter((r) => {
@@ -481,8 +494,14 @@ export function groupsRecheckAdvance(
   const deferSet = new Set((defer || []).map((d) => Number(d.groupId) || 0).filter(Boolean));
   const leftNow = () => mergeDeferItems(rows.filter(onLeft).map(toItem), defer).filter((x) => !skipSet.has(Number(x.groupId) || 0));
   const rightNow = () => {
-    const need = rows.filter((r) => (roster ? Boolean(r.roster) : r.needRecheck));
-    return (need.length ? need : rows.filter(onRight))
+    if (roster) {
+      const need = rows.filter((r) => Boolean(r.roster));
+      return (need.length ? need : rows.filter(onRight))
+        .map(toItem)
+        .filter((x) => !skipSet.has(Number(x.groupId) || 0) && !deferSet.has(Number(x.groupId) || 0));
+    }
+    return rows
+      .filter(onRight)
       .map(toItem)
       .filter((x) => !skipSet.has(Number(x.groupId) || 0) && !deferSet.has(Number(x.groupId) || 0));
   };
@@ -653,7 +672,7 @@ export function jobPeriodDays(input?: { recheck?: boolean; recheckDays?: number;
   return Math.max(0, Math.floor((t1 - t0) / 86400000) + 1);
 }
 
-/** Синяя таблица по окну. Красная сюда не ходит — jobGapOf режет. */
+/** Синяя таблица по окну. Красная сюда не ходит — jobGapOf режет. Шаг 3 синяя — и слева по чипу. */
 export function jobGapMs(_mode?: JournalJobMode | "", periodDays?: number) {
   const n = Number(periodDays) || 0;
   if (n > 0 && n <= 14) return JOURNAL_FORTNIGHT_GAP_MS;
@@ -664,6 +683,7 @@ export function jobGapMs(_mode?: JournalJobMode | "", periodDays?: number) {
 }
 
 export function jobGapOf(job?: { mode?: JournalJobMode | ""; recheck?: boolean; recheckDays?: number; dateFrom?: string; dateTo?: string }): number {
+  if (job?.mode === "groups-recheck") return jobGapMs(job.mode, jobPeriodDays({ ...job, recheck: true }));
   if (!job?.recheck) return JOURNAL_ONE_GAP_MS;
   return jobGapMs(job.mode, jobPeriodDays(job));
 }

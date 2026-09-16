@@ -391,6 +391,38 @@ export function journalIdsReady(p: {
   return diskUniq === censusN;
 }
 
+/** Шаг 3: зелёный только если перепись всего журнала дошла и дырок/лишнего нет нигде. */
+export function groupJournalGreen(r: { censusOk?: boolean; holeN?: number; extraN?: number }) {
+  return Boolean(r.censusOk) && !(Number(r.holeN) || 0) && !(Number(r.extraN) || 0);
+}
+
+export type GroupPeriodHit = { pagesComplete?: boolean; holeN?: number; extraN?: number; at?: string; censusN?: number };
+export type GroupWhollyHit = GroupPeriodHit;
+
+/** Сейчас по штампам: целиком, если оно новее порций; иначе сумма спрошенных порций. */
+export function journalGroupNow(
+  wholly: GroupWhollyHit | undefined,
+  hits: Record<string, GroupPeriodHit> | undefined,
+  keys: string[],
+) {
+  const map = hits || {};
+  const lastHit = keys.reduce((m, k) => {
+    const at = String(map[k]?.at || "");
+    return at > m ? at : m;
+  }, "");
+  const whollyOk = Boolean(wholly?.pagesComplete);
+  const whollyNewer = whollyOk && String(wholly?.at || "") >= lastHit;
+  if (whollyNewer) {
+    return { censusOk: true, holeN: Number(wholly?.holeN) || 0, extraN: Number(wholly?.extraN) || 0 };
+  }
+  const asked = keys.length > 0 && keys.every((k) => Boolean(map[k]?.pagesComplete));
+  return {
+    censusOk: asked,
+    holeN: keys.reduce((s, k) => s + (Number(map[k]?.holeN) || 0), 0),
+    extraN: keys.reduce((s, k) => s + (Number(map[k]?.extraN) || 0), 0),
+  };
+}
+
 export function mergeSeenLessonIds(prev: number[] | undefined, pulled: { lessonId?: number }[]) {
   const set = new Set<number>();
   for (const n of prev || []) {

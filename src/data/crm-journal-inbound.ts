@@ -196,7 +196,7 @@ function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
 export async function inboundJournalGroup(
   branch: number,
   gid: number,
-  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean; recheck?: boolean; recheckDays?: number; groupName?: string },
+  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean; recheck?: boolean; prune?: boolean; recheckDays?: number; groupName?: string },
 ) {
   if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[], capped: false, hole: [] as number[], gone: [] as number[], pagesComplete: true };
   const slots = opts?.slots || (opts?.groupName ? [] : (await import("./alfacrm-schedule")).listAdminSlots());
@@ -212,6 +212,7 @@ export async function inboundJournalGroup(
     subject: String(cached?.subject || slot?.subject || ""),
   };
   const recheck = Boolean(opts?.recheck);
+  const prune = opts?.prune === undefined ? recheck : Boolean(opts.prune);
   const days = clampRecheckDays(opts?.recheckDays);
   const winRecheck = recheck ? iceWindowOrNow(true, opts?.dateFrom, opts?.dateTo, days) : null;
   const dateFrom = winRecheck ? winRecheck.from : opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
@@ -284,7 +285,9 @@ export async function inboundJournalGroup(
   const holdIds = [...hold];
   const pagesComplete = !hitCap;
   let calendar = mergeLocalCalendar(pulled, cached?.calendar, hold, "union");
-  if (recheck && pagesComplete) {
+  const haveBefore = uniquePositiveIds(sliceWin(calendar).map((l) => Number(l.lessonId) || 0));
+  const goneBefore = groupWindowGone(haveBefore, census, holdIds, pagesComplete);
+  if (prune && pagesComplete) {
     calendar = pruneCalendarToAlfaIds(calendar, census, hold, [], winFrom, winTo);
   }
   const have = uniquePositiveIds(sliceWin(calendar).map((l) => Number(l.lessonId) || 0));
@@ -308,14 +311,15 @@ export async function inboundJournalGroup(
     const id = Number(l.lessonId) || 0;
     return id > 0 && !beforeIds.has(id);
   });
+  const seated = seatedNew.length + (prune ? goneBefore.length : 0);
   const now = new Date().toISOString();
   const noteOf = (n: number, suffix = "") =>
     n > 0 ? `«${ctx.groupName}»: ${n} зан.${suffix}` : `«${ctx.groupName}»: в Alfa занятий нет${suffix}`;
   const gapNote = `${hole.length ? `, дырок ${hole.length}` : ""}${gone.length ? `, ушло ${gone.length}` : ""}`;
   const samePrint = cached && journalFingerprint(calendar) === journalFingerprint(cached.calendar || []);
   const sameMoney = cached && lessonPupilsKey(calendar) === lessonPupilsKey(cached.calendar || []);
-  const gap = { hole, gone, pagesComplete, capped: !pagesComplete, censusN, diskUniq, diskRows, checksum, ready };
-  if (samePrint && sameMoney && !recheck) {
+  const gap = { hole, gone, pagesComplete, capped: !pagesComplete, censusN, diskUniq, diskRows, checksum, ready, seated };
+  if (samePrint && sameMoney && !recheck && !prune) {
     if (opts?.deep) {
       const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
       if (enriched.changed) {

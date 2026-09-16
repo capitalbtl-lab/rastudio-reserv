@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   pulledPeriodKeys,
   chunkOverlapsLife,
+  chunkOutsideLessons,
   chunkDone,
   journalChunks,
   groupAge,
@@ -58,6 +59,9 @@ describe("перепроверка журнала", () => {
     assert.ok(!parts.some((p) => p.key.startsWith("2024")));
     assert.equal(groupAge("01.02.2026", "30.06.2026", new Date("2026-09-09")).id, "young");
     assert.match(lifeLabel("01.02.2026", "30.06.2026"), /фев 2026/);
+    assert.equal(chunkOutsideLessons({ from: "01.01.2026", to: "31.03.2026" }, "01.04.2026", "30.06.2026"), true);
+    assert.equal(chunkOutsideLessons({ from: "01.07.2026", to: "30.09.2026" }, "01.04.2026", "30.06.2026"), true);
+    assert.equal(chunkOutsideLessons({ from: "01.04.2026", to: "30.06.2026" }, "01.04.2026", "30.06.2026"), false);
   });
 
   it("обрыв пакета: weak не даёт зелёный бейдж", () => {

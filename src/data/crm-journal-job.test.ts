@@ -36,6 +36,7 @@ import {
   stoppedJobMsg,
   isRecheckWaveMode,
   jobHasIce,
+  jobItemSkipped,
 } from "./crm-journal-job-core.ts";
 
 describe("фон истории из Alfa", () => {
@@ -98,7 +99,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobRetryGapMs("429 Too Many Requests", 0), 120_000);
     assert.equal(jobRetryGapMs("ок"), 5000);
     assert.equal(jobRetryGapMs("нет ответа", 14), 2000);
-    assert.match(readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8"), /gap: jobRetryGapMs\(err \|\| "перепись не дошла", live\.recheck \? jobPeriodDays\(live\) : 0\)/);
+    assert.match(readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8"), /jobRetryGapMs\(err \|\| "перепись не дошла", blue \|\| live.recheck \? jobPeriodDays/);
   });
   it("очередь учеников: слева неготовые, справа перепроверка", () => {
     const people = [
@@ -349,6 +350,11 @@ describe("фон истории из Alfa", () => {
     const gAfterPre = groupsRecheckAdvance([gRight, gLeft], "preleft", g1.follow, false);
     assert.equal(gAfterPre.wave, "right");
     assert.deepEqual(gAfterPre.items.map((x) => x.groupId), [10]);
+    const gGreenA = { groupId: 21, branchId: 1, name: "уже", finished: true, needRecheck: false };
+    const gGreenB = { groupId: 22, branchId: 1, name: "стала", finished: true, needRecheck: true };
+    const gWave2 = groupsRecheckAdvance([gGreenA, gGreenB], "preleft", [], false);
+    assert.equal(gWave2.wave, "right");
+    assert.deepEqual(gWave2.items.map((x) => x.groupId).sort(), [21, 22]);
     const g2 = groupsRecheckAdvance([gRight, gLeft], "right", [], false);
     assert.equal(g2.wave, "left");
     assert.deepEqual(g2.items.map((x) => x.groupId), [11]);
@@ -421,6 +427,10 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapOf({ mode: "person", recheck: true, recheckDays: 92 }), 3000);
     assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 92 }), 3000);
     assert.equal(jobGapOf({ mode: "groups-recheck", recheck: true, recheckDays: 182 }), 4000);
+    assert.equal(jobGapOf({ mode: "groups-recheck", recheck: false, recheckDays: 7 }), 2000);
+    assert.equal(jobGapOf({ mode: "groups-recheck", recheck: false, recheckDays: 32 }), 2500);
+    assert.equal(jobItemSkipped({ groupId: 5, name: "г", periodKey: "2026q1" }, [{ groupId: 5, name: "г" }]), true);
+    assert.equal(jobItemSkipped({ groupId: 5, name: "г", periodKey: "2026q2" }, [{ groupId: 5, name: "г", periodKey: "2026q1" }]), false);
     assert.equal(jobGapOf({ mode: "people", recheck: true, recheckDays: 32 }), 2500);
     assert.equal(jobGapOf({ mode: "people", recheck: true, recheckDays: 92 }), 3000);
     assert.equal(jobGapOf({ mode: "roster-recheck", recheck: true, recheckDays: 32 }), 2500);
@@ -536,7 +546,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /skipAfterCap/);
     assert.match(job, /finishWaveOrStop/);
     assert.match(job, /wave: isRecheckWaveMode\(job.mode\) \? "left2"/);
-    assert.match(job, /dateTo: job.dateTo/);
+    assert.match(job, /dateTo: blue \? \(windowed \? job.dateTo/);
     assert.match(job, /iceWindowOrNow/);
     assert.match(job, /ensureJobIce/);
     assert.match(job, /freezeIce/);

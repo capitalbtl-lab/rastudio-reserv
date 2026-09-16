@@ -258,6 +258,16 @@ export function chunkOverlapsLife(chunk: { from: string; to: string }, from?: st
   return a <= e && b >= s;
 }
 
+/** Пустые порции до первого и после последнего урока в красную очередь не ставим. */
+export function chunkOutsideLessons(chunk: { from: string; to: string }, first?: Date | string | null, last?: Date | string | null) {
+  const a = parseLessonDate(chunk.from);
+  const b = parseLessonDate(chunk.to);
+  const f = first instanceof Date ? first : parseLessonDate(String(first || ""));
+  const l = last instanceof Date ? last : parseLessonDate(String(last || ""));
+  if (!a || !b || !f || !l) return false;
+  return b < f || a > l;
+}
+
 export function lifeLabel(from?: string, to?: string) {
   const a = parseLessonDate(from);
   const b = parseLessonDate(to);

@@ -14,6 +14,7 @@ export type HistoryLoadSpec = {
   dateFrom?: string;
   dateTo?: string;
   recheckDays?: number;
+  prune?: boolean;
   probe?: boolean;
   school?: string;
   name?: string;
@@ -30,6 +31,10 @@ export type HistoryLoadResult = {
   lastArchives?: { branch?: string };
   lastArchivesPupils?: { left?: number };
   student?: { paysMore?: boolean; paysOk?: boolean };
+  pagesComplete?: boolean;
+  holeN?: number;
+  extraN?: number;
+  seated?: number;
 };
 
 /** Пропуск кассы: complete, либо страницы прошли и есть строки / пустой проход. Синяя force — не skip. */
@@ -52,6 +57,7 @@ export async function historyLoadOne(spec: HistoryLoadSpec): Promise<HistoryLoad
     dateFrom: spec.dateFrom,
     dateTo: spec.dateTo,
     recheckDays: spec.recheckDays,
+    prune: Boolean(spec.prune),
     probe: Boolean(spec.probe),
     school: spec.school,
     name: spec.name,

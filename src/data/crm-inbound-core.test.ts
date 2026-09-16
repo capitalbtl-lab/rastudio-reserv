@@ -28,6 +28,8 @@ import {
   groupWindowGone,
   idsChecksum,
   journalIdsReady,
+  groupJournalGreen,
+  journalGroupNow,
   censusSeatLessonId,
 } from "./crm-inbound-core.ts";
 
@@ -360,6 +362,18 @@ describe("inbound не сбрасывает курс сайта", () => {
       journalIdsReady({ pagesComplete: true, holeN: 0, extraN: 2, diskUniq: 14, censusN: 12, diskRows: 14 }),
       false,
     );
+    assert.equal(groupJournalGreen({ censusOk: true, holeN: 0, extraN: 0 }), true);
+    assert.equal(groupJournalGreen({ censusOk: true, holeN: 1, extraN: 0 }), false);
+    assert.equal(groupJournalGreen({ censusOk: true, holeN: 0, extraN: 2 }), false);
+    assert.equal(groupJournalGreen({ censusOk: false, holeN: 0, extraN: 0 }), false);
+    const nowWhole = journalGroupNow({ pagesComplete: true, holeN: 0, extraN: 0, at: "b" }, { "2026q1": { pagesComplete: true, holeN: 3, extraN: 0, at: "a" } }, ["2026q1"]);
+    assert.equal(nowWhole.censusOk, true);
+    assert.equal(nowWhole.holeN, 0);
+    const nowParts = journalGroupNow(undefined, { "2026q1": { pagesComplete: true, holeN: 1, extraN: 0 }, "2026q2": { pagesComplete: true, holeN: 0, extraN: 2 } }, ["2026q1", "2026q2"]);
+    assert.equal(nowParts.censusOk, true);
+    assert.equal(nowParts.holeN, 1);
+    assert.equal(nowParts.extraN, 2);
+    assert.equal(journalGroupNow(undefined, { "2026q1": { pagesComplete: true, holeN: 0, extraN: 0 } }, ["2026q1", "2026q2"]).censusOk, false);
     const noId = pruneCalendarToAlfaIds([{ lessonId: 0, date: "2026-09-01" }, { lessonId: 5, date: "2026-09-01" }], [5], [], [], "2026-08-01", "2026-10-01");
     assert.equal(noId.some((x) => !x.lessonId), true);
     assert.equal(keepAlfaProbe(286, 250, true).write, true);

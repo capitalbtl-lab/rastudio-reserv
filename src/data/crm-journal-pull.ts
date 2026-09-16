@@ -14,12 +14,12 @@ import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalRead
 import { payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, paysOf } from "./crm-pay";
 import { balanceOf } from "./crm-pay-core";
 import { writeoffSumOf } from "./crm-ledger-core";
-import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
+import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, chunkOutsideLessons, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, parseArchiveUiFilters, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems, historyWorkerBeat } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { loadPlanLog } from "./crm-sync-plan-log";
-import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady } from "./crm-inbound-core";
+import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady, journalGroupNow, groupJournalGreen, type GroupPeriodHit, type GroupWhollyHit } from "./crm-inbound-core";
 import { dossierAuditRole } from "./crm-person-role";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
@@ -119,6 +119,8 @@ type FillHit = {
   fail?: Record<string, string>;
   life?: { from: string; to: string; source: string };
   roster?: string;
+  periodHit?: Record<string, GroupPeriodHit>;
+  wholly?: GroupWhollyHit;
 };
 
 type PullStore = {
@@ -615,6 +617,7 @@ export function groupFillRow(g: JournalPullGroup) {
   const cal = loadGroupCard(g.branchId, g.groupId)?.calendar || [];
   const firsts = cal.map((l) => parseLessonDate(l.date)).filter((d): d is Date => Boolean(d));
   const first = firsts.length ? new Date(Math.min(...firsts.map((d) => d.getTime()))) : null;
+  const last = firsts.length ? new Date(Math.max(...firsts.map((d) => d.getTime()))) : null;
   const allParts = periods.map((p) => {
     let n = 0;
     let needDetails = 0;
@@ -625,16 +628,16 @@ export function groupFillRow(g: JournalPullGroup) {
       if (Number(l.status) === 3) conducted += 1;
       if (lessonNeedsHomework(l)) needDetails += 1;
     }
+    const empty = chunkOutsideLessons(p, first, last);
     const stamped = done.includes(p.key) && !weak.has(p.key);
-    const end = parseLessonDate(p.to);
-    const emptyPrefix = Boolean(first && end && end < first && cal.length);
     return {
       key: p.key,
       label: p.label,
       from: p.from,
       to: p.to,
-      done: stamped || emptyPrefix,
-      weak: weak.has(p.key),
+      done: stamped || empty,
+      empty,
+      weak: !empty && weak.has(p.key),
       rechecked: recheckedSet.has(p.key) && !weak.has(p.key),
       lessons: n,
       err: fail[p.key] || "",
@@ -644,11 +647,14 @@ export function groupFillRow(g: JournalPullGroup) {
     };
   });
   const parts = known ? allParts.filter((p) => chunkOverlapsLife(p, clipFrom, clipTo)) : allParts.slice(0, 4);
-  const next = parts.find((p) => !p.done);
+  const next = parts.find((p) => !p.done && !p.empty);
   const lifeTxt = lifeLabel(life.from, life.to);
   const src = life.source === "alfa" ? "по журналу Alfa" : life.source === "slot" ? "по расписанию" : "";
   const fromLabel = !known ? "срок неизвестен — сначала определите сроки" : lifeTxt ? `${src} ${lifeTxt}`.trim() : "ещё не загружали";
-  const complete = parts.length > 0 && parts.every((p) => p.done);
+  const liveKeys = parts.filter((p) => !p.empty).map((p) => p.key);
+  const nowIds = journalGroupNow(fill.wholly, fill.periodHit, liveKeys);
+  const green = groupJournalGreen(nowIds);
+  const complete = green;
   const lessons = parts.reduce((s, p) => s + (Number(p.lessons) || 0), 0);
   return {
     groupId: g.groupId,
@@ -664,11 +670,15 @@ export function groupFillRow(g: JournalPullGroup) {
     from: fromLabel,
     weight: "",
     complete,
+    censusOk: nowIds.censusOk,
+    holeN: nowIds.holeN,
+    extraN: nowIds.extraN,
+    green,
     age: age.id,
     ageLabel: age.label,
     life: lifeTxt,
     roster: String(fill.roster || ""),
-    extra: complete ? "вся информация загружена" : [age.label, lifeTxt, src].filter(Boolean).join(" · "),
+    extra: green ? "вся информация загружена" : [age.label, lifeTxt, src].filter(Boolean).join(" · "),
     err: next && fail[next.key] ? fail[next.key] : "",
     source: life.source,
     parts,
@@ -1063,17 +1073,28 @@ function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch
   censusN?: number;
   diskUniq?: number;
   checksum?: string;
+  pagesComplete?: boolean;
+  holeN?: number;
+  extraN?: number;
+  wholly?: boolean;
 }) {
   const prev = fillOf(branchId, gid);
   const pulled = { ...(prev.pulled || {}) };
   const fail = { ...(prev.fail || {}) };
   const weak = new Set(prev.weak || []);
   const rechecked = new Set(prev.rechecked || []);
+  const periodHit = { ...(prev.periodHit || {}) };
   const at = new Date().toISOString();
+  const pagesComplete = patch.pagesComplete !== false && patch.ok;
+  const holeN = Number(patch.holeN) || 0;
+  const extraN = Number(patch.extraN) || 0;
+  const hit: GroupPeriodHit = { pagesComplete, holeN, extraN, at, censusN: Number(patch.censusN) || 0 };
   for (const key of keys) {
+    if (key === "whole") continue;
     if (patch.ok) {
       pulled[key] = at;
       delete fail[key];
+      periodHit[key] = hit;
       if (patch.weak) weak.add(key);
       else {
         weak.delete(key);
@@ -1084,7 +1105,10 @@ function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch
       weak.add(key);
     }
   }
-  patchFill(branchId, gid, { pulled, fail, weak: [...weak], rechecked: [...rechecked] });
+  const wholly = patch.wholly
+    ? { pagesComplete, holeN, extraN, at, censusN: Number(patch.censusN) || 0 }
+    : prev.wholly;
+  patchFill(branchId, gid, { pulled, fail, weak: [...weak], rechecked: [...rechecked], periodHit, wholly });
   const card = loadGroupCard(branchId, gid);
   if (!card) return null;
   const done = pulledPeriodKeys({ done: card.journalFill?.done, pulled });
@@ -1120,16 +1144,23 @@ async function pullOneGroup(
   recheckDays?: number,
   iceFrom = "",
   iceTo = "",
+  prune = false,
 ) {
   const beforeCard = loadGroupCard(g.branchId, g.groupId);
   const days = clampRecheckDays(recheckDays);
-  const win = iceWindowOrNow(recheck, iceFrom || period.from, iceTo || (recheck ? "" : period.to), days);
-  const beforeWin = (beforeCard?.calendar || []).filter((l) => inPeriod(l.date, win.from, win.to)).length;
+  const wholly = period.key === "whole" || (!recheck && prune);
+  const win = wholly
+    ? { from: "2015-01-01", to: "" }
+    : recheck
+      ? iceWindowOrNow(true, iceFrom, iceTo, days)
+      : { from: period.from, to: period.to };
+  const beforeWin = (beforeCard?.calendar || []).filter((l) => (win.to ? inPeriod(l.date, win.from, win.to) : true)).length;
   const { inboundJournalGroup } = await import("./crm-journal-inbound");
   const res = await inboundJournalGroup(g.branchId, g.groupId, {
     deep: false,
     lite: true,
     recheck,
+    prune: prune || wholly,
     recheckDays: days,
     dateFrom: win.from,
     dateTo: win.to,
@@ -1142,37 +1173,32 @@ async function pullOneGroup(
   const pagesComplete = res.pagesComplete !== false && !res.capped;
   const censusN = res.censusN != null ? Number(res.censusN) : 0;
   const diskUniq = res.diskUniq != null ? Number(res.diskUniq) : uniquePositiveIds((res.calendar || []).map((l: { lessonId?: number }) => Number(l.lessonId) || 0)).length;
-  const diskRows = res.diskRows != null ? Number(res.diskRows) : countAlfaLessonRows(res.calendar);
-  const ready = res.ready === true || journalIdsReady({
-    pagesComplete,
-    holeN,
-    extraN: goneN,
-    diskUniq,
-    censusN,
-    diskRows,
-    allowExtra: false,
-  });
-  const weak = !ok || !ready;
-  const keys = period.keys?.length ? period.keys : [period.key];
+  const seated = Number(res.seated) || 0;
+  const tileWeak = !ok || !pagesComplete || holeN > 0;
+  const keys = wholly ? ["whole"] : period.keys?.length ? period.keys : [period.key];
   stampJournalPeriod(g.branchId, g.groupId, keys, {
     ok,
     err: ok ? "" : String(res.extra || "Alfa не ответила"),
-    weak,
+    weak: tileWeak,
     recheck,
     recheckDays: days,
     censusN,
     diskUniq,
     checksum: String(res.checksum || ""),
+    pagesComplete,
+    holeN,
+    extraN: goneN,
+    wholly,
   });
   const added = Math.max(0, n - beforeWin);
   const extra = ok
     ? !pagesComplete
       ? `«${g.name}»: ${period.label} · ${n} зан.${holeN ? ` · дырок ${holeN}` : ""}${added ? `, +${added}` : ""} · пакет оборвался, нажмите ещё раз`
-      : recheck
+      : recheck || wholly
         ? `перепроверка «${g.name}»: ${period.label}${holeN ? ` · дырка ${holeN}` : ""}${goneN ? ` · лишние ${goneN}` : !holeN && !goneN ? " · набор id сошёлся" : ""}`
-        : `«${g.name}»: ${period.label} · ${n} зан. за порцию${holeN ? ` · дырок ${holeN}` : ""}`
+        : `«${g.name}»: ${period.label} · ${n} зан. за порцию${holeN ? ` · дырок ${holeN}` : ""}${goneN ? ` · лишние ${goneN}` : ""}`
     : String(res.extra || `«${g.name}»: ${period.label} — Alfa не ответила`);
-  return { extra, count: n, ok, capped: weak };
+  return { extra, count: n, ok, capped: !pagesComplete, pagesComplete, holeN, extraN: goneN, seated };
 }
 
 export { keepAlfaProbe };
@@ -1577,6 +1603,7 @@ export async function journalPull(opts: {
   dateFrom?: string;
   dateTo?: string;
   recheckDays?: number;
+  prune?: boolean;
   jobMode?: string;
   take?: number;
   name?: string;
@@ -2320,9 +2347,21 @@ export async function journalPull(opts: {
     const useGrain = clampGrain(age.id, grain);
     const chunksAll = journalChunks(useGrain);
     const known = Boolean(clipFrom || clipTo);
-    const chunks = known ? chunksAll.filter((c) => chunkOverlapsLife(c, clipFrom, clipTo)) : chunksAll.slice(0, 4);
-    const need = (c: (typeof chunks)[number]) => !chunkDone(c, doneKeys) || c.keys.some((k) => weakSet.has(k));
+    const cal = loadGroupCard(hit.branchId, hit.groupId)?.calendar || [];
+    const firsts = cal.map((l) => parseLessonDate(l.date)).filter((d): d is Date => Boolean(d));
+    const first = firsts.length ? new Date(Math.min(...firsts.map((d) => d.getTime()))) : null;
+    const last = firsts.length ? new Date(Math.max(...firsts.map((d) => d.getTime()))) : null;
+    const chunks = known ? chunksAll.filter((c) => chunkOverlapsLife(c, clipFrom, clipTo) && !chunkOutsideLessons(c, first, last)) : chunksAll.slice(0, 4);
+    const need = (c: (typeof chunks)[number]) => {
+      const hitRow = fill.periodHit?.[c.key];
+      if (hitRow?.pagesComplete && !(Number(hitRow.holeN) || 0)) return false;
+      return !chunkDone(c, doneKeys) || c.keys.some((k) => weakSet.has(k));
+    };
+    const wholly = Boolean(opts.prune) && !recheck;
     const picked =
+      (periodKey === "whole" || wholly
+        ? { key: "whole", from: "01.01.2015", to: "", label: "целиком", keys: ["whole"] }
+        : null) ||
       (periodKey && (chunksAll.find((c) => c.key === periodKey) || journalChunks("quarter").find((c) => c.key === periodKey))) ||
       (!recheck && chunks.find(need)) ||
       (recheck
@@ -2334,11 +2373,15 @@ export async function journalPull(opts: {
       saveStore(store);
       return { ok: true as const, extra: store.note, count: 0, scanned: 0, more: false, ...snap() };
     }
-    const res = await pullOneGroup(hit, picked, recheck || Boolean(periodKey && chunkDone(picked, doneKeys)), opts.recheckDays, String(opts.dateFrom || "").trim(), String(opts.dateTo || "").trim()).catch((e) => ({
+    const res = await pullOneGroup(hit, picked, recheck || Boolean(periodKey && periodKey !== "whole" && chunkDone(picked, doneKeys)), opts.recheckDays, String(opts.dateFrom || "").trim(), String(opts.dateTo || "").trim(), Boolean(opts.prune) || wholly).catch((e) => ({
       extra: `«${hit.name}»: ${e instanceof Error ? e.message : "ошибка"}`,
       count: 0,
       ok: false,
       capped: true,
+      pagesComplete: false,
+      holeN: 0,
+      extraN: 0,
+      seated: 0,
     }));
     store.note = res.extra;
     store.at = new Date().toISOString();
@@ -2346,14 +2389,24 @@ export async function journalPull(opts: {
     const afterFillHit = fillOf(hit.branchId, hit.groupId);
     const afterFill = pulledPeriodKeys({ done: Object.keys(afterFillHit.pulled || {}), pulled: afterFillHit.pulled });
     const afterWeak = new Set(afterFillHit.weak || []);
+    const afterHit = afterFillHit.periodHit || {};
+    const moreHoles = chunks.some((c) => {
+      const h = afterHit[c.key];
+      if (h?.pagesComplete) return (Number(h.holeN) || 0) > 0;
+      return !chunkDone(c, afterFill) || c.keys.some((k) => afterWeak.has(k));
+    });
     return {
-      ok: true as const,
+      ok: res.ok !== false,
       extra: store.note,
       count: res.count,
       scanned: 1,
-      more: Boolean(chunks.some((c) => !chunkDone(c, afterFill) || c.keys.some((k) => afterWeak.has(k)))),
+      more: moreHoles,
       periodKey: picked.key,
       periodLabel: picked.label,
+      pagesComplete: res.pagesComplete,
+      holeN: res.holeN,
+      extraN: res.extraN,
+      seated: res.seated,
       ...snap(),
     };
   }

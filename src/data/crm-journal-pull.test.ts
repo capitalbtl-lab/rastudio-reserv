@@ -51,8 +51,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /opts\?\.skipPeople \? new Map/);
     assert.match(pull, /loadGroupCard\(g\.branchId, g\.groupId\)/);
     assert.match(pull, /hydrateDisk/);
-    assert.match(pull, /emptyPrefix/);
-    assert.match(pull, /done: stamped \|\| emptyPrefix/);
+    assert.match(pull, /chunkOutsideLessons/);
+    assert.match(pull, /done: stamped \|\| empty/);
     assert.doesNotMatch(pull, /stamped \|\| n > 0 \|\| emptyPrefix/);
     assert.match(pull, /applyHydrateFills/);
     assert.match(pull, /groupName: g\.name/);
@@ -72,6 +72,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /recheckCensusWindow/);
     assert.match(inbound, /journalIdsReady/);
     assert.match(inbound, /idsChecksum/);
+    assert.match(inbound, /if \(prune && pagesComplete\)/);
     assert.doesNotMatch(inbound, /lessonId \|\| 0\}\|\$\{packed.date\}/);
     assert.match(pull, /pagesComplete/);
     assert.match(pull, /journalIdsReady/);
@@ -81,7 +82,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /!\/\^w\\d\+\$\/\.test\(key\)/);
     assert.doesNotMatch(pull, /alfaTotal > 0 && n < alfaTotal/);
     assert.match(pull, /key: `w\$\{clampRecheckDays/);
-    assert.match(job, /if \(mode === "groups" && item.groupId\)/);
+    assert.match(pull, /period.key === "whole"/);
+    assert.match(pull, /chunkOutsideLessons/);
+    assert.match(pull, /journalGroupNow/);
+    assert.match(job, /if \(mode === "groups" && item.groupId && !item.periodKey\)/);
+    assert.match(job, /prune: blue/);
+    assert.match(job, /periodKey: blue && !windowed \? "whole"/);
+    assert.match(job, /dateFrom: blue \? \(windowed \? job.dateFrom : "2015-01-01"\) : job.dateFrom/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(pull, /a\.done - b\.done/);
     assert.match(pull, /kind === "details"/);
@@ -95,8 +102,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Требуют загрузки данных/);
     assert.match(ui, /Загрузка данных завершена/);
     assert.match(ui, /fillFinished/);
-    assert.match(ui, /fillNeedsRecheck/);
-    assert.match(ui, /есть неперепроверенные данные/);
+    assert.match(ui, /groupJournalGreen/);
     assert.match(ui, /№\{Number\(row.groupId\) \|\| "—"\}/);
     assert.match(ui, /shrink-0 rounded-full bg-black\/10/);
     assert.match(ui, /домашнее задание/);

@@ -13,7 +13,7 @@ import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_PIPE_CH, ALFA_SYNC_DE
 import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-periods";
 import { keepAlfa, peopleLessonsLine, peopleStudentAction, peopleStudentBadge, peopleStudentHint, PEOPLE_PACK } from "@/data/crm-people-line";
 import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
-import { RECHECK_DAY_OPTS, clampRecheckDays, type RecheckDays } from "@/data/crm-inbound-core";
+import { RECHECK_DAY_OPTS, clampRecheckDays, groupJournalGreen, type RecheckDays } from "@/data/crm-inbound-core";
 import { POLICY_FACTORY, planDateFrom, planFromIdOf, planFromIdToRecheckDays, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
 import { HistoryPlanModal } from "@/components/admin-history-plan";
 
@@ -221,8 +221,8 @@ const HINT = {
   resetPay: "Стирает платежи этого ученика у нас на диске и пометку «касса загружена». Сама загрузку не начинает — дальше «Загрузить кассу». Свои ещё не отправленные платежи не трогает. Календарь занятий не трогает. В Alfa ничего не пишет.",
   loadCal: "Красная загрузка календаря этой карточки. Сколько лет назад — список в красной рамке, не синяя. Сверяет набор номеров уроков, дописывает дырки. Если карточка давно жёлтая — надёжнее «Загрузить всю историю» (всегда с 2015). В Alfa не пишет.",
   hole: "Галка на жёлтой карточке: в Alfa есть номера уроков, которых нет у нас. Сама ничего не качает и журнал не закрывает. С этой галкой человека пускают к шагам 3–5, даже если календарь дырявый. Снять можно только руками. У кого набор номеров сошёлся, галки нет.",
-  loadOneGroups: "Красная очередь по группам слева, по одной. Только открытая колонка: «Сейчас идут» или «Архивные». Берёт выбранную порцию — квартал, полугодие или год — и читает явки из Alfa на диск. Следующая группа не стартует, пока эта порция не закрылась. Пауза 5 секунд. Если сверху выбрана школа — только её группы. Это явки группы, не личный календарь человека и не касса. В Alfa расписание не меняет. «Стоп» после текущей группы.",
-  grain: "Только красная рамка шага 3 и кнопки порции на карточке группы. «Квартал» — самое спокойное: одно нажатие не тянет всю историю группы. «Полугодие» больше. «Год» — у коротких молодых групп. Срок жизни группы (если определяли) отрезает лишнее. Это не «с 2015» и не окно синей рамки. Синяя зерно не читает. В Alfa ничего не отправляет.",
+  loadOneGroups: "Красная очередь порций: группа + кусок зерна. Одна порция, пауза 5 с. Спрашивает номера этого куска, добирает недостающие, лишнее не снимает. Лишнее порцию не повторяет — карточка жёлтая. Пустые куски до первого и после последнего урока не берёт. Список кончился — стоп. Зелёный — весь журнал: перепись дошла, дырок нет, лишнего нет. Чип синей не читает. В Alfa не пишет.",
+  grain: "Только красная рамка шага 3. Квартал / полугодие / год — размер порции, не «с 2015». Год — у молодых. Пустые куски вне уроков в очередь не ставим. Синяя зерно не читает. В Alfa ничего не отправляет.",
   archPupils: "Смотрит карточки людей выбранной колонки: «сейчас ходят» или рабочий архив — в одном прогоне не смешивает. Собирает номера групп, где они когда-то числились. Живые группы из списка выкидывает. Остальные появятся как архивные — чтобы старый остаток на карточке сошёлся. Идёт по одной группе, пауза 5 секунд. Журнал явок сама не качает — только список групп. Дальше красная «по одному» на виде «Архивные группы». В Alfa ничего не создаёт.",
   archAll: "Тянет из Alfa архивные группы филиала, не только те, что есть у ваших учеников. Поэтому программа спрашивает подтверждение. Живое расписание не трогает. Журнал явок не качает — появится только список групп. Один филиал, пауза 5 секунд. Если нужен архив только ваших людей — кнопка «Архив групп учеников» уже и спокойнее. В Alfa ничего не пишет.",
   life: "Спрашивает Alfa, с какого по какое число у группы реально был журнал. Чтобы не грузить курс за десять лет, если он шёл полгода. Срок пишется на карточку группы у нас. Шаблон группы в Alfa не меняет. Одна группа, пауза 5 секунд. Если срок не нашли — группа «без срока», тогда видимые кварталы грузите руками. После сроков красная берёт только подходящие порции. Это подготовка, не загрузка явок.",
@@ -233,11 +233,11 @@ const HINT = {
   yearsMoney: "Только красные кнопки шага 4. «С начала · 2015» — платежи с 1 января 2015. «7 / 3 / 1 год» — с этой даты по сегодня. У архивных клиентов здесь только год или два, как на шаге 2. Синяя рамка этот список не читает: у неё своё окно. В Alfa ничего не отправляет.",
   loadPay: "Красная касса этой карточки. Платежи и абонементы из Alfa на диск, по номеру платежа. Товары не берём. Журнал занятий не качает. Годы в рамке режут, с какой даты читать. Один и тот же платёж дважды не пишем. Когда страницы кончились — карточка вправо. В Alfa платёж не проводит.",
   recheckPay: "Синяя касса этой карточки. Ещё раз читает все страницы и все нужные виды платежей по номеру. Курсор не сбрасывает. Товары по-прежнему не берём. Журнал не качает. Окно дат кассу не режет. Сумма против шапки — шаг 5. В Alfa не пишет.",
-  recheckOneGroups: "Синяя очередь групп. Пять волн: жёлтые слева целиком (оставшиеся порции, без чипа), зелёные справа окном с чипа, снова дырки слева, кто из волны 3 уехал вправо — то же окно, оставшиеся дырки. Пустую пропускаем. После 5-й — стоп. 8 отказов — эту группу этой кнопкой больше не берём, жёлтая остаётся. Пауза как у синей: от 2 до 5 секунд по окну. «Стоп» после текущей. В Alfa не пишет.",
+  recheckOneGroups: "Синяя очередь групп, пять волн. 1/3/5 — жёлтые целиком, чип не режет, лишнее снимает везде. 2 — все, кто сейчас зелёный, окном с чипа. 4 — только кто стал зелёным в волне 3, тем же окном. Кто прошёл 2 и остался зелёным — в 3–5 не входит. Пустую пропускаем, 6-й нет. Пауза по чипу и слева: неделя/две — 2 с, месяц — 2,5 с, 3 мес — 3 с, 6 мес — 4 с, 3 года / 7 лет / 2015 — 5 с. 8 отказов — эту группу этой кнопкой не берём. «Стоп» после текущей. В Alfa не пишет.",
   recheckOneMoney: "Синяя очередь кассы. Сначала справа, потом недочитанные слева, кто дочитался — снова справа. Сумма — шаг 5. Журнал не качает. Пауза от 1 до 5 секунд. «Стоп» после текущего. В Alfa не пишет.",
   tabRoster: "Шаг 1. Сначала узнаём, кто числится в группе. Без этого шага программа не знает, кого ставить в календарь и кассу. Красная читает состав одной группы из Alfa и пишет людей к нам. Выбывших не удаляет — только «уже не в этой группе». Журнал, деньги и домашку не качает. Живые и архивные группы — две таблетки на этом же шаге. Школа сверху сужает очередь. Пульт «1–5» тоже начинает отсюда. В Alfa ничего не меняет.",
   tabStudents: "Шаг 2. Личный календарь одного ребёнка: все его уроки из всех групп, одним списком. Смотрим набор номеров уроков, не «244 против 254». Красная рамка — загрузить и сколько лет. Синяя — перепроверить кусок дат. Жёлтая — в Alfa есть номера, которых нет у нас. «Сейчас ходят» — люди из живых групп шага 1, ученики и лиды. «Архивные клиенты» — только те, кто когда-то был клиентом; архивных лидов сюда не берём. Год или два, не с 2015 всем скопом. В Alfa не пишем.",
-  tabGroups: "Шаг 3. Журнал одной группы: все уроки этой группы, кто был. Не дневник ребёнка (он шаг 2). Счёт — набор номеров уроков группы, не «N занятий». Жёлтая — в Alfa есть номера этой порции, которых нет у нас, или у нас лишние. Красная — порция квартал / полугодие / год, не годы человека. Синяя — пять волн: жёлтые целиком (оставшиеся порции), зелёные окном с чипа, снова дырки, кто уехал вправо — то же окно, ещё раз дырки. Пустую волну пропускаем, 6-ю не открываем. Чип дат только справа. Филиал один — карточки группы. Живые и архивные группы — две таблетки, не архив людей шага 2. Тема и ДЗ — после зелёных явок. В Alfa журнал не проводим.",
+  tabGroups: "Шаг 3. Журнал одной группы: все уроки этой группы, кто был. Не дневник ребёнка. Цвет — вся группа сейчас: только жёлтый и зелёный. Зелёный: перепись всего журнала дошла, дырок нет нигде, лишнего нет. Не «порция чистая» и не «3/8». Чип цвет не сужает. Карточка — группа. Красная очередь — порции. Синяя — группы. Тема и ДЗ цвет не меняют. Живые и архивные группы — две таблетки, не архив людей. В Alfa журнал не проводим.",
   tabMoney: "Шаг 4. Касса: платежи по номеру, не уроки и не «остаток на карточке». Товары (тип 2 и 9) не грузим — ломают шапку. Те же люди, что шаги 1–2. «Касса загружена» — страницы дочитали. Сошлась ли сумма — шаг 5. Архивных берём тем же набором, что шаг 2. В Alfa оплату не создаём.",
   tabAudit: "Шаг 5. Сверка остатка. Вправо только если три цифры рядом: «Клиенты» на сайте, шапка Alfa и наша касса — с точностью около рубля. Лидов не сверяем: у лида нет шапки клиента. Рабочий архив — отдельная таблетка, после календаря и кассы. Слева — сегмент и что поправить. Цифру из Alfa в файл не записываем. В Alfa не пишем.",
   auditAll: "Красная проходит текущих клиентов по одному. Лидов пропускает. Между людьми пауза 5 секунд. Сравнивает число в «Клиентах» с шапкой Alfa (общий остаток, не остаток одного абонемента). Если не сошлось — догружает журнал или кассу только этого номера. Цифру Alfa в кассу не записывает. «Стоп» после текущего. Архивных — соседняя таблетка, тем же набором шага 2.",
@@ -554,7 +554,7 @@ type MissPack = {
   items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string; archived?: boolean }[];
 };
 
-type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; weak?: boolean; rechecked?: boolean; lessons?: number; err?: string; at?: string; needDetails?: number; conducted?: number };
+type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; weak?: boolean; empty?: boolean; rechecked?: boolean; lessons?: number; err?: string; at?: string; needDetails?: number; conducted?: number };
 
 type FillRow = {
   groupId?: number;
@@ -572,6 +572,10 @@ type FillRow = {
   weight?: string;
   err?: string;
   complete?: boolean;
+  censusOk?: boolean;
+  holeN?: number;
+  extraN?: number;
+  green?: boolean;
   age?: string;
   ageLabel?: string;
   life?: string;
@@ -658,7 +662,8 @@ function fillNeedsRecheck(chunks: FillPart[]) {
 }
 
 function fillFinishedRow(row: FillRow, grain: Grain) {
-  return fillFinished(packGrain(row.parts, clampGrain(row.age, grain)));
+  void grain;
+  return groupJournalGreen(row);
 }
 
 function nextRecheckPart(row: FillRow, grain: Grain) {
@@ -671,7 +676,7 @@ function nextRecheckPart(row: FillRow, grain: Grain) {
 }
 
 function nextWizard(chunks: FillPart[]) {
-  const load = chunks.find((c) => !c.done || c.weak);
+  const load = chunks.find((c) => !c.empty && (!c.done || c.weak));
   if (load) {
     return {
       kind: "load" as const,
@@ -795,7 +800,7 @@ function GroupFillList({
   const doneRows = orderActiveQueue(
     scoped.filter((r) => finishedOf(r)),
     (r) => Boolean(loading && loading.groupId === r.groupId && loading.branchId === r.branchId),
-    (r) => fillNeedsRecheck(packGrain(r.parts, clampGrain(r.age, grain))),
+    () => false,
     byFillName,
   );
   const nNeed = needRows.length;
@@ -862,14 +867,14 @@ function GroupFillList({
           const pct = total > 0 ? Math.min(100, Math.round((doneN / total) * 100)) : 0;
           const active = loading && loading.groupId === row.groupId && loading.branchId === row.branchId;
           const full = fillFinished(chunks);
-          const needsRecheck = fillNeedsRecheck(chunks);
+          const green = groupJournalGreen(row);
           const shown = open === id;
           const wiz = nextWizard(chunks);
           const detailsLeft = chunks.reduce((s, c) => s + (c.needDetails || 0), 0);
           const loadKind = active ? loading?.kind || "group" : "";
           const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || wiz.part?.label || "" : "";
           return (
-            <li key={id} data-gid={id} className={cn("rounded-2xl p-3 ring-1", needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
+            <li key={id} data-gid={id} className={cn("rounded-2xl p-3 ring-1", green ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
               <div className="flex items-center gap-2">
                 <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => toggleOpen(id)} title={row.name}>
                   {row.name}
@@ -894,15 +899,11 @@ function GroupFillList({
                         {row.ageLabel}
                       </span>
                     ) : null}
-                    {full ? (
-                      needsRecheck ? (
-                        <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[0.72rem] font-semibold text-sky-950">есть неперепроверенные данные</span>
-                      ) : (
+                    {green ? (
                         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">загрузка завершена</span>
-                      )
                     ) : (
                       <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">
-                        требуют загрузки{total ? ` · ${doneN}/${total}` : ""}
+                        требуют загрузки
                       </span>
                     )}
                     {detailsLeft > 0 ? (
@@ -919,7 +920,7 @@ function GroupFillList({
                   {shown ? "−" : "+"}
                 </button>
               </div>
-              <FillBar pct={pct} run={active} done={full && !needsRecheck} warn={needsRecheck} />
+              <FillBar pct={pct} run={active} done={green} warn={false} />
               <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
                   {[row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
                   {row.archived ? " · архив" : ""}
