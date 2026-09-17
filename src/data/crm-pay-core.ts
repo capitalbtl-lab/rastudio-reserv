@@ -142,6 +142,14 @@ export function rememberPayTypes(items: Array<{ id?: unknown; name?: unknown }>)
   }
 }
 
+export function extraPayTypeIds(fallback: readonly number[] = PAY_INBOUND_EXTRA_TYPES) {
+  const ids = [...payTypeKindById.entries()]
+    .filter(([, kind]) => kind === "refund" || kind === "correct")
+    .map(([id]) => id)
+    .sort((a, b) => a - b);
+  return ids.length ? ids : [...fallback];
+}
+
 
 export function isGoodsArticle(item: Record<string, unknown>) {
   if (Number(item.commodity_id || item.commodityId)) return true;

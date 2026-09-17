@@ -32,6 +32,7 @@ import {
   markRefundOfGoods,
   alfaPayTypeIdOf,
   rememberPayTypes,
+  extraPayTypeIds,
   isGoodsArticle,
   OPENING_NOTE,
   isOpeningRow,
@@ -773,7 +774,7 @@ async function inboundPayWindow(
     } catch {
       /* филиал окна — не валим done */
     }
-    for (const typeId of PAY_INBOUND_EXTRA_TYPES) {
+    for (const typeId of extraPayTypeIds()) {
       if (resetGone()) return paysOf(customerId);
       try {
         for (let extraPage = 0; extraPage < 20; extraPage += 1) {
@@ -928,7 +929,7 @@ export async function inboundCustomerPays(
   const extraStart = Number(cur?.extra) || 0;
   if (!failed && (done || extraResume) && !overBudget()) {
     done = false;
-    const types = [...PAY_INBOUND_EXTRA_TYPES];
+    const types = extraPayTypeIds();
     let typeIdx = extraResume ? types.findIndex((n) => n === extraStart) : 0;
     if (typeIdx < 0) typeIdx = 0;
     let extraBidIdx = extraResume ? Math.max(0, branches.indexOf(Number(cur?.bid) || 0)) : 0;
@@ -1095,7 +1096,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
     const stamp = payPollStampOrEmpty(poll.branches[String(branchId)]);
     try {
       const extraItems: Record<string, unknown>[] = [];
-      for (const typeId of PAY_INBOUND_EXTRA_TYPES) {
+      for (const typeId of extraPayTypeIds()) {
         extraItems.push(...(await pullPages(branchId, { pay_type_id: typeId }, 2)));
       }
       const raw = [...(await pullPages(branchId, {}, windowPages)), ...extraItems];
