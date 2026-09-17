@@ -1,6 +1,29 @@
-/** Канон шага 4: разбор ответа Pay по карточке API. Очередь и штампы A/B здесь не живут. */
+/** Канон шага 4: тело pay/index и разбор ответа по карточке API. */
 
-export { payIncomeCanon, payDocumentDateCanon, alfaPayIndexDate, PAY_INBOUND_EXTRA_TYPES, PAY_INBOUND_PAGE } from "./crm-pay-core";
+export function payIncomeCanon(raw: unknown): { has: boolean; value: number } {
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw)) return { has: false, value: 0 };
+    return { has: true, value: raw };
+  }
+  if (raw == null) return { has: false, value: 0 };
+  const s = String(raw).trim();
+  if (!s) return { has: false, value: 0 };
+  if (/[₽,eE\s]/.test(s)) return { has: false, value: 0 };
+  if (!/^\d+(?:\.\d+)?$/.test(s)) return { has: false, value: 0 };
+  const n = Number(s);
+  if (!Number.isFinite(n)) return { has: false, value: 0 };
+  return { has: true, value: n };
+}
+
+export function payDocumentDateCanon(item: Record<string, unknown>): string {
+  const raw = String(item.document_date ?? "").trim();
+  if (!raw) return "";
+  const dmy = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+  const ymd = raw.match(/^(\d{4})[.-](\d{2})[.-](\d{2})/);
+  if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
+  return "";
+}
 
 export function payIndexBody(p: {
   page: number;
