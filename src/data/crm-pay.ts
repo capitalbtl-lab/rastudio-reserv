@@ -31,6 +31,7 @@ import {
   cttRestSum,
   markRefundOfGoods,
   alfaPayTypeIdOf,
+  rememberPayTypes,
   isGoodsArticle,
   OPENING_NOTE,
   isOpeningRow,
@@ -763,7 +764,6 @@ async function inboundPayWindow(
     try {
       const json = await request(`/v2api/${bid}/pay/index`, {
         page: 0,
-        pageSize,
         customer_id: customerId,
         date_from: from,
         date_to: to,
@@ -776,16 +776,18 @@ async function inboundPayWindow(
     for (const typeId of PAY_INBOUND_EXTRA_TYPES) {
       if (resetGone()) return paysOf(customerId);
       try {
-        const extra = await request(`/v2api/${bid}/pay/index`, {
-          page: 0,
-          pageSize,
-          customer_id: customerId,
-          pay_type_id: typeId,
-          date_from: from,
-          date_to: to,
-        }, token);
-        const packT = crmUnwrapIndex(extra);
-        raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
+        for (let extraPage = 0; extraPage < 20; extraPage += 1) {
+          const extra = await request(`/v2api/${bid}/pay/index`, {
+            page: extraPage,
+            customer_id: customerId,
+            pay_type_id: typeId,
+            date_from: from,
+            date_to: to,
+          }, token);
+          const packT = crmUnwrapIndex(extra);
+          raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
+          if (!packT.items.length || packT.items.length < 30) break;
+        }
       } catch {
         /* тип окна — не валим done */
       }
@@ -836,6 +838,12 @@ export async function inboundCustomerPays(
 ) {
   if (pendingExportIds(["pay.create"]).has(customerId) && !opts?.force && payCustomerFilled(customerId)) return paysOf(customerId);
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  try {
+    const types = crmUnwrapIndex(await request(`/v2api/${branchId}/pay-type/index`, { page: 0 }, token));
+    rememberPayTypes(types.items);
+  } catch {
+    /* справочник типов — без него остаются 1/5/6 */
+  }
   const reset0 = String(customerSyncOf(customerId).paysResetAt || "");
   const resetGone = () => String(customerSyncOf(customerId).paysResetAt || "") !== reset0;
   if (opts?.force && !payFillPending(customerId)) {
@@ -890,7 +898,6 @@ export async function inboundCustomerPays(
       try {
         const json = await request(`/v2api/${bid}/pay/index`, {
           page: p,
-          pageSize,
           customer_id: customerId,
           ...fillDates,
         }, token);
@@ -901,7 +908,7 @@ export async function inboundCustomerPays(
         received += Number(pack.count != null ? pack.count : pack.items.length) || pack.items.length;
         if (Number(pack.total) > total) total = Number(pack.total);
         const mine = pack.items.filter((it) => payCustomerIdOf(it, 0) === customerId).length;
-        lastShort = !pack.items.length || (total > 0 ? received >= total : pack.items.length < pageSize);
+        lastShort = !pack.items.length || (total > 0 && received >= total) || (total <= 0 && pack.items.length < 30);
         if (!mine && pack.items.length) lastShort = true;
         fillBid = bid;
         fillPage = p;
@@ -940,16 +947,28 @@ export async function inboundCustomerPays(
           break extraLoop;
         }
         try {
-          console.warn(`pay inbound cid=${customerId} branch=${extraBid} type=${typeId}`);
-          const extra = await request(
-            `/v2api/${extraBid}/pay/index`,
-            { page: 0, pageSize, customer_id: customerId, pay_type_id: typeId, ...fillDates },
-            token,
-          );
-          const packT = crmUnwrapIndex(extra);
-          raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || extraBid) || extraBid })));
-          ran += 1;
-          console.warn(`pay inbound cid=${customerId} branch=${extraBid} type=${typeId} n=${packT.items.length}`);
+          let extraPage = extraResume && extraBid === (Number(cur?.bid) || extraBid) && typeId === extraStart ? (Number(cur?.page) || 0) : 0;
+          for (;;) {
+            if (ran >= maxRun || overBudget() || resetGone()) {
+              extraFinished = false;
+              if (!resetGone()) {
+                store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid: extraBid, page: extraPage, extra: typeId } };
+                save(store, { keepAll: true });
+              }
+              break extraLoop;
+            }
+            console.warn(`pay inbound cid=${customerId} branch=${extraBid} type=${typeId} page=${extraPage}`);
+            const extra = await request(
+              `/v2api/${extraBid}/pay/index`,
+              { page: extraPage, customer_id: customerId, pay_type_id: typeId, ...fillDates },
+              token,
+            );
+            const packT = crmUnwrapIndex(extra);
+            raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || extraBid) || extraBid })));
+            ran += 1;
+            extraPage += 1;
+            if (!packT.items.length || packT.items.length < 30) break;
+          }
         } catch {
           /* типы филиала — не валим весь прогон */
         }
@@ -1061,7 +1080,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
     for (let page = 0; page < take; page += 1) {
       const json = await request(
         `/v2api/${branchId}/pay/index`,
-        { page, pageSize: PAY_INBOUND_PAGE, ...windowDates, ...extra },
+        { page, ...windowDates, ...extra },
         t,
       );
       pages += 1;
@@ -1114,7 +1133,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
     let ran = 0;
     while (ran < PAY_INBOUND_RUN && !fill.done) {
       try {
-        const json = await request(`/v2api/${fill.bid}/pay/index`, { page: fill.page, pageSize: PAY_INBOUND_PAGE }, t);
+        const json = await request(`/v2api/${fill.bid}/pay/index`, { page: fill.page }, t);
         pages += 1;
         ran += 1;
         const pack = crmUnwrapIndex(json);

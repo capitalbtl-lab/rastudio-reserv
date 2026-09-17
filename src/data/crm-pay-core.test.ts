@@ -183,8 +183,8 @@ describe("журнал денег", () => {
     assert.equal(payPollAllowed(hits.slice(1), now), true);
     assert.equal(PAY_POLL_MAX_PER_HOUR, 4);
     const win = payPollLookbackDates(3, new Date("2026-09-08T12:00:00+03:00"));
-    assert.equal(win.date_from, "2026.09.05");
-    assert.equal(win.date_to, "2026.09.08");
+    assert.equal(win.date_from, "05.09.2026");
+    assert.equal(win.date_to, "08.09.2026");
     assert.equal(
       matchAlfaPayId(
         [
@@ -230,8 +230,8 @@ describe("журнал денег", () => {
     assert.equal(payCustomerIdOf({ customer: { id: 44 } }), 44);
     assert.equal(alfaPayDate("2026-09-07"), "07.09.2026");
     assert.equal(alfaPayDate("07.09.2026"), "07.09.2026");
-    assert.equal(alfaPayIndexDate("07.09.2026"), "2026.09.07");
-    assert.equal(alfaPayIndexDate("2026-09-07"), "2026.09.07");
+    assert.equal(alfaPayIndexDate("07.09.2026"), "07.09.2026");
+    assert.equal(alfaPayIndexDate("2026-09-07"), "07.09.2026");
     assert.equal(ruDateIso("07.09.2026"), "2026-09-07");
   });
 
@@ -343,12 +343,12 @@ describe("журнал денег", () => {
     assert.deepEqual(payFillRange(""), {});
     assert.deepEqual(payFillRange(), {});
     const y = payFillRange("2015-01-01", "2026-09-15");
-    assert.equal(y.date_from, "2015.01.01");
-    assert.equal(y.date_to, "2026.09.15");
+    assert.equal(y.date_from, "01.01.2015");
+    assert.equal(y.date_to, "15.09.2026");
     const one = payFillRange("2025-09-15", "2026-09-15");
-    assert.equal(one.date_from, "2025.09.15");
+    assert.equal(one.date_from, "15.09.2025");
     const open = payFillRange("2015-01-01");
-    assert.equal(open.date_from, "2015.01.01");
+    assert.equal(open.date_from, "01.01.2015");
     assert.match(String(open.date_to || ""), /^\d{4}\.\d{2}\.\d{2}$/);
   });
 });

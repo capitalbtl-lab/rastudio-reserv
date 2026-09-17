@@ -128,6 +128,21 @@ export function alfaPayTypeIdOf(item: Record<string, unknown>) {
   return Number(item.pay_type_id || item.payTypeId || 0) || 0;
 }
 
+const payTypeKindById = new Map<number, PayKind>();
+
+export function rememberPayTypes(items: Array<{ id?: unknown; name?: unknown }>) {
+  for (const it of items) {
+    const id = Number(it.id) || 0;
+    if (!id) continue;
+    const name = String(it.name || "").toLowerCase();
+    if (/коррект/.test(name)) payTypeKindById.set(id, "correct");
+    else if (/возврат/.test(name)) payTypeKindById.set(id, "refund");
+    else if (/товар|продаж/.test(name)) payTypeKindById.set(id, "product");
+    else if (/доход/.test(name)) payTypeKindById.set(id, "income");
+  }
+}
+
+
 export function isGoodsArticle(item: Record<string, unknown>) {
   if (Number(item.commodity_id || item.commodityId)) return true;
   const name = String(item.pay_item || item.pay_item_name || item.item_name || item.article || item.category || "").toLowerCase();
@@ -156,6 +171,8 @@ export function skipAlfaGoodsPay(item: Record<string, unknown>) {
 
 export function kindFromAlfaPay(item: Record<string, unknown>): PayKind {
   const typeId = alfaPayTypeIdOf(item);
+  const fromDir = payTypeKindById.get(typeId);
+  if (fromDir) return fromDir;
   const label = String(item.pay_type || item.type_name || "").toLowerCase();
   if (typeId === 6 || /коррект/.test(label)) return "correct";
   if (typeId === 5 || typeId === 3 || /возврат/.test(label)) return "refund";
@@ -406,9 +423,9 @@ export function ruDateIso(raw: string) {
 export function alfaPayIndexDate(raw?: string) {
   const iso = String(raw || "").trim() ? ruDateIso(String(raw)) : "";
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) return `${m[1]}.${m[2]}.${m[3]}`;
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
   const sv = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" }).slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(sv) ? sv.replace(/-/g, ".") : "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(sv) ? `${sv.slice(8,10)}.${sv.slice(5,7)}.${sv.slice(0,4)}` : "";
 }
 
 /** Красная касса: годы рамки → date_from/date_to в теле. Пустая дата — без фильтра (старый курсор). */
@@ -417,11 +434,11 @@ export function payFillRange(dateFrom?: string, dateTo?: string): { date_from?: 
   if (!raw) return {};
   const iso = ruDateIso(raw).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return {};
-  const from = `${iso.slice(0, 4)}.${iso.slice(5, 7)}.${iso.slice(8, 10)}`;
+  const from = `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
   const toRaw = String(dateTo || "").trim();
   const toIso = toRaw ? ruDateIso(toRaw).slice(0, 10) : shiftMskDate(0);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(toIso)) return { date_from: from };
-  return { date_from: from, date_to: `${toIso.slice(0, 4)}.${toIso.slice(5, 7)}.${toIso.slice(8, 10)}` };
+  return { date_from: from, date_to: `${toIso.slice(8, 10)}.${toIso.slice(5, 7)}.${toIso.slice(0, 4)}` };
 }
 
 export function shiftMskDate(days: number, now = new Date()) {
