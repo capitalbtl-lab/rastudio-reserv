@@ -1,4 +1,4 @@
-/** Классификация шага 4. Без диска и Alfa. */
+/** Классификация шага 5. Без диска и Alfa. */
 
 export type AuditCode =
   | "ok"
@@ -20,7 +20,18 @@ export type AuditCode =
   | "unknown"
   | "нет ответа"
   | "лид"
-  | "архив";
+  | "архив"
+  | "header-stale"
+  | "product"
+  | "orphan-type"
+  | "alien-branch"
+  | "correct-only"
+  | "refund"
+  | "extra-lessons"
+  | "missing-income"
+  | "thin-writeoff"
+  | "writeoff-gap"
+  | "mismatch";
 
 export function moneyClose(a: number, b: number) {
   return Math.abs((Number(a) || 0) - (Number(b) || 0)) <= 1;
@@ -30,12 +41,28 @@ export function auditOnRight(codes: AuditCode[]) {
   return codes.includes("ok");
 }
 
-/** Живая шапка customer.balance, не rest абонемента. */
+export function sameCustomerId(a: unknown, b: unknown) {
+  const x = Number(a);
+  const y = Number(b);
+  return Number.isFinite(x) && Number.isFinite(y) && x > 0 && x === y;
+}
+
+/** Живая шапка customer.balance. Строку не парсим. Объект — только если числовое поле одно. */
 export function alfaBalancePresent(customer: Record<string, unknown> | null | undefined) {
-  if (!customer) return false;
+  return parseAlfaHeader(customer).ok;
+}
+
+export function parseAlfaHeader(customer: Record<string, unknown> | null | undefined): { ok: boolean; header: number } {
+  if (!customer) return { ok: false, header: 0 };
   const raw = customer.balance;
-  if (raw == null || raw === "") return false;
-  return Number.isFinite(Number(raw));
+  if (raw == null || raw === "") return { ok: false, header: 0 };
+  if (typeof raw === "number" && Number.isFinite(raw)) return { ok: true, header: raw };
+  if (typeof raw === "string") return { ok: false, header: 0 };
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const nums = Object.values(raw as Record<string, unknown>).filter((v) => typeof v === "number" && Number.isFinite(v)) as number[];
+    if (nums.length === 1) return { ok: true, header: nums[0] };
+  }
+  return { ok: false, header: 0 };
 }
 
 /** Шаг 5 пишет extras.balance только с шапки Alfa. Не касса, не rest, не pending pay. */
@@ -43,14 +70,14 @@ export function shouldStampAlfaHeader(p: { alfaOk: boolean; headerOk: boolean; p
   return Boolean(p.alfaOk && p.headerOk && !p.pendingPay);
 }
 
-export function alfaHeaderOf(customer: Record<string, unknown> | null | undefined, cttRest = 0, liveCount = 0) {
-  if (!customer) return 0;
-  const raw = customer.balance;
-  if (raw != null && raw !== "") {
-    const n = Number(raw);
-    if (Number.isFinite(n)) return n;
-  }
-  return liveCount > 0 ? Number(cttRest) || 0 : 0;
+export function alfaHeaderOf(customer: Record<string, unknown> | null | undefined, _cttRest = 0, _liveCount = 0) {
+  return parseAlfaHeader(customer).header;
+}
+
+export function alfaLessonCountOf(customer: Record<string, unknown> | null | undefined) {
+  if (!customer) return null;
+  const n = Number(customer.lesson_count);
+  return Number.isFinite(n) ? n : null;
 }
 
 export function classifyAudit(p: {
