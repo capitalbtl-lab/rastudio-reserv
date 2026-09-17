@@ -508,9 +508,11 @@ type StudentHit = {
   paysEmpty?: boolean;
   cashRows?: number;
   cashPaysN?: number;
+  cashRefundN?: number;
   cashCorrN?: number;
   cashGoodsN?: number;
   cashPaysSum?: number;
+  cashRefundSum?: number;
   cashCorrSum?: number;
   cashGoodsSum?: number;
   rechecked?: boolean;
@@ -1876,7 +1878,7 @@ function PeopleFillList({
                 />
                 <CheckLine
                   on={Boolean(row.pays)}
-                  text={`касса загружена${row.pays ? "" : " · нет А"} · платежей ${row.cashPaysN ?? 0} (${rubAudit(row.cashPaysSum)}) · корректировок ${row.cashCorrN ?? 0} (${rubAudit(row.cashCorrSum)}) · товаров ${row.cashGoodsN ?? 0} (${rubAudit(row.cashGoodsSum)})`}
+                  text={`касса загружена${row.pays ? "" : " · нет А"} · платежей ${row.cashPaysN ?? 0} (${rubAudit(row.cashPaysSum)}) · возвратов ${row.cashRefundN ?? 0} (${rubAudit(row.cashRefundSum)}) · корректировок ${row.cashCorrN ?? 0} (${rubAudit(row.cashCorrSum)}) · товаров ${row.cashGoodsN ?? 0} (${rubAudit(row.cashGoodsSum)})`}
                 />
                 <CheckLine
                   on={Boolean(row.paysRechecked)}
@@ -1956,9 +1958,11 @@ type AuditUiRow = {
   funnel?: string;
   leadStatus?: number;
   cashPaysN?: number;
+  cashRefundN?: number;
   cashCorrN?: number;
   cashGoodsN?: number;
   cashPaysSum?: number;
+  cashRefundSum?: number;
   cashCorrSum?: number;
   cashGoodsSum?: number;
   alfaPaysN?: number;
@@ -1971,7 +1975,9 @@ type AuditUiRow = {
 };
 
 function asAuditRow(
-  r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number; cashPaysN?: number; cashCorrN?: number; cashGoodsN?: number; cashPaysSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
+  r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number; cashPaysN?: number;
+  cashRefundN?: number; cashCorrN?: number; cashGoodsN?: number; cashPaysSum?: number;
+  cashRefundSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
   h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean },
 ): AuditUiRow {
   const codes = h?.codes;
@@ -1988,9 +1994,11 @@ function asAuditRow(
     at: h?.at,
     seen: Boolean(h),
     cashPaysN: r.cashPaysN,
+    cashRefundN: r.cashRefundN,
     cashCorrN: r.cashCorrN,
     cashGoodsN: r.cashGoodsN,
     cashPaysSum: r.cashPaysSum,
+    cashRefundSum: r.cashRefundSum,
     cashCorrSum: r.cashCorrSum,
     cashGoodsSum: r.cashGoodsSum,
     alfaPaysN: h?.alfaPaysN,

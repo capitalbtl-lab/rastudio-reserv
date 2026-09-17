@@ -900,6 +900,7 @@ function cashCardOf(cid: number) {
   const raw = Number(findDossier({ crmId: cid })?.extras?.balance);
   const cashHeader = Number.isFinite(raw) ? raw : null;
   const payRows = [] as typeof live;
+  const refundRows = [] as typeof live;
   const corrRows = [] as typeof live;
   const goodsRows = [] as typeof live;
   for (const row of live) {
@@ -907,6 +908,7 @@ function cashCardOf(cid: number) {
     const pt = Number(row.payTypeId);
     if (k === "product" || pt === 9 || pt === 2) goodsRows.push(row);
     else if (k === "correct" || pt === 6) corrRows.push(row);
+    else if (k === "refund" || pt === 5 || pt === 3) refundRows.push(row);
     else payRows.push(row);
   }
   return {
@@ -915,9 +917,11 @@ function cashCardOf(cid: number) {
     cashRemain,
     cashHeader,
     cashPaysN: payRows.length,
+    cashRefundN: refundRows.length,
     cashCorrN: corrRows.length,
     cashGoodsN: goodsRows.length,
     cashPaysSum: balanceOf(payRows),
+    cashRefundSum: balanceOf(refundRows),
     cashCorrSum: balanceOf(corrRows),
     cashGoodsSum: balanceOf(goodsRows),
   };
