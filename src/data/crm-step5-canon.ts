@@ -132,3 +132,76 @@ export function step5Newer(left: unknown, right: unknown) {
   const b = step5Ymd(right);
   return Boolean(a && b && a > b);
 }
+
+export type Step5Reason =
+  | ""
+  | "header-stale"
+  | "product"
+  | "orphan-type"
+  | "alien-branch"
+  | "correct-only"
+  | "refund"
+  | "extra-lessons"
+  | "missing-income"
+  | "thin-writeoff"
+  | "writeoff-gap"
+  | "mismatch";
+
+export function step5Reasons(p: {
+  sverka: boolean;
+  hasH: boolean;
+  pending: boolean;
+  formulaSite?: number;
+  header?: number;
+  cashLessons?: number;
+  cashAll?: number;
+  cashDate?: string;
+  headerAt?: string;
+  orphan?: boolean;
+  alien?: boolean;
+  extraN?: number;
+  holeN?: number;
+  dSiteWithout6?: number;
+  dSiteWithoutRefund?: number;
+}): { main: Step5Reason; tail: Step5Reason[]; c: boolean } {
+  const formulaOk = Number.isFinite(p.formulaSite);
+  if (!p.sverka || !p.hasH || p.pending || !formulaOk) return { main: "", tail: [], c: false };
+  const header = Number(p.header);
+  const site = Number(p.formulaSite);
+  const dSite = site - header;
+  const cashL = Number(p.cashLessons);
+  const cashA = Number(p.cashAll);
+  const dCash = cashL - header;
+  const dAll = cashA - header;
+  const cashNewer = step5Newer(p.cashDate, p.headerAt);
+  const c = !p.orphan && !p.alien && Math.abs(dSite) <= 1;
+  if (c && !cashNewer) return { main: "", tail: [], c: true };
+  const extraN = Number(p.extraN) || 0;
+  const holeN = Number(p.holeN) || 0;
+  const flags: { k: Step5Reason; on: boolean }[] = [
+    { k: "header-stale", on: cashNewer },
+    { k: "product", on: Math.abs(dAll) <= 1 && Math.abs(dSite) > 1 },
+    { k: "orphan-type", on: Boolean(p.orphan) },
+    { k: "alien-branch", on: Boolean(p.alien) },
+    { k: "correct-only", on: Math.abs(dSite) > 1 && Number.isFinite(p.dSiteWithout6) && Math.abs(Number(p.dSiteWithout6)) <= 1 },
+    { k: "refund", on: Math.abs(dSite) > 1 && Number.isFinite(p.dSiteWithoutRefund) && Math.abs(Number(p.dSiteWithoutRefund)) <= 1 },
+    { k: "extra-lessons", on: extraN > 0 && dSite < -1 },
+    { k: "missing-income", on: extraN === 0 && dCash < -1 && dSite < -1 },
+    { k: "thin-writeoff", on: extraN === 0 && holeN === 0 && dCash > 1 && dSite > 1 },
+    { k: "writeoff-gap", on: extraN === 0 && holeN === 0 && Math.abs(dCash) <= 1 && Math.abs(dSite) > 1 },
+    { k: "mismatch", on: Math.abs(dSite) > 1 },
+  ];
+  const on = flags.filter((x) => x.on).map((x) => x.k);
+  if (on.includes("mismatch") && on.some((k) => k !== "mismatch")) {
+    const i = on.indexOf("mismatch");
+    if (i >= 0) on.splice(i, 1);
+  }
+  return { main: on[0] || "", tail: on.slice(1), c };
+}
+
+export function step5ChipMoreLess(main: Step5Reason, dSite: number) {
+  if (!main || main === "product" || main === "orphan-type" || main === "alien-branch") {
+    return { more: false, less: false };
+  }
+  return { more: dSite > 1, less: dSite < -1 };
+}
