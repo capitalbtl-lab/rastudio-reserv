@@ -899,17 +899,28 @@ function cashCardOf(cid: number) {
   const cashRemain = cashPaySum - cashWriteoff;
   const raw = Number(findDossier({ crmId: cid })?.extras?.balance);
   const cashHeader = Number.isFinite(raw) ? raw : null;
-  let cashPaysN = 0;
-  let cashCorrN = 0;
-  let cashGoodsN = 0;
+  const payRows = [] as typeof live;
+  const corrRows = [] as typeof live;
+  const goodsRows = [] as typeof live;
   for (const row of live) {
     const k = String(row.kind || "");
-    const t = Number(row.payTypeId);
-    if (k === "product" || t === 9 || t === 2) cashGoodsN += 1;
-    else if (k === "correct" || t === 6) cashCorrN += 1;
-    else cashPaysN += 1;
+    const pt = Number(row.payTypeId);
+    if (k === "product" || pt === 9 || pt === 2) goodsRows.push(row);
+    else if (k === "correct" || pt === 6) corrRows.push(row);
+    else payRows.push(row);
   }
-  return { cashPaySum, cashWriteoff, cashRemain, cashHeader, cashPaysN, cashCorrN, cashGoodsN };
+  return {
+    cashPaySum,
+    cashWriteoff,
+    cashRemain,
+    cashHeader,
+    cashPaysN: payRows.length,
+    cashCorrN: corrRows.length,
+    cashGoodsN: goodsRows.length,
+    cashPaysSum: balanceOf(payRows),
+    cashCorrSum: balanceOf(corrRows),
+    cashGoodsSum: balanceOf(goodsRows),
+  };
 }
 
 export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: boolean }) {
