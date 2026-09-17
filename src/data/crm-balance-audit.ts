@@ -702,7 +702,7 @@ export async function auditOne(cid: number, branchId: number) {
   }
 
   let extra = shown.ok && shown.headerOk
-    ? `Клиенты ${rub(Number.isFinite(first.formulaSite) ? first.formulaSite : 0)} · Alfa ${rub(shown.alfa)} · касса ${rub(first.cashLessons)} · ${judged.codes.join(", ")}`
+    ? `Клиенты ${rub(Number.isFinite(first.formulaSite) ? first.formulaSite : 0)} · Alfa ${rub(shown.alfa)} · касса ${rub(Number.isFinite(first.formulaSite) ? first.formulaSite : first.cash)} · ${judged.codes.join(", ")}`
     : shown.rejectCid
       ? "400/422, шапки нет"
       : skip || "нет ответа Alfa";
@@ -714,7 +714,7 @@ export async function auditOne(cid: number, branchId: number) {
       name: first.name,
       clients: Number.isFinite(first.formulaSite) ? first.formulaSite : 0,
       alfa: shown.ok && shown.headerOk ? shown.alfa : 0,
-      cash: first.cashLessons,
+      cash: Number.isFinite(first.formulaSite) ? first.formulaSite : first.cash,
       cttRest: 0,
       codes: judged.codes,
       repaired: false,
