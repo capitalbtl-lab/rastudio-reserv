@@ -632,11 +632,19 @@ function closePlanSlot(job: JournalJob, ok: boolean) {
 }
 
 function continueAutoPipe(job: JournalJob) {
+  const rest = (job.pipe || []).map(String).filter(Boolean);
+  if (!rest.length) {
+    closePlanSlot(job, true);
+    return;
+  }
+  if (job.stop || /Остановились/i.test(String(job.msg || ""))) {
+    closePlanSlot(job, true);
+    return;
+  }
   if (!pipeShouldContinue(job)) {
     closePlanSlot(job, false);
     return;
   }
-  const rest = job.pipe.map(String).filter(Boolean);
   const next = rest[0];
   if (!next) {
     closePlanSlot(job, true);
