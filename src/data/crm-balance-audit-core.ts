@@ -47,25 +47,33 @@ export function sameCustomerId(a: unknown, b: unknown) {
   return Number.isFinite(x) && Number.isFinite(y) && x > 0 && x === y;
 }
 
-/** Живая шапка customer.balance. Строку не парсим. Объект — только если числовое поле одно. */
 export function alfaBalancePresent(customer: Record<string, unknown> | null | undefined) {
   return parseAlfaHeader(customer).ok;
 }
 
 export function parseAlfaHeader(customer: Record<string, unknown> | null | undefined): { ok: boolean; header: number } {
   if (!customer) return { ok: false, header: 0 };
+  if (!Object.prototype.hasOwnProperty.call(customer, "balance")) return { ok: false, header: 0 };
   const raw = customer.balance;
-  if (raw == null || raw === "") return { ok: false, header: 0 };
+  if (raw == null) return { ok: false, header: 0 };
   if (typeof raw === "number" && Number.isFinite(raw)) return { ok: true, header: raw };
-  if (typeof raw === "string") return { ok: false, header: 0 };
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    if (!s) return { ok: false, header: 0 };
+    if (/[\u20BD,eE]/.test(s) || /\s/.test(s)) return { ok: false, header: 0 };
+    const n = Number(s);
+    if (!Number.isFinite(n)) return { ok: false, header: 0 };
+    return { ok: true, header: n };
+  }
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-    const nums = Object.values(raw as Record<string, unknown>).filter((v) => typeof v === "number" && Number.isFinite(v)) as number[];
-    if (nums.length === 1) return { ok: true, header: nums[0] };
+    const vals = Object.values(raw as Record<string, unknown>);
+    if (vals.length !== 1) return { ok: false, header: 0 };
+    const one = vals[0];
+    if (typeof one === "number" && Number.isFinite(one)) return { ok: true, header: one };
   }
   return { ok: false, header: 0 };
 }
 
-/** Шаг 5 пишет extras.balance только с шапки Alfa. Не касса, не rest, не pending pay. */
 export function shouldStampAlfaHeader(p: { alfaOk: boolean; headerOk: boolean; pendingPay: boolean }) {
   return Boolean(p.alfaOk && p.headerOk && !p.pendingPay);
 }
@@ -75,9 +83,10 @@ export function alfaHeaderOf(customer: Record<string, unknown> | null | undefine
 }
 
 export function alfaLessonCountOf(customer: Record<string, unknown> | null | undefined) {
-  if (!customer) return null;
-  const n = Number(customer.lesson_count);
-  return Number.isFinite(n) ? n : null;
+  if (!customer || !Object.prototype.hasOwnProperty.call(customer, "paid_lesson_count")) return null;
+  const n = Number(customer.paid_lesson_count);
+  if (!Number.isFinite(n) || n % 1 !== 0) return null;
+  return n;
 }
 
 export function classifyAudit(p: {
