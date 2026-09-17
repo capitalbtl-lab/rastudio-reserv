@@ -19,14 +19,21 @@ describe("шаг 5 канон", () => {
     assert.equal(sameCustomerId(12, 13), false);
   });
 
-  it("роль по is_study и removed, не is_study=2", () => {
+  it("роль по removed=2 и старому диску is_study=2", () => {
     assert.equal(step5Role(1, 0), "клиент");
     assert.equal(step5Role(0, 0), "лид");
     assert.equal(step5Role(1, 2), "архив");
     assert.equal(step5Role(0, 2), "архив");
-    assert.equal(step5Role(2, 0), "не разобрали");
+    assert.equal(step5Role(2, 0), "архив");
     assert.equal(step5Role(1, 1), "не разобрали");
     assert.equal(step5Role("1", "0"), "клиент");
+  });
+
+  it("старый диск is_study=2 сверяем только в наборе шага 2", () => {
+    const p = { hasDossier: true, payFilled: true, livePays: 3, isStudy: 2, removed: 0, inArchiveSet: false };
+    assert.equal(step5CanSverka(p), false);
+    assert.equal(step5SkipNote(p), "не в наборе шага 2, не сверяем");
+    assert.equal(step5CanSverka({ ...p, inArchiveSet: true }), true);
   });
 
   it("лид без кассы не сверка, лид с кассой сверка, лид архива с кассой сверка", () => {

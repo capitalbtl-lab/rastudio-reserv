@@ -61,18 +61,14 @@ export function step5Role(isStudy: unknown, removed: unknown): Step5Role {
   const rem = Number(removed);
   const st = Number(isStudy);
   if (rem === 1) return "не разобрали";
-  if (st === 2) return "не разобрали";
-  if (st === 0 && rem === 2) return "архив";
-  if (st === 1 && rem === 2) return "архив";
-  if (st === 0 && rem === 0) return "лид";
-  if (st === 1 && rem === 0) return "клиент";
+  if (rem === 2 || st === 2) return "архив";
+  if (st === 0) return "лид";
+  if (st === 1) return "клиент";
   return "не разобрали";
 }
 
 export function step5RoleDefined(isStudy: unknown, removed: unknown) {
-  const st = Number(isStudy);
-  const rem = Number(removed);
-  return (st === 0 || st === 1) && (rem === 0 || rem === 1 || rem === 2);
+  return step5Role(isStudy, removed) !== "не разобрали";
 }
 
 export function step5CanSverka(p: {
@@ -86,14 +82,14 @@ export function step5CanSverka(p: {
   if (!p.hasDossier) return false;
   if (!p.payFilled) return false;
   if ((Number(p.livePays) || 0) < 1) return false;
-  if (!step5RoleDefined(p.isStudy, p.removed)) return false;
   const rem = Number(p.removed);
   const st = Number(p.isStudy);
   if (rem === 1) return false;
-  if (st === 2) return false;
   if (st === 1 && rem === 0) return true;
+  if (st === 0 && rem === 0) return true;
+  if (st === 0 && rem === 2) return true;
   if (st === 1 && rem === 2 && p.inArchiveSet) return true;
-  if (st === 0 && (rem === 0 || rem === 2)) return true;
+  if (st === 2 && p.inArchiveSet) return true;
   return false;
 }
 
@@ -105,7 +101,9 @@ export function step5SkipNote(p: {
 }) {
   if ((Number(p.livePays) || 0) < 1) return "кассы нет, не сверяем";
   if (Number(p.removed) === 1) return "не разобрали";
-  if (Number(p.isStudy) === 1 && Number(p.removed) === 2 && !p.inArchiveSet) {
+  const st = Number(p.isStudy);
+  const rem = Number(p.removed);
+  if ((st === 1 && rem === 2 && !p.inArchiveSet) || (st === 2 && !p.inArchiveSet)) {
     return "не в наборе шага 2, не сверяем";
   }
   return "";
