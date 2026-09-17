@@ -1492,6 +1492,7 @@ function catalogFilterBlocks(
   }
   return "";
 }
+export type ArchiveCatalogRejected = { id: number; name: string };
 export type ArchiveCatalogReport = {
   at: string;
   more: boolean;

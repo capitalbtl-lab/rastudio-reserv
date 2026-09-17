@@ -94,7 +94,7 @@ export function loadArchivePolicy(): ArchivePolicy {
         if (v === "intersect" || v === "manual" || v === "left" || v === "catalog") reasons[k] = v;
       }
     }
-    const f = raw.filters && typeof raw.filters === "object" ? raw.filters : {};
+    const f = (raw.filters && typeof raw.filters === "object" ? raw.filters : {}) as Partial<ArchivePolicyFilters> & { intersectLive?: boolean };
     const data: ArchivePolicy = {
       at: String(raw.at || ""),
       ready: Boolean(raw.ready),
