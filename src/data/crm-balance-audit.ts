@@ -1,7 +1,7 @@
 /** Шаг 5: сверка остатка с шапкой. Кассу и журнал не качает. Канон 44. */
 
-import { writeoffSumOf, uniqueBranches } from "./crm-ledger-core";
-import { balanceOf, liveCttOf } from "./crm-pay-core";
+import { uniqueBranches } from "./crm-ledger-core";
+import { liveCttOf } from "./crm-pay-core";
 import {
   classifyAudit,
   moneyClose,
@@ -16,6 +16,7 @@ import {
 } from "./crm-balance-audit-core";
 import {
   step5CanSverka,
+  step5FlagFalse,
   step5Money,
   step5MoscowDay,
   step5Reasons,
@@ -100,8 +101,8 @@ function isProductType(t: number) {
 
 type PayLike = {
   id?: number;
-  deleted?: boolean;
-  hold?: boolean;
+  deleted?: boolean | string | number;
+  hold?: boolean | string | number;
   documentDate?: string;
   at?: string;
   income?: unknown;
@@ -114,10 +115,24 @@ type PayLike = {
 function livePayRows(rows: PayLike[]) {
   return rows.filter((x) => {
     if ((Number(x.id) || 0) <= 0) return false;
-    if (x.deleted) return false;
-    if (x.hold) return false;
+    if (!step5FlagFalse(x.deleted)) return false;
+    if (!step5FlagFalse(x.hold)) return false;
     return Boolean(String(x.documentDate || x.at || "").trim());
   });
+}
+
+function writeoffCanon(cal: { lessonId?: unknown; status?: unknown; amount?: unknown }[], lessonsDisk: number, jready: boolean) {
+  if (lessonsDisk < 1) return { ok: true, n: 0 };
+  if (!jready) return { ok: false, n: 0 };
+  let n = 0;
+  for (const l of cal) {
+    if ((Number(l.lessonId) || 0) <= 0) continue;
+    if (Number(l.status) !== 3) continue;
+    const a = step5Money(l.amount);
+    if (!a.ok) continue;
+    n += a.n;
+  }
+  return { ok: true, n };
 }
 
 export async function diskAudit(cid: number, branchId: number) {
@@ -150,42 +165,49 @@ export async function diskAudit(cid: number, branchId: number) {
     return { t, sum, day, orphan, alien };
   });
   const fair = typed.filter((x) => !x.orphan);
-  const cashLessons = fair.filter((x) => isLessonType(x.t)).reduce((s, x) => s + x.sum.n, 0);
-  const cashProduct = fair.filter((x) => isProductType(x.t)).reduce((s, x) => s + x.sum.n, 0);
-  const cashAll = cashLessons + cashProduct;
+  const lessonRows = fair.filter((x) => isLessonType(x.t));
+  const productRows = fair.filter((x) => isProductType(x.t));
+  const cashLessons = lessonRows.reduce((s, x) => s + x.sum.n, 0);
+  const cashProduct = productRows.reduce((s, x) => s + x.sum.n, 0);
+  const cashAllOk = fair.length > 0;
+  const cashAll = cashAllOk ? cashLessons + cashProduct : Number.NaN;
   const cashDays = fair.map((x) => x.day).filter(Boolean).sort();
   const cashDate = cashDays[cashDays.length - 1] || "";
-  const paySum = balanceOf(payRows as { deleted?: boolean; income?: number; expenditure?: number }[]);
-  const woCal = writeoffSumOf(cal, id);
-  const woCard = writeoffSumOf(journal, id);
-  const snap = d ? accountSnapOf(d.extras?.balance, parseDossierCtt(d.extras)) : Number.NaN;
-  const clients = d ? customerBalance(id, snap, woCal) : 0;
-  const ids = cal.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0);
-  const study = Number(d?.extras?.is_study);
-  const removed = Number(d?.extras?.removed);
+  const ids = cal.map((l) => Number((l as { lessonId?: number }).lessonId) || 0).filter((n) => n > 0);
+  const lessonsDisk = new Set(ids).size;
   const sync = customerSyncOf(id);
   const jready = lessonsJournalReady(sync);
+  const wo = writeoffCanon(cal as { lessonId?: unknown; status?: unknown; amount?: unknown }[], lessonsDisk, jready);
+  const formulaSite = cashAllOk && wo.ok ? cashLessons - wo.n : Number.NaN;
+  const without6 = lessonRows.filter((x) => x.t !== 6);
+  const withoutRefund = lessonRows.filter((x) => x.t !== 5 && x.t !== 3);
+  const dSiteWithout6 = cashAllOk && wo.ok && without6.length ? without6.reduce((s, x) => s + x.sum.n, 0) - wo.n : Number.NaN;
+  const dSiteWithoutRefund = cashAllOk && wo.ok && withoutRefund.length ? withoutRefund.reduce((s, x) => s + x.sum.n, 0) - wo.n : Number.NaN;
+  const snap = d ? accountSnapOf(d.extras?.balance, parseDossierCtt(d.extras)) : Number.NaN;
+  const clients = d ? customerBalance(id, snap, wo.n) : 0;
   return {
-    name: String(d?.child?.fio || "").trim() || `\u043a\u043b\u0438\u0435\u043d\u0442 ${id}`,
+    name: String(d?.child?.fio || "").trim() || `клиент ${id}`,
     clients,
-    cash: paySum - woCal,
+    cash: Number.isFinite(formulaSite) ? formulaSite : 0,
     cashLessons,
     cashAll,
+    cashAllOk,
     cashDate,
-    formulaSite: cashLessons - woCal,
-    woCal,
-    woCard,
+    formulaSite,
+    woCal: wo.n,
+    woCard: wo.n,
+    woOk: wo.ok,
     paysComplete: payCustomerFilled(id),
     livePays: live.length,
-    lessonsDisk: new Set(ids).size,
+    lessonsDisk,
     liveCtt: liveCttOf(parseDossierCtt(d?.extras)).length > 0,
-    dupLessons: ids.length !== new Set(ids).size,
-    badStatus: cal.some((l) => Number(l.status) !== 3 && (Number(l.amount) || 0) > 0),
+    dupLessons: ids.length !== lessonsDisk,
+    badStatus: cal.some((l) => Number((l as { status?: number }).status) !== 3 && (Number((l as { amount?: number }).amount) || 0) > 0),
     goodsNet: goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
     refundGoodsSum: refundGoodsSumOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
     corrLooksGoods: payRows.some((r) => corrLooksGoods(r as { kind?: string; note?: string })),
-    study,
-    removed,
+    study: Number(d?.extras?.is_study),
+    removed: Number(d?.extras?.removed),
     hasDossier: Boolean(d),
     headerAt: String(d?.extras?.headerAt || ""),
     extraN: Number(sync.lessonsExtraN) || 0,
@@ -194,13 +216,36 @@ export async function diskAudit(cid: number, branchId: number) {
     inArchiveSet: isArchiveWorking(id),
     orphan: typed.some((x) => x.orphan),
     alien: typed.some((x) => x.alien),
+    dSiteWithout6,
+    dSiteWithoutRefund,
+    journal: journal.length,
   };
+}
+
+async function sleep(ms: number) {
+  await new Promise((r) => setTimeout(r, ms));
 }
 
 async function alfaShow(branch: number, cid: number) {
   const { token, request } = await import("./alfacrm");
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const t = await token();
+  if (!t) {
+    return {
+      ok: false as const,
+      alfa: 0,
+      headerOk: false,
+      lessonCount: null as number | null,
+      branch: Number(branch) || 1,
+      switched: false,
+      token: t,
+      request,
+      study: Number.NaN,
+      removed: Number.NaN,
+      authStop: true,
+      rejectCid: false,
+    };
+  }
   const branches = uniqueBranches(branch);
   let found: Record<string, unknown> | null = null;
   let used = Number(branch) || 1;
@@ -208,29 +253,37 @@ async function alfaShow(branch: number, cid: number) {
   let authStop = false;
   let rejectCid = false;
   for (const bid of branches) {
-    try {
-      const json = await request(`/v2api/${bid}/customer/index`, { id: cid, page: 0 }, t);
-      const items = crmUnwrapIndex(json).items;
-      const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
-      if (!hit) continue;
-      const parsed = parseAlfaHeader(hit);
-      if (!parsed.ok) continue;
-      found = hit;
-      used = bid;
-      switched = bid !== (Number(branch) || 1);
-      break;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (/\b401\b|\b403\b/.test(msg)) {
-        authStop = true;
+    let retried = false;
+    for (;;) {
+      try {
+        const json = await request(`/v2api/${bid}/customer/index`, { id: cid, page: 0 }, t);
+        const items = crmUnwrapIndex(json).items;
+        const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
+        if (hit && parseAlfaHeader(hit).ok) {
+          found = hit;
+          used = bid;
+          switched = bid !== (Number(branch) || 1);
+        }
+        break;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/\b401\b|\b403\b/.test(msg)) {
+          authStop = true;
+          break;
+        }
+        if (/\b400\b|\b422\b/.test(msg)) {
+          rejectCid = true;
+          break;
+        }
+        if (/\b429\b/.test(msg) && !retried) {
+          retried = true;
+          await sleep(120000);
+          continue;
+        }
         break;
       }
-      if (/\b400\b|\b422\b/.test(msg)) {
-        rejectCid = true;
-        break;
-      }
-      continue;
     }
+    if (found || authStop || rejectCid) break;
   }
   if (!found) {
     return {
@@ -279,8 +332,10 @@ function codesFromCanon(p: {
   holeN: number;
   orphan: boolean;
   alien: boolean;
-}): { codes: AuditCode[]; c: boolean; main: string } {
-  if (!p.headerOk) return { codes: ["\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430"], c: false, main: "" };
+  dSiteWithout6: number;
+  dSiteWithoutRefund: number;
+}): { codes: AuditCode[]; c: boolean; main: string; dCash: number } {
+  if (!p.headerOk) return { codes: ["нет ответа"], c: false, main: "", dCash: 0 };
   const r = step5Reasons({
     sverka: p.sverka,
     hasH: p.headerOk,
@@ -295,6 +350,8 @@ function codesFromCanon(p: {
     holeN: p.holeN,
     orphan: p.orphan,
     alien: p.alien,
+    dSiteWithout6: p.dSiteWithout6,
+    dSiteWithoutRefund: p.dSiteWithoutRefund,
   });
   const codes: AuditCode[] = [];
   if (r.c) codes.push("ok");
@@ -302,7 +359,7 @@ function codesFromCanon(p: {
   for (const t of r.tail) {
     if (t && t !== r.main) codes.push(t as AuditCode);
   }
-  return { codes, c: r.c, main: r.main };
+  return { codes, c: r.c, main: r.main, dCash: Number(p.cashLessons) - Number(p.header) };
 }
 
 export async function auditOne(cid: number, branchId: number) {
@@ -319,10 +376,10 @@ export async function auditOne(cid: number, branchId: number) {
         clients: 0,
         alfa: 0,
         cash: 0,
-        codes: ["\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430"] as AuditCode[],
+        codes: ["нет ответа"] as AuditCode[],
         repaired: false,
         at,
-        extra: "\u041d\u0435\u0442 \u043d\u043e\u043c\u0435\u0440\u0430 \u0443\u0447\u0435\u043d\u0438\u043a\u0430.",
+        extra: "Нет номера ученика.",
       } satisfies AuditHit,
     };
   }
@@ -330,19 +387,19 @@ export async function auditOne(cid: number, branchId: number) {
   try {
     first = await diskAudit(id, branch);
   } catch (e) {
-    const err = e instanceof Error ? e.message : "\u0434\u0438\u0441\u043a";
+    const err = e instanceof Error ? e.message : "диск";
     return {
       hit: {
         cid: id,
         branchId: branch,
-        name: `\u043a\u043b\u0438\u0435\u043d\u0442 ${id}`,
+        name: `клиент ${id}`,
         clients: 0,
         alfa: 0,
         cash: 0,
-        codes: ["\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430"] as AuditCode[],
+        codes: ["нет ответа"] as AuditCode[],
         repaired: false,
         at,
-        extra: `\u0434\u0438\u0441\u043a: ${err}`,
+        extra: `диск: ${err}`,
       } satisfies AuditHit,
     };
   }
@@ -356,10 +413,10 @@ export async function auditOne(cid: number, branchId: number) {
         clients: 0,
         alfa: 0,
         cash: 0,
-        codes: ["\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430"],
+        codes: ["нет ответа"],
         repaired: false,
         at,
-        extra: "\u0414\u043e\u0441\u044c\u0435 \u043d\u0435\u0442, \u0448\u0430г 5 \u043d\u0435 создаёт.",
+        extra: "Досье нет, шаг 5 не создаёт.",
       } satisfies AuditHit,
     };
   }
@@ -373,10 +430,10 @@ export async function auditOne(cid: number, branchId: number) {
         clients: first.clients,
         alfa: 0,
         cash: first.cash,
-        codes: first.study === 0 ? (["\u043b\u0438\u0434"] as AuditCode[]) : (["snap"] as AuditCode[]),
+        codes: first.study === 0 ? (["лид"] as AuditCode[]) : (["snap"] as AuditCode[]),
         repaired: false,
         at,
-        extra: "\u043a\u0430\u0441\u0441\u044b \u043d\u0435\u0442, \u043d\u0435 \u0441\u0432\u0435\u0440\u044f\u0435\u043c",
+        extra: "кассы нет, не сверяем",
       } satisfies AuditHit,
     };
   }
@@ -395,7 +452,7 @@ export async function auditOne(cid: number, branchId: number) {
         codes: ["snap"],
         repaired: false,
         at,
-        extra: "\u043a\u0430\u0441\u0441\u0430 \u0435\u0449\u0451 \u043f\u0438\u0448\u0435\u0442\u0441\u044f",
+        extra: "касса ещё пишется",
       } satisfies AuditHit,
     };
   }
@@ -412,7 +469,7 @@ export async function auditOne(cid: number, branchId: number) {
         codes: ["lessons"],
         repaired: false,
         at,
-        extra: "\u0436\u0443\u0440\u043d\u0430\u043b \u043d\u0435 \u0437\u0430\u043a\u0440\u044b\u0442, \u0448\u0430\u043f\u043a\u0443 \u043d\u0435 \u0437\u043e\u0432\u0451\u043c",
+        extra: "журнал не закрыт, шапку не зовём",
       } satisfies AuditHit,
     };
   }
@@ -443,7 +500,7 @@ export async function auditOne(cid: number, branchId: number) {
         codes: ["snap"],
         repaired: false,
         at,
-        extra: skip || "\u0441\u0432\u0435\u0440\u043a\u0438 \u043d\u0435\u0442",
+        extra: skip || "сверки нет",
       } satisfies AuditHit,
     };
   }
@@ -458,10 +515,10 @@ export async function auditOne(cid: number, branchId: number) {
         clients: first.clients,
         alfa: 0,
         cash: first.cash,
-        codes: ["\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430"],
+        codes: ["нет ответа"],
         repaired: false,
         at,
-        extra: "401/403: \u0441\u0435\u0441\u0441\u0438\u044e \u0448\u0430\u0433\u0430 5 \u0441\u0442\u043e\u043f\u0430\u0442\u044c",
+        extra: "401/403: сессию шага 5 стопать",
       } satisfies AuditHit,
       authStop: true,
     };
@@ -476,11 +533,13 @@ export async function auditOne(cid: number, branchId: number) {
     cashLessons: first.cashLessons,
     cashAll: first.cashAll,
     cashDate: first.cashDate,
-    headerAt: shown.ok && shown.headerOk ? day : first.headerAt,
+    headerAt: first.headerAt,
     extraN: first.extraN,
     holeN: first.holeN,
     orphan: first.orphan,
     alien: first.alien,
+    dSiteWithout6: Number.isFinite(first.dSiteWithout6) ? first.dSiteWithout6 - (shown.ok ? shown.alfa : 0) : Number.NaN,
+    dSiteWithoutRefund: Number.isFinite(first.dSiteWithoutRefund) ? first.dSiteWithoutRefund - (shown.ok ? shown.alfa : 0) : Number.NaN,
   });
 
   if (shown.ok && shown.headerOk) {
@@ -503,17 +562,18 @@ export async function auditOne(cid: number, branchId: number) {
   }
   /* stampDossierAlfaBalance — канон: extras.balance не пишем */
 
-  const extra = shown.ok && shown.headerOk
-    ? `\u041a\u043b\u0438\u0435\u043d\u0442\u044b ${rub(first.formulaSite)} \u00b7 Alfa ${rub(shown.alfa)} \u00b7 \u043a\u0430\u0441\u0441\u0430 ${rub(first.cashLessons)} \u00b7 ${judged.codes.join(", ")}`
+  let extra = shown.ok && shown.headerOk
+    ? `Клиенты ${rub(Number.isFinite(first.formulaSite) ? first.formulaSite : 0)} · Alfa ${rub(shown.alfa)} · касса ${rub(first.cashLessons)} · ${judged.codes.join(", ")}`
     : shown.rejectCid
       ? "400/422, шапки нет"
       : skip || "нет ответа Alfa";
+  if (judged.c && judged.dCash > 1) extra += "; приход больше шапки на списания, так бывает";
   return {
     hit: {
       cid: id,
       branchId: shown.branch || branch,
       name: first.name,
-      clients: first.formulaSite,
+      clients: Number.isFinite(first.formulaSite) ? first.formulaSite : 0,
       alfa: shown.ok && shown.headerOk ? shown.alfa : 0,
       cash: first.cashLessons,
       cttRest: 0,
@@ -528,7 +588,7 @@ export async function auditOne(cid: number, branchId: number) {
 export function mergeAudit(prev: AuditReport | null | undefined, hit: AuditHit, idx: number): AuditReport {
   const rows = [hit, ...(prev?.rows || []).filter((r) => r.cid !== hit.cid)].slice(0, 400);
   const ok = rows.filter((r) => auditOnRight(r.codes)).length;
-  const fail = rows.filter((r) => r.codes.includes("\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430")).length;
+  const fail = rows.filter((r) => r.codes.includes("нет ответа")).length;
   const show = rows.filter((r) => r.codes.some((c) => SHOW_CODES.includes(c)) && !auditOnRight(r.codes)).length;
   const hole = rows.filter((r) => r.codes.some((c) => HOLE_CODES.includes(c)) && !auditOnRight(r.codes)).length;
   return {
@@ -546,7 +606,7 @@ export function mergeAudit(prev: AuditReport | null | undefined, hit: AuditHit, 
 export function auditShowBugNote(rep: AuditReport) {
   const mass = SHOW_CODES.map((c) => ({ c, n: rep.rows.filter((r) => r.codes.includes(c)).length })).filter((x) => x.n >= 10);
   if (!mass.length) return "";
-  return `ошибка показа в Клиентах: ${mass.map((x) => `${x.c} ${x.n}`).join(" \u00b7 ")}`;
+  return `ошибка показа в Клиентах: ${mass.map((x) => `${x.c} ${x.n}`).join(" · ")}`;
 }
 
 void shouldStampAlfaHeader;

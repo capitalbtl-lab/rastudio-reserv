@@ -19,6 +19,27 @@ export function step5Money(raw: unknown): { ok: boolean; n: number } {
   return { ok: true, n };
 }
 
+export function step5FlagFalse(raw: unknown) {
+  if (raw == null) return true;
+  if (raw === false || raw === 0) return true;
+  if (typeof raw === "string") {
+    const s = raw.trim().toLowerCase();
+    if (!s || s === "0" || s === "false") return true;
+  }
+  return false;
+}
+
+export function step5FlagTrue(raw: unknown) {
+  if (raw === true || raw === 1) return true;
+  if (typeof raw === "string") {
+    const s = raw.trim().toLowerCase();
+    if (s === "1" || s === "true") return true;
+    if (s && !step5FlagFalse(raw)) return true;
+  }
+  if (raw != null && typeof raw !== "string" && !step5FlagFalse(raw) && raw !== false && raw !== 0) return true;
+  return false;
+}
+
 export function step5MoscowDay(d = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Moscow",
