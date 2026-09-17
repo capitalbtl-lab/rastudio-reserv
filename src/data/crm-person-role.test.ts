@@ -8,6 +8,7 @@ describe("роль человека: один экран", () => {
     assert.equal(personRole({ is_study: 0 }), "лид");
     assert.equal(personRole({ is_study: 2 }), "архив");
     assert.equal(personRole({ is_study: 1, removed: 1 }), "удалён");
+    assert.equal(personRole({ is_study: 1, removed: 2 }), "архив");
   });
 
   it("ученик с хвостом воронки Alfa — всё равно учится, не лид", () => {
