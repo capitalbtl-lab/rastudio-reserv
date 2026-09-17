@@ -1063,6 +1063,8 @@ function journalJobView(job = journalJobSnapshot()) {
     ...litePullState(),
     job,
     groupRow,
+    planLog: loadPlanLog(),
+    historyWorker: historyWorkerBeat(),
   };
 }
 

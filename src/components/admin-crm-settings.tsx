@@ -1470,6 +1470,8 @@ function applyJobStatus<T extends {
     lastArchives: res.lastArchives ?? base.lastArchives,
     lastArchivesPupils: res.lastArchivesPupils ?? base.lastArchivesPupils,
     job: res.job ?? base.job,
+    planLog: (res as { planLog?: unknown }).planLog ?? (base as { planLog?: unknown }).planLog,
+    historyWorker: (res as { historyWorker?: unknown }).historyWorker ?? (base as { historyWorker?: unknown }).historyWorker,
   };
 }
 
