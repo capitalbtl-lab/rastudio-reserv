@@ -1353,7 +1353,9 @@ function auditReasonHit(r: AuditSegIn, id: string) {
 }
 
 function rubAudit(n?: number) {
-  return `${Math.round(Number(n) || 0)} ₽`;
+  const v = Math.round(Number(n) || 0);
+  if (v > 0) return `+${v} ₽`;
+  return `${v} ₽`;
 }
 
 function patchPeopleSide(
@@ -1874,7 +1876,7 @@ function PeopleFillList({
                 />
                 <CheckLine
                   on={Boolean(row.pays)}
-                  text={`касса загружена${row.pays ? "" : " · нет А"} · платежей ${row.cashPaysN ?? 0} (${Math.round(Number(row.cashPaysSum) || 0)} ₽) · корректировок ${row.cashCorrN ?? 0} (${Math.round(Number(row.cashCorrSum) || 0)} ₽) · товаров ${row.cashGoodsN ?? 0} (${Math.round(Number(row.cashGoodsSum) || 0)} ₽)`}
+                  text={`касса загружена${row.pays ? "" : " · нет А"} · платежей ${row.cashPaysN ?? 0} (${rubAudit(row.cashPaysSum)}) · корректировок ${row.cashCorrN ?? 0} (${rubAudit(row.cashCorrSum)}) · товаров ${row.cashGoodsN ?? 0} (${rubAudit(row.cashGoodsSum)})`}
                 />
                 <CheckLine
                   on={Boolean(row.paysRechecked)}
