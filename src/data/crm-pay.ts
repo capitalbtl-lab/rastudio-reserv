@@ -145,7 +145,7 @@ function save(store: Store, opts?: { keepAll?: boolean }) {
   const items = opts?.keepAll || rawItems.length <= PAY_STORE_CAP ? rawItems : rawItems.slice(-PAY_STORE_CAP);
   writeFileSync(
     fileOf(),
-    JSON.stringify({ at: new Date().toISOString(), items, poll, complete: (store.complete || []).slice(-4000), payFill: store.payFill || {} }, null, 0),
+    JSON.stringify({ at: new Date().toISOString(), items, poll, complete: [], payFill: store.payFill || {} }, null, 0),
     "utf8",
   );
   try {
@@ -305,8 +305,7 @@ export function customerBalance(customerId: number, fallback?: number | string, 
 }
 
 export function isPayJournalComplete(customerId: number) {
-  const id = Number(customerId) || 0;
-  return Boolean(id && completeSetOf(load()).has(id));
+  return payFillFull(customerId);
 }
 
 export function markPayJournalComplete(customerId: number) {

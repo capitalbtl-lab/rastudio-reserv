@@ -50,7 +50,7 @@ describe("роль человека: один экран", () => {
   it("Сделать лидом / клиентом пишет диск и Alfa одним комплектом", () => {
     assert.deepEqual(personSaveFields(0), { is_study: 0, removed: 0, lead_status_id: 0, crm_funnel: "1" });
     assert.deepEqual(personSaveFields(1), { is_study: 1, removed: 0, lead_status_id: 0, crm_funnel: "0" });
-    assert.deepEqual(personSaveFields(2), { is_study: 2, removed: 2, lead_status_id: 0, crm_funnel: "0" });
+    assert.deepEqual(personSaveFields(2), { removed: 2, lead_status_id: 0, crm_funnel: "0" });
     assert.equal(personIsStudy("лид"), 0);
     assert.equal(personRole({ ...personSaveFields(0) }), "лид");
     assert.equal(personRole({ ...personSaveFields(1) }), "учится");

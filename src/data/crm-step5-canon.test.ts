@@ -40,7 +40,9 @@ describe("шаг 5 канон", () => {
     const base = { hasDossier: true, payFilled: true, isStudy: 0, removed: 0, inArchiveSet: false };
     assert.equal(step5CanSverka({ ...base, livePays: 0 }), false);
     assert.equal(step5CanSverka({ ...base, livePays: 2 }), true);
-    assert.equal(step5CanSverka({ ...base, livePays: 2, removed: 2 }), true);
+    assert.equal(step5CanSverka({ ...base, livePays: 2, removed: 2 }), false);
+    assert.equal(step5CanSverka({ ...base, livePays: 2, removed: 2, inArchiveSet: true }), true);
+    assert.equal(step5SkipNote({ livePays: 2, isStudy: 0, removed: 2, inArchiveSet: false }), "не в наборе шага 2, не сверяем");
     assert.equal(step5SkipNote({ livePays: 0, isStudy: 0, removed: 0, inArchiveSet: false }), "кассы нет, не сверяем");
   });
 

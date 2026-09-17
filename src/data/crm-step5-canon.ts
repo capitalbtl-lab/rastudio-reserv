@@ -87,9 +87,7 @@ export function step5CanSverka(p: {
   if (rem === 1) return false;
   if (st === 1 && rem === 0) return true;
   if (st === 0 && rem === 0) return true;
-  if (st === 0 && rem === 2) return true;
-  if (st === 1 && rem === 2 && p.inArchiveSet) return true;
-  if (st === 2 && p.inArchiveSet) return true;
+  if ((rem === 2 || st === 2) && p.inArchiveSet) return true;
   return false;
 }
 
@@ -103,7 +101,7 @@ export function step5SkipNote(p: {
   if (Number(p.removed) === 1) return "не разобрали";
   const st = Number(p.isStudy);
   const rem = Number(p.removed);
-  if ((st === 1 && rem === 2 && !p.inArchiveSet) || (st === 2 && !p.inArchiveSet)) {
+  if ((rem === 2 || st === 2) && !p.inArchiveSet) {
     return "не в наборе шага 2, не сверяем";
   }
   return "";
