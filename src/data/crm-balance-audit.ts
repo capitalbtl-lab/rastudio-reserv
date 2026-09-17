@@ -16,10 +16,11 @@ import {
 } from "./crm-balance-audit-core";
 import {
   step5CanSverka,
+  step5Money,
   step5MoscowDay,
   step5Reasons,
   step5SkipNote,
-  type Step5Reason,
+  step5Ymd,
 } from "./crm-step5-canon";
 
 export type { AuditCode } from "./crm-balance-audit-core";
@@ -61,6 +62,7 @@ export type AuditReport = {
 
 const SHOW_CODES: AuditCode[] = ["ctt", "formula", "src"];
 const HOLE_CODES: AuditCode[] = ["lessons", "pays", "snap"];
+const KNOWN_PAY = new Set([1, 2, 3, 5, 6, 9]);
 
 export function emptyAudit(): AuditReport {
   return { at: "", idx: 0, scanned: 0, ok: 0, hole: 0, show: 0, fail: 0, rows: [] };
@@ -70,22 +72,51 @@ function rub(n: number) {
   return `${Math.round(Number(n) || 0)} \u20BD`;
 }
 
-function livePayRows(
-  rows: {
-    id?: number;
-    deleted?: boolean;
-    hold?: boolean;
-    documentDate?: string;
-    at?: string;
-    date?: string;
-  }[],
-) {
+function payTypeOf(row: { payTypeId?: unknown; kind?: unknown }) {
+  const n = Number(row.payTypeId);
+  if (Number.isFinite(n)) return KNOWN_PAY.has(n) ? n : 0;
+  const k = String(row.kind || "").trim().toLowerCase();
+  if (k === "income") return 1;
+  if (k === "product") return 9;
+  if (k === "refund") return 5;
+  if (k === "correct") return 6;
+  return 0;
+}
+
+function rowSum(row: { income?: unknown; expenditure?: unknown }) {
+  const a = step5Money(row.income);
+  const b = step5Money(row.expenditure);
+  if (!a.ok || !b.ok) return { ok: false, n: 0 };
+  return { ok: true, n: a.n - b.n };
+}
+
+function isLessonType(t: number) {
+  return t === 1 || t === 5 || t === 6 || t === 3;
+}
+
+function isProductType(t: number) {
+  return t === 9 || t === 2;
+}
+
+type PayLike = {
+  id?: number;
+  deleted?: boolean;
+  hold?: boolean;
+  documentDate?: string;
+  at?: string;
+  income?: unknown;
+  expenditure?: unknown;
+  payTypeId?: unknown;
+  kind?: unknown;
+  branchId?: unknown;
+};
+
+function livePayRows(rows: PayLike[]) {
   return rows.filter((x) => {
     if ((Number(x.id) || 0) <= 0) return false;
     if (x.deleted) return false;
     if (x.hold) return false;
-    const dt = String(x.documentDate || x.at || "").trim();
-    return Boolean(dt);
+    return Boolean(String(x.documentDate || x.at || "").trim());
   });
 }
 
@@ -95,6 +126,8 @@ export async function diskAudit(cid: number, branchId: number) {
   const { paysOf, payCustomerFilled, customerBalance } = await import("./crm-pay");
   const { accountSnapOf, goodsNetOf, refundGoodsSumOf, corrLooksGoods } = await import("./crm-pay-core");
   const { parseDossierCtt } = await import("./pupil-tariffs");
+  const { customerSyncOf, lessonsJournalReady } = await import("./crm-customer-sync");
+  const { isArchiveWorking } = await import("./crm-archive-policy");
   const id = Number(cid) || 0;
   const branch = Number(branchId) || 1;
   const d = findDossier({ crmId: id });
@@ -105,11 +138,24 @@ export async function diskAudit(cid: number, branchId: number) {
   }));
   const cal = loadCustomerCalendar(id);
   const journal = collectCustomerJournal(id, groups);
-  const payRows = paysOf(id).filter((x) => !x.deleted);
-  const live = livePayRows(
-    payRows as { id?: number; deleted?: boolean; hold?: boolean; documentDate?: string; at?: string }[],
-  );
-  const paySum = balanceOf(payRows);
+  const payRows = paysOf(id) as PayLike[];
+  const live = livePayRows(payRows);
+  const typed = live.map((x) => {
+    const t = payTypeOf(x);
+    const sum = rowSum(x);
+    const day = step5Ymd(x.documentDate || x.at);
+    const bid = Number(x.branchId) || 0;
+    const orphan = t === 0 || !sum.ok;
+    const alien = !orphan && bid > 0 && bid !== 1 && bid !== 2 && bid !== 3 && bid !== 4;
+    return { t, sum, day, orphan, alien };
+  });
+  const fair = typed.filter((x) => !x.orphan);
+  const cashLessons = fair.filter((x) => isLessonType(x.t)).reduce((s, x) => s + x.sum.n, 0);
+  const cashProduct = fair.filter((x) => isProductType(x.t)).reduce((s, x) => s + x.sum.n, 0);
+  const cashAll = cashLessons + cashProduct;
+  const cashDays = fair.map((x) => x.day).filter(Boolean).sort();
+  const cashDate = cashDays[cashDays.length - 1] || "";
+  const paySum = balanceOf(payRows as { deleted?: boolean; income?: number; expenditure?: number }[]);
   const woCal = writeoffSumOf(cal, id);
   const woCard = writeoffSumOf(journal, id);
   const snap = d ? accountSnapOf(d.extras?.balance, parseDossierCtt(d.extras)) : Number.NaN;
@@ -117,16 +163,16 @@ export async function diskAudit(cid: number, branchId: number) {
   const ids = cal.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0);
   const study = Number(d?.extras?.is_study);
   const removed = Number(d?.extras?.removed);
-  const goodsNet = goodsNetOf(payRows);
-  const cashLessons = paySum - goodsNet;
-  const formulaSite = cashLessons - woCal;
+  const sync = customerSyncOf(id);
+  const jready = lessonsJournalReady(sync);
   return {
     name: String(d?.child?.fio || "").trim() || `\u043a\u043b\u0438\u0435\u043d\u0442 ${id}`,
     clients,
     cash: paySum - woCal,
     cashLessons,
-    cashAll: paySum,
-    formulaSite,
+    cashAll,
+    cashDate,
+    formulaSite: cashLessons - woCal,
     woCal,
     woCard,
     paysComplete: payCustomerFilled(id),
@@ -135,15 +181,19 @@ export async function diskAudit(cid: number, branchId: number) {
     liveCtt: liveCttOf(parseDossierCtt(d?.extras)).length > 0,
     dupLessons: ids.length !== new Set(ids).size,
     badStatus: cal.some((l) => Number(l.status) !== 3 && (Number(l.amount) || 0) > 0),
-    goodsNet,
-    refundGoodsSum: refundGoodsSumOf(payRows),
-    corrLooksGoods: payRows.some((r) => corrLooksGoods(r)),
+    goodsNet: goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
+    refundGoodsSum: refundGoodsSumOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
+    corrLooksGoods: payRows.some((r) => corrLooksGoods(r as { kind?: string; note?: string })),
     study,
     removed,
     hasDossier: Boolean(d),
     headerAt: String(d?.extras?.headerAt || ""),
-    extraN: Number(d?.extras?.extraN) || 0,
-    holeN: Number(d?.extras?.holeN) || 0,
+    extraN: Number(sync.lessonsExtraN) || 0,
+    holeN: Number(sync.lessonsHoleN) || 0,
+    jready,
+    inArchiveSet: isArchiveWorking(id),
+    orphan: typed.some((x) => x.orphan),
+    alien: typed.some((x) => x.alien),
   };
 }
 
@@ -223,12 +273,14 @@ function codesFromCanon(p: {
   header: number;
   cashLessons: number;
   cashAll: number;
+  cashDate: string;
   headerAt: string;
   extraN: number;
   holeN: number;
-  goodsNet: number;
-}): AuditCode[] {
-  if (!p.headerOk) return ["\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430"];
+  orphan: boolean;
+  alien: boolean;
+}): { codes: AuditCode[]; c: boolean; main: string } {
+  if (!p.headerOk) return { codes: ["\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430"], c: false, main: "" };
   const r = step5Reasons({
     sverka: p.sverka,
     hasH: p.headerOk,
@@ -237,9 +289,12 @@ function codesFromCanon(p: {
     header: p.header,
     cashLessons: p.cashLessons,
     cashAll: p.cashAll,
-    headerAt: p.headerAt || step5MoscowDay(),
+    cashDate: p.cashDate,
+    headerAt: p.headerAt,
     extraN: p.extraN,
     holeN: p.holeN,
+    orphan: p.orphan,
+    alien: p.alien,
   });
   const codes: AuditCode[] = [];
   if (r.c) codes.push("ok");
@@ -247,17 +302,14 @@ function codesFromCanon(p: {
   for (const t of r.tail) {
     if (t && t !== r.main) codes.push(t as AuditCode);
   }
-  if (p.goodsNet && !codes.includes("product")) {
-    /* \u0442\u043e\u0432\u0430\u0440 \u043d\u0435 \u0433\u043b\u0430\u0432\u043d\u0430\u044f \u2014 \u043d\u0435 \u043f\u043e\u0434\u043c\u0435\u0448\u0438\u0432\u0430\u0442\u044c \u0441\u0442\u0430\u0440\u044b\u0439 goods */
-  }
-  if (!codes.length) codes.push("mismatch");
-  return [...new Set(codes)];
+  return { codes, c: r.c, main: r.main };
 }
 
 export async function auditOne(cid: number, branchId: number) {
   const id = Number(cid) || 0;
   const branch = Number(branchId) || 1;
   const at = new Date().toISOString();
+  const day = step5MoscowDay();
   if (!id) {
     return {
       hit: {
@@ -307,7 +359,7 @@ export async function auditOne(cid: number, branchId: number) {
         codes: ["\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430"],
         repaired: false,
         at,
-        extra: "\u0414\u043e\u0441\u044c\u0435 \u043d\u0435\u0442, \u0448\u0430\u0433 5 \u043d\u0435 \u0441\u043e\u0437\u0434\u0430\u0451\u0442.",
+        extra: "\u0414\u043e\u0441\u044c\u0435 \u043d\u0435\u0442, \u0448\u0430г 5 \u043d\u0435 создаёт.",
       } satisfies AuditHit,
     };
   }
@@ -330,8 +382,8 @@ export async function auditOne(cid: number, branchId: number) {
   }
 
   const { pendingExportIds } = await import("./crm-export-queue");
-  const pendingPay = pendingExportIds(["pay.create", "pay.update", "pay.delete"]).has(id);
-  if (pendingPay || !first.paysComplete) {
+  const pendingPay = pendingExportIds(["pay.create", "pay.update", "pay.delete"]).has(id) || !first.paysComplete;
+  if (pendingPay) {
     return {
       hit: {
         cid: id,
@@ -348,20 +400,53 @@ export async function auditOne(cid: number, branchId: number) {
     };
   }
 
+  if (first.lessonsDisk > 0 && !first.jready) {
+    return {
+      hit: {
+        cid: id,
+        branchId: branch,
+        name: first.name,
+        clients: first.clients,
+        alfa: 0,
+        cash: first.cash,
+        codes: ["lessons"],
+        repaired: false,
+        at,
+        extra: "\u0436\u0443\u0440\u043d\u0430\u043b \u043d\u0435 \u0437\u0430\u043a\u0440\u044b\u0442, \u0448\u0430\u043f\u043a\u0443 \u043d\u0435 \u0437\u043e\u0432\u0451\u043c",
+      } satisfies AuditHit,
+    };
+  }
+
   const sverka = step5CanSverka({
     hasDossier: first.hasDossier,
     payFilled: first.paysComplete,
     livePays: first.livePays,
     isStudy: first.study,
     removed: first.removed,
-    inArchiveSet: true,
+    inArchiveSet: first.inArchiveSet,
   });
   const skip = step5SkipNote({
     livePays: first.livePays,
     isStudy: first.study,
     removed: first.removed,
-    inArchiveSet: true,
+    inArchiveSet: first.inArchiveSet,
   });
+  if (!sverka) {
+    return {
+      hit: {
+        cid: id,
+        branchId: branch,
+        name: first.name,
+        clients: first.clients,
+        alfa: 0,
+        cash: first.cash,
+        codes: ["snap"],
+        repaired: false,
+        at,
+        extra: skip || "\u0441\u0432\u0435\u0440\u043a\u0438 \u043d\u0435\u0442",
+      } satisfies AuditHit,
+    };
+  }
 
   const shown = await alfaShow(branch, id);
   if (shown.authStop) {
@@ -382,18 +467,7 @@ export async function auditOne(cid: number, branchId: number) {
     };
   }
 
-  if (shouldStampAlfaHeader({
-    alfaOk: shown.ok,
-    headerOk: Boolean(shown.ok && shown.headerOk),
-    pendingPay: false,
-  })) {
-    const { stampDossierAlfaBalance } = await import("./dossiers");
-    stampDossierAlfaBalance(id, shown.alfa, shown.branch);
-    const { stampCustomerSync } = await import("./crm-customer-sync");
-    stampCustomerSync(id, { paysRecheckAt: at });
-  }
-
-  const codes = codesFromCanon({
+  const judged = codesFromCanon({
     headerOk: Boolean(shown.ok && shown.headerOk),
     sverka,
     pending: false,
@@ -401,16 +475,39 @@ export async function auditOne(cid: number, branchId: number) {
     header: shown.ok && shown.headerOk ? shown.alfa : 0,
     cashLessons: first.cashLessons,
     cashAll: first.cashAll,
-    headerAt: first.headerAt,
+    cashDate: first.cashDate,
+    headerAt: shown.ok && shown.headerOk ? day : first.headerAt,
     extraN: first.extraN,
     holeN: first.holeN,
-    goodsNet: first.goodsNet,
+    orphan: first.orphan,
+    alien: first.alien,
   });
+
+  if (shown.ok && shown.headerOk) {
+    const { upsertDossier } = await import("./dossiers");
+    const extras: Record<string, string> = {
+      header: String(shown.alfa),
+      headerAt: day,
+      auditRecheckAt: day,
+      auditReason: judged.main,
+      C: judged.c ? "1" : "0",
+    };
+    if (shown.lessonCount != null) extras.headerC = String(shown.lessonCount);
+    const st = Number(shown.study);
+    const rem = Number(shown.removed);
+    if (st === 0 || st === 1) extras.is_study = String(st);
+    if (rem === 0 || rem === 1 || rem === 2) extras.removed = String(rem);
+    upsertDossier({ crmId: id, source: "step5-header", extras, persist: true, byCrmOnly: true });
+    const { stampCustomerSync } = await import("./crm-customer-sync");
+    stampCustomerSync(id, { paysRecheckAt: at });
+  }
+  /* stampDossierAlfaBalance — канон: extras.balance не пишем */
+
   const extra = shown.ok && shown.headerOk
-    ? `\u041a\u043b\u0438\u0435\u043d\u0442\u044b ${rub(first.formulaSite)} \u00b7 Alfa ${rub(shown.alfa)} \u00b7 \u043a\u0430\u0441\u0441\u0430 ${rub(first.cashLessons)} \u00b7 ${codes.join(", ")}`
-    : shown.ok
-      ? "\u0432 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0435 \u043d\u0435\u0442 \u0448\u0430\u043f\u043a\u0438"
-      : skip || "\u043d\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u0430 Alfa";
+    ? `\u041a\u043b\u0438\u0435\u043d\u0442\u044b ${rub(first.formulaSite)} \u00b7 Alfa ${rub(shown.alfa)} \u00b7 \u043a\u0430\u0441\u0441\u0430 ${rub(first.cashLessons)} \u00b7 ${judged.codes.join(", ")}`
+    : shown.rejectCid
+      ? "400/422, шапки нет"
+      : skip || "нет ответа Alfa";
   return {
     hit: {
       cid: id,
@@ -420,7 +517,7 @@ export async function auditOne(cid: number, branchId: number) {
       alfa: shown.ok && shown.headerOk ? shown.alfa : 0,
       cash: first.cashLessons,
       cttRest: 0,
-      codes,
+      codes: judged.codes,
       repaired: false,
       at,
       extra,
@@ -449,7 +546,7 @@ export function mergeAudit(prev: AuditReport | null | undefined, hit: AuditHit, 
 export function auditShowBugNote(rep: AuditReport) {
   const mass = SHOW_CODES.map((c) => ({ c, n: rep.rows.filter((r) => r.codes.includes(c)).length })).filter((x) => x.n >= 10);
   if (!mass.length) return "";
-  return `\u043e\u0448\u0438\u0431\u043a\u0430 \u043f\u043e\u043a\u0430\u0437\u0430 \u0432 \u041a\u043b\u0438\u0435\u043d\u0442\u0430\u0445: ${mass.map((x) => `${x.c} ${x.n}`).join(" \u00b7 ")}`;
+  return `ошибка показа в Клиентах: ${mass.map((x) => `${x.c} ${x.n}`).join(" \u00b7 ")}`;
 }
 
-void step5MoscowDay;
+void shouldStampAlfaHeader;
