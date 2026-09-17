@@ -618,8 +618,13 @@ function closePlanSlot(job: JournalJob, ok: boolean) {
     saveSyncPolicyRun(stampPlanFired(pol, card.id, job.id || "", new Date()).plan);
     return;
   }
+  const now = new Date();
   saveSyncPolicyRun(
-    pol.plan.map((r) => (r.id === card.id ? { ...r, lastSkip: "pipe" } : r)),
+    pol.plan.map((r) => {
+      if (r.id !== card.id) return r;
+      if (r.when.kind === "ymd") return { ...r, lastSkip: "pipe", lastFiredAt: now.toISOString() };
+      return { ...r, dueAt: "", lastSkip: "pipe", lastFiredAt: now.toISOString(), lastJobId: job.id || r.lastJobId };
+    }),
   );
   notePlan({
     kind: "fail",

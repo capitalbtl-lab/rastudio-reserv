@@ -609,11 +609,35 @@ export function HistoryPlanPanel({
               </span>
             ) : null}
             <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">{r.study === "2" ? "Архив" : "Сейчас ходят"}</span>
-            {r.study === "1" && r.mode === "auto" && r.leads === false ? (
-              <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">без лидов</span>
+            {r.study === "1" && r.mode === "auto" ? (
+              <button
+                type="button"
+                className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7"
+                disabled={busy}
+                onClick={() =>
+                  patch({
+                    ...policy,
+                    plan: policy.plan.map((x) => (x.id === r.id ? { ...x, leads: x.leads === false } : x)),
+                  })
+                }
+              >
+                {r.leads === false ? "без лидов" : "лиды вкл"}
+              </button>
             ) : null}
-            {r.study === "1" && r.mode === "auto" && r.archGroups === false ? (
-              <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">без архива групп</span>
+            {r.study === "1" && r.mode === "auto" ? (
+              <button
+                type="button"
+                className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7"
+                disabled={busy}
+                onClick={() =>
+                  patch({
+                    ...policy,
+                    plan: policy.plan.map((x) => (x.id === r.id ? { ...x, archGroups: x.archGroups === false } : x)),
+                  })
+                }
+              >
+                {r.archGroups === false ? "без архива групп" : "архив групп вкл"}
+              </button>
             ) : null}
             {r.mode !== "auto" ? (
               <span className="h-7 rounded-full bg-amber-50 px-2.5 text-[0.72rem] font-semibold leading-7 text-amber-900">один шаг, не 1–5</span>

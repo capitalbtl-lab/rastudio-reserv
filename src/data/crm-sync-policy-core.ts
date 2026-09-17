@@ -465,9 +465,18 @@ export function markPlanDue(policy: CrmSyncPolicy, now = new Date()): CrmSyncPol
   };
 }
 
-export function pickDueRule(policy: CrmSyncPolicy): HistorySchedule | null {
+export function pickDueRule(policy: CrmSyncPolicy, now = new Date()): HistorySchedule | null {
   if (!policy.planEnabled) return null;
-  return policy.plan.find((r) => r.on && r.dueAt) || null;
+  return (
+    policy.plan.find((r) => {
+      if (!r.on || !r.dueAt) return false;
+      if (r.lastSkip === "pipe") {
+        const t = Date.parse(r.lastFiredAt || r.dueAt);
+        if (Number.isFinite(t) && now.getTime() - t < 20 * 60 * 1000) return false;
+      }
+      return true;
+    }) || null
+  );
 }
 
 export function stampPlanFired(policy: CrmSyncPolicy, id: string, jobId: string, now = new Date()): CrmSyncPolicy {
