@@ -117,6 +117,9 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
     delete next.loadPaysN;
     delete next.recheckPaysN;
   }
+  if (next.loadLessonsDisk == null && prev.lessonsDisk != null) next.loadLessonsDisk = Number(prev.lessonsDisk) || 0;
+  if (next.loadLessonsAlfa == null && prev.lessonsAlfa != null) next.loadLessonsAlfa = Number(prev.lessonsAlfa) || 0;
+  if (next.loadDupsN == null && prev.lessonsExtraN != null) next.loadDupsN = Number(prev.lessonsExtraN) || 0;
   const diskN = patch.lessonsDisk != null ? Number(patch.lessonsDisk) : undefined;
   const alfaN = patch.lessonsAlfa != null ? Number(patch.lessonsAlfa) : undefined;
   const extraN = patch.lessonsExtraN != null ? Number(patch.lessonsExtraN) : undefined;

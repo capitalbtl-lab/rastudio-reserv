@@ -648,10 +648,12 @@ function CheckLine({ on, text }: { on: boolean; text: string }) {
 }
 
 function pairCount(before?: number, after?: number, now?: number) {
-  const left = before != null && Number.isFinite(Number(before)) ? String(Math.max(0, Number(before) || 0)) : "—";
-  const rightRaw = after != null && Number.isFinite(Number(after)) ? Number(after) : now;
-  const right = rightRaw != null && Number.isFinite(Number(rightRaw)) ? String(Math.max(0, Number(rightRaw) || 0)) : "—";
-  return `до ${left} → после ${right}`;
+  const pick = (n?: number) => (n != null && Number.isFinite(Number(n)) ? Math.max(0, Number(n) || 0) : null);
+  const left = pick(before) ?? pick(now);
+  const right = pick(after) ?? pick(now);
+  const a = left == null ? "—" : String(left);
+  const b = right == null ? "—" : String(right);
+  return `до ${a} → после ${b}`;
 }
 
 function rubShort(n?: number | null) {
