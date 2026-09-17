@@ -117,7 +117,7 @@ function editFromRow(p: CashRow): CashEdit {
     name: p.name,
     parent: p.parent,
     kind: p.kind || "income",
-    sum: String(p.kind === "refund" ? p.expenditure || "" : p.income || ""),
+    sum: String(p.kind === "refund" ? (p.expenditure || p.income || "") : p.income || ""),
     date: ruToIso(p.documentDate || ""),
     payAccountId: String(p.payAccountId || 1),
     payItemId: String(p.payItemId || defaultPayItemId(bid)),

@@ -230,8 +230,7 @@ export function markRefundOfGoods(rows: PayRow[]): PayRow[] {
     if (r.deleted || r.kind !== "refund") return r;
     const abs = refundAbs(r);
     const byItem = Boolean(r.payItemId) && products.some((p) => Number(p.payItemId) === Number(r.payItemId));
-    const bySum = products.some((p) => Math.abs(payNum(p.income) - abs) <= 1);
-    return { ...r, refundOfGoods: Boolean(r.refundOfGoods || byItem || bySum) };
+    return { ...r, refundOfGoods: Boolean(r.refundOfGoods || byItem) };
   });
 }
 

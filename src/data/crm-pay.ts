@@ -630,14 +630,19 @@ export function replaceCustomerPays(customerId: number, rows: PayRow[], opts?: {
 
 export function packPay(item: Record<string, unknown>, customerId: number, branchId: number): PayRow | null {
   const id = Number(item.id || 0) || 0;
-  const income = payNum(item.income);
-  const expenditure = payNum(item.expenditure);
+  let income = payNum(item.income);
+  let expenditure = payNum(item.expenditure);
   const rawDate = String(item.document_date || "").trim();
   if (!rawDate || !ruDateIso(rawDate)) return null;
   if (!id && !income && !expenditure) return null;
   const cid = payCustomerIdOf(item, customerId);
   const kind = kindFromAlfaPay(item);
   const typeId = alfaPayTypeIdOf(item);
+  const goodsRefund = kind === "refund" && isGoodsArticle(item);
+  if (kind === "refund" && !goodsRefund && income && !expenditure) {
+    expenditure = income;
+    income = 0;
+  }
   return {
     id: id || 0,
     customerId: cid,

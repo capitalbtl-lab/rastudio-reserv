@@ -1041,7 +1041,7 @@ export function CrmClientCard({
                                   e.stopPropagation();
                                   setPayEditId(p.id);
                                   setPayKind((p.kind as "income" | "product" | "refund" | "correct") || "income");
-                                  setPaySum(String(p.kind === "refund" ? p.expenditure || "" : p.income || ""));
+                                  setPaySum(String(p.kind === "refund" ? (p.expenditure || p.income || "") : p.income || ""));
                                   setPayDate(ruToIso(p.documentDate || ""));
                                   setPayAccountId(String(p.payAccountId || 1));
                                   setPayItemId(String(p.payItemId || defaultPayItemId(card.branchId)));

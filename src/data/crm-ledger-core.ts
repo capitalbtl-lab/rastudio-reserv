@@ -239,8 +239,8 @@ export function ledgerMoney(opts: {
   const snap = opts.snap == null ? Number.NaN : Number(opts.snap);
   const tape = pay - wo;
   if (opts.pending) return tape;
-  if (opts.liveCtt && Number.isFinite(snap)) return snap;
   if (opts.complete) return tape;
+  if (opts.liveCtt && Number.isFinite(snap)) return snap;
   if (Number.isFinite(snap)) return snap;
   return tape;
 }

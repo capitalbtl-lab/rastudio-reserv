@@ -324,6 +324,12 @@ describe("журнал денег", () => {
       row({ id: 23, kind: "refund", income: 0, expenditure: 100 }),
     ]);
     assert.equal(Boolean(noPair[1].refundOfGoods), false);
+    const sameSum = markRefundOfGoods([
+      row({ id: 30, kind: "product", income: 100, expenditure: 0, payItemId: 8 }),
+      row({ id: 31, kind: "refund", income: 100, expenditure: 0, payItemId: 3 }),
+    ]);
+    assert.equal(Boolean(sameSum[1].refundOfGoods), false);
+    assert.equal(rowDelta(sameSum[1]), -100);
     assert.equal(balanceOf(noPair), 0);
     assert.equal(remainderClose(0, 0, false), true);
     assert.equal(remainderClose(47504, 47504, true), true);
