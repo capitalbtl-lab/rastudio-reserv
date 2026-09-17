@@ -83,13 +83,13 @@ function rub(n: number) {
 
 function payTypeOf(row: { payTypeId?: unknown; kind?: unknown }) {
   const n = Number(row.payTypeId);
-  if (Number.isFinite(n)) return KNOWN_PAY.has(n) ? n : 0;
+  if (Number.isFinite(n) && n > 0 && KNOWN_PAY.has(n)) return n;
   const k = String(row.kind || "").trim().toLowerCase();
   if (k === "income") return 1;
   if (k === "product") return 9;
   if (k === "refund") return 5;
   if (k === "correct") return 6;
-  return 0;
+  return Number.isFinite(n) && KNOWN_PAY.has(n) ? n : 0;
 }
 
 function rowSum(row: { income?: unknown; expenditure?: unknown }) {
@@ -515,7 +515,7 @@ export async function auditOne(cid: number, branchId: number) {
 
   const { pendingExportIds } = await import("./crm-export-queue");
   const outgoing = pendingExportIds(["pay.create", "pay.update", "pay.delete"]).has(id);
-  const pendingPay = first.payPending || outgoing;
+  const pendingPay = outgoing || (first.payPending && (Number(first.livePays) || 0) < 1);
   if (pendingPay) {
     return {
       hit: {
@@ -533,7 +533,8 @@ export async function auditOne(cid: number, branchId: number) {
     };
   }
 
-  if (!first.paysComplete && !((Number(first.liveFair) || 0) >= 1 && !first.payPending)) {
+  const cashOnDisk = (Number(first.livePays) || 0) >= 1 || (Number(first.liveFair) || 0) >= 1;
+  if (!first.paysComplete && !cashOnDisk) {
     return {
       hit: {
         cid: id,
