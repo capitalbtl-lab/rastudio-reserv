@@ -23,6 +23,7 @@ import {
   step5SkipNote,
   step5Ymd,
 } from "./crm-step5-canon";
+import { step5CompleteAdd, step5SessionStopped, step5WaitOrStop } from "./crm-step5-session";
 
 export type { AuditCode } from "./crm-balance-audit-core";
 export {
@@ -222,10 +223,6 @@ export async function diskAudit(cid: number, branchId: number) {
   };
 }
 
-async function sleep(ms: number) {
-  await new Promise((r) => setTimeout(r, ms));
-}
-
 async function alfaShow(branch: number, cid: number) {
   const { token, request } = await import("./alfacrm");
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
@@ -244,6 +241,7 @@ async function alfaShow(branch: number, cid: number) {
       removed: Number.NaN,
       authStop: true,
       rejectCid: false,
+      stopped: false,
     };
   }
   const branches = uniqueBranches(branch);
@@ -252,7 +250,12 @@ async function alfaShow(branch: number, cid: number) {
   let switched = false;
   let authStop = false;
   let rejectCid = false;
+  let stopped = false;
   for (const bid of branches) {
+    if (step5SessionStopped()) {
+      stopped = true;
+      break;
+    }
     let retried = false;
     for (;;) {
       try {
@@ -277,13 +280,17 @@ async function alfaShow(branch: number, cid: number) {
         }
         if (/\b429\b/.test(msg) && !retried) {
           retried = true;
-          await sleep(120000);
+          const go = await step5WaitOrStop(120000);
+          if (!go) {
+            stopped = true;
+            break;
+          }
           continue;
         }
         break;
       }
     }
-    if (found || authStop || rejectCid) break;
+    if (found || authStop || rejectCid || stopped) break;
   }
   if (!found) {
     return {
@@ -299,6 +306,7 @@ async function alfaShow(branch: number, cid: number) {
       removed: Number.NaN,
       authStop,
       rejectCid,
+      stopped,
     };
   }
   const parsed = parseAlfaHeader(found);
@@ -315,6 +323,7 @@ async function alfaShow(branch: number, cid: number) {
     removed: Number(found.removed),
     authStop: false,
     rejectCid: false,
+    stopped: false,
   };
 }
 
@@ -367,6 +376,23 @@ export async function auditOne(cid: number, branchId: number) {
   const branch = Number(branchId) || 1;
   const at = new Date().toISOString();
   const day = step5MoscowDay();
+  if (step5SessionStopped()) {
+    return {
+      hit: {
+        cid: id,
+        branchId: branch,
+        name: "",
+        clients: 0,
+        alfa: 0,
+        cash: 0,
+        codes: ["нет ответа"] as AuditCode[],
+        repaired: false,
+        at,
+        extra: "стоп",
+      } satisfies AuditHit,
+      stopped: true,
+    };
+  }
   if (!id) {
     return {
       hit: {
@@ -506,6 +532,23 @@ export async function auditOne(cid: number, branchId: number) {
   }
 
   const shown = await alfaShow(branch, id);
+  if (shown.stopped) {
+    return {
+      hit: {
+        cid: id,
+        branchId: branch,
+        name: first.name,
+        clients: first.clients,
+        alfa: 0,
+        cash: first.cash,
+        codes: ["нет ответа"],
+        repaired: false,
+        at,
+        extra: "стоп на 429",
+      } satisfies AuditHit,
+      stopped: true,
+    };
+  }
   if (shown.authStop) {
     return {
       hit: {
@@ -557,10 +600,10 @@ export async function auditOne(cid: number, branchId: number) {
     if (st === 0 || st === 1) extras.is_study = String(st);
     if (rem === 0 || rem === 1 || rem === 2) extras.removed = String(rem);
     upsertDossier({ crmId: id, source: "step5-header", extras, persist: true, byCrmOnly: true });
+    step5CompleteAdd(id);
     const { stampCustomerSync } = await import("./crm-customer-sync");
     stampCustomerSync(id, { paysRecheckAt: at });
   }
-  /* stampDossierAlfaBalance — канон: extras.balance не пишем */
 
   let extra = shown.ok && shown.headerOk
     ? `Клиенты ${rub(Number.isFinite(first.formulaSite) ? first.formulaSite : 0)} · Alfa ${rub(shown.alfa)} · касса ${rub(first.cashLessons)} · ${judged.codes.join(", ")}`
