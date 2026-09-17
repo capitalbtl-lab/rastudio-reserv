@@ -70,7 +70,7 @@ export function personIsStudy(role: PersonRole): 0 | 1 | 2 {
 }
 
 export function personSaveFields(next: 0 | 1 | 2) {
-  if (next === 0) return { is_study: 0, lead_status_id: 0, crm_funnel: "1" as const };
-  if (next === 2) return { is_study: 2, lead_status_id: 0, crm_funnel: "0" as const };
-  return { is_study: 1, lead_status_id: 0, crm_funnel: "0" as const };
+  if (next === 0) return { is_study: 0, removed: 0, lead_status_id: 0, crm_funnel: "1" as const };
+  if (next === 2) return { is_study: 2, removed: 2, lead_status_id: 0, crm_funnel: "0" as const };
+  return { is_study: 1, removed: 0, lead_status_id: 0, crm_funnel: "0" as const };
 }

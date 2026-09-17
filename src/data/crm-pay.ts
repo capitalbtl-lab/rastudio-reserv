@@ -230,10 +230,7 @@ function completeSetOf(store: { complete?: number[] }) {
 }
 
 export function payIdComplete(customerId: number) {
-  const id = Number(customerId) || 0;
-  if (!id) return false;
-  if (completeSetOf(load()).has(id)) return true;
-  return paysOf(id).some((x) => !x.deleted && String(x.note || "") === OPENING_NOTE);
+  return payFillFull(customerId);
 }
 
 export function payFillPending(customerId: number) {
@@ -244,7 +241,7 @@ export function payFillPending(customerId: number) {
   return (Number(cur.bid) || 0) > 0;
 }
 
-/** Страницы кассы уже дочитали, шапка Alfa не сошлась — не крутить заново. */
+/** done текущего захода. Не А. А = payFill.full. */
 export function payFillScanned(customerId: number) {
   const id = Number(customerId) || 0;
   if (!id) return false;
