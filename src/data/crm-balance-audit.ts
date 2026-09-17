@@ -1,4 +1,4 @@
-/** Шаг 5: сверка остатка с шапкой. Кассу и журнал не качает. Канон 44. */
+/** Шаг 5: сверка остатка с шапкой. А = payFill.full шага 4. Кассу не качает. */
 
 import { uniqueBranches } from "./crm-ledger-core";
 import { liveCttOf } from "./crm-pay-core";
@@ -139,7 +139,7 @@ function writeoffCanon(cal: { lessonId?: unknown; status?: unknown; amount?: unk
 export async function diskAudit(cid: number, branchId: number) {
   const { findDossier } = await import("./dossiers");
   const { collectCustomerJournal, loadCustomerCalendar } = await import("./group-cards");
-  const { paysOf, payCustomerFilled, customerBalance } = await import("./crm-pay");
+  const { paysOf, payCustomerFilled, payFillPending, customerBalance } = await import("./crm-pay");
   const { accountSnapOf, goodsNetOf, refundGoodsSumOf, corrLooksGoods } = await import("./crm-pay-core");
   const { parseDossierCtt } = await import("./pupil-tariffs");
   const { customerSyncOf, lessonsJournalReady } = await import("./crm-customer-sync");
@@ -199,7 +199,9 @@ export async function diskAudit(cid: number, branchId: number) {
     woCard: wo.n,
     woOk: wo.ok,
     paysComplete: payCustomerFilled(id),
+    payPending: payFillPending(id),
     livePays: live.length,
+    liveFair: fair.length,
     lessonsDisk,
     liveCtt: liveCttOf(parseDossierCtt(d?.extras)).length > 0,
     dupLessons: ids.length !== lessonsDisk,
@@ -447,25 +449,9 @@ export async function auditOne(cid: number, branchId: number) {
     };
   }
 
-  if (!first.livePays) {
-    return {
-      hit: {
-        cid: id,
-        branchId: branch,
-        name: first.name,
-        clients: first.clients,
-        alfa: 0,
-        cash: first.cash,
-        codes: first.study === 0 ? (["лид"] as AuditCode[]) : (["snap"] as AuditCode[]),
-        repaired: false,
-        at,
-        extra: "кассы нет, не сверяем",
-      } satisfies AuditHit,
-    };
-  }
-
   const { pendingExportIds } = await import("./crm-export-queue");
-  const pendingPay = pendingExportIds(["pay.create", "pay.update", "pay.delete"]).has(id) || !first.paysComplete;
+  const outgoing = pendingExportIds(["pay.create", "pay.update", "pay.delete"]).has(id);
+  const pendingPay = first.payPending || outgoing;
   if (pendingPay) {
     return {
       hit: {
@@ -479,6 +465,40 @@ export async function auditOne(cid: number, branchId: number) {
         repaired: false,
         at,
         extra: "касса ещё пишется",
+      } satisfies AuditHit,
+    };
+  }
+
+  if (!first.paysComplete) {
+    return {
+      hit: {
+        cid: id,
+        branchId: branch,
+        name: first.name,
+        clients: first.clients,
+        alfa: 0,
+        cash: first.cash,
+        codes: ["snap"],
+        repaired: false,
+        at,
+        extra: "касса не закрыта шагом 4",
+      } satisfies AuditHit,
+    };
+  }
+
+  if ((Number(first.liveFair) || 0) < 1) {
+    return {
+      hit: {
+        cid: id,
+        branchId: branch,
+        name: first.name,
+        clients: first.clients,
+        alfa: 0,
+        cash: first.cash,
+        codes: first.study === 0 ? (["лид"] as AuditCode[]) : (["snap"] as AuditCode[]),
+        repaired: false,
+        at,
+        extra: "кассы нет, не сверяем",
       } satisfies AuditHit,
     };
   }
@@ -503,13 +523,13 @@ export async function auditOne(cid: number, branchId: number) {
   const sverka = step5CanSverka({
     hasDossier: first.hasDossier,
     payFilled: first.paysComplete,
-    livePays: first.livePays,
+    livePays: first.liveFair,
     isStudy: first.study,
     removed: first.removed,
     inArchiveSet: first.inArchiveSet,
   });
   const skip = step5SkipNote({
-    livePays: first.livePays,
+    livePays: first.liveFair,
     isStudy: first.study,
     removed: first.removed,
     inArchiveSet: first.inArchiveSet,
@@ -601,8 +621,6 @@ export async function auditOne(cid: number, branchId: number) {
     if (rem === 0 || rem === 1 || rem === 2) extras.removed = String(rem);
     upsertDossier({ crmId: id, source: "step5-header", extras, persist: true, byCrmOnly: true });
     step5CompleteAdd(id);
-    const { stampCustomerSync } = await import("./crm-customer-sync");
-    stampCustomerSync(id, { paysRecheckAt: at });
   }
 
   let extra = shown.ok && shown.headerOk
