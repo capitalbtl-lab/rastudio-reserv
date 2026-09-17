@@ -19,7 +19,7 @@ import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote
 import { journalJobSnapshot, parseJobItems, historyWorkerBeat } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { loadPlanLog } from "./crm-sync-plan-log";
-import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady, journalGroupNow, groupJournalGreen, type GroupPeriodHit, type GroupWhollyHit } from "./crm-inbound-core";
+import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady, journalGroupNow, groupJournalGreen, lessonsSetGap, type GroupPeriodHit, type GroupWhollyHit } from "./crm-inbound-core";
 import { diskIsArchive, dossierAuditRole } from "./crm-person-role";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
@@ -810,6 +810,8 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         holeApproved: Boolean(sync.journalHoleApprovedAt),
         holeN: sync.lessonsHoleN,
         extraN: sync.lessonsExtraN,
+        holeIds: lessonGapIds(p.cid, sync.lessonsSeenIds).hole,
+        extraIds: lessonGapIds(p.cid, sync.lessonsSeenIds).extra,
         dups,
         journal,
         pays,
@@ -877,6 +879,11 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
 }
 
 /** Архив как в Alfa: removed=2 (старый диск is_study=2). Не рабочий отбор шага 2. Для чипа шага 5. */
+function lessonGapIds(cid: number, seen: Iterable<number> | undefined) {
+  const have = loadCustomerCalendar(cid).map((x) => Number((x as { lessonId?: number }).lessonId) || 0);
+  return lessonsSetGap(have, seen || []);
+}
+
 function cashCardOf(cid: number) {
   const live = paysOf(cid).filter((x) => !x.deleted);
   const cashPaySum = balanceOf(live);
@@ -912,6 +919,10 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
       alfa: probed ? alfaN : undefined,
       short,
       holeApproved: Boolean(sync.journalHoleApprovedAt),
+      holeN: sync.lessonsHoleN,
+      extraN: sync.lessonsExtraN,
+      holeIds: lessonGapIds(p.cid, sync.lessonsSeenIds).hole,
+      extraIds: lessonGapIds(p.cid, sync.lessonsSeenIds).extra,
       dups,
       journal,
       pays,

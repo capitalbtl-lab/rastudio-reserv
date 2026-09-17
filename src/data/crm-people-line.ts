@@ -31,11 +31,21 @@ function ruPacks(n: number) {
   return `${n} пачек`;
 }
 
+export function formatLessonIds(ids: number[], cap = 8) {
+  const list = [...new Set(ids.map(Number).filter((n) => n > 0))].sort((a, b) => a - b);
+  if (!list.length) return "";
+  const head = list.slice(0, cap);
+  const more = list.length - head.length;
+  return more > 0 ? `${head.join(", ")} …ещё ${more}` : head.join(", ");
+}
+
 export function peopleLessonsLine(opts: {
   disk?: number;
   alfa?: number;
   hole?: number;
   extra?: number;
+  holeIds?: number[];
+  extraIds?: number[];
   pack?: number;
   plus?: number;
   at?: string;
@@ -53,8 +63,16 @@ export function peopleLessonsLine(opts: {
   const diskN = opts.disk != null && Number.isFinite(Number(opts.disk)) ? Math.max(0, Number(opts.disk) || 0) : null;
   const alfaN = opts.alfa != null && Number.isFinite(Number(opts.alfa)) ? Math.max(0, Number(opts.alfa) || 0) : null;
   if (diskN != null || alfaN != null) parts.push(`диск ${diskN ?? "—"} · Alfa ${alfaN ?? "—"}`);
+  const holeIds = (opts.holeIds || []).map(Number).filter((n) => n > 0);
+  const extraIds = (opts.extraIds || []).map(Number).filter((n) => n > 0);
   if (holeKnown && hole > 0) parts.push(`дырка ${hole}`);
   if (extraKnown && extra > 0) parts.push(`лишние ${extra}`);
+  const holeList = formatLessonIds(holeIds);
+  if (holeList) parts.push(`нет на диске ${holeList}`);
+  const extraList = formatLessonIds(extraIds);
+  if (extraList) parts.push(`лишние id ${extraList}`);
+  const countGap = diskN != null && alfaN != null && alfaN > diskN ? alfaN - diskN : 0;
+  if (countGap > 0 && !holeIds.length) parts.push(`счётчик +${countGap} без id`);
   parts.push(`пачка ${pack}`);
   if (hasPlus) parts.push(`+${k}`);
   const clock = peopleClock(opts.at);
@@ -62,7 +80,11 @@ export function peopleLessonsLine(opts: {
 
   let hint = "";
   let packsLeft: number | undefined;
-  if (holeKnown && hole === 0 && (!extraKnown || extra === 0)) {
+  if (holeIds.length) {
+    hint = "id из переписи, на диске строк нет";
+  } else if (countGap > 0) {
+    hint = "Alfa насчитала больше, чем отдала с датой";
+  } else if (holeKnown && hole === 0 && (!extraKnown || extra === 0)) {
     hint = "ничего нового";
   } else if (hasPlus && k > 0 && left > 0) {
     packsLeft = Math.ceil(left / k);

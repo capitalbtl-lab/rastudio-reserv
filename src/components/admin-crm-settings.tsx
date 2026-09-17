@@ -515,6 +515,8 @@ type StudentHit = {
   short?: boolean;
   holeN?: number;
   extraN?: number;
+  holeIds?: number[];
+  extraIds?: number[];
   dups?: boolean;
   holeApproved?: boolean;
 };
@@ -1145,7 +1147,7 @@ function peopleHoleOk(row: PeopleRow) {
 }
 
 function confirmHole(row: PeopleRow, on: boolean, alfa?: number) {
-  const line = peopleLessonsLine({ disk: row.lessons, alfa: alfa ?? row.alfa, hole: row.holeN, extra: row.extraN, at: row.at }).line || `№${row.cid}`;
+  const line = peopleLessonsLine({ disk: row.lessons, alfa: alfa ?? row.alfa, hole: row.holeN, extra: row.extraN, holeIds: row.holeIds, extraIds: row.extraIds, at: row.at }).line || `№${row.cid}`;
   const ask = on
     ? `${line}\nжурнал не закроется, снять только вручную.`
     : `${line}\nснять отметку? карточка вернётся в «требуют».`;
@@ -1349,7 +1351,7 @@ function patchPeopleSide(
     const paysRechecked = hit.paysRechecked != null ? Boolean(hit.paysRechecked) : p.paysRechecked;
     const extra = hit.paysMore
       ? `касса: ещё страницы, нажмите снова`
-      : peopleLessonsLine({ disk, alfa, hole: hit.holeN ?? p.holeN, extra: hit.extraN ?? p.extraN }).line || p.extra;
+      : peopleLessonsLine({ disk, alfa, hole: hit.holeN ?? p.holeN, extra: hit.extraN ?? p.extraN, holeIds: hit.holeIds ?? p.holeIds, extraIds: hit.extraIds ?? p.extraIds }).line || p.extra;
     return {
       ...p,
       lessons: disk,
@@ -1628,7 +1630,7 @@ function PeopleFillList({
     const plus = packSt?.active ? Math.max(0, (Number(row.lessons) || 0) - packSt.before) : packSt && packSt.plus != null ? packSt.plus : undefined;
     const nums =
       kind === "students"
-        ? peopleLessonsLine({ disk: row.lessons, alfa: alfaShown, hole: row.holeN, extra: row.extraN, pack: PEOPLE_PACK, plus, at: row.at, running: active })
+        ? peopleLessonsLine({ disk: row.lessons, alfa: alfaShown, hole: row.holeN, extra: row.extraN, holeIds: row.holeIds, extraIds: row.extraIds, pack: PEOPLE_PACK, plus, at: row.at, running: active })
         : null;
     const numsHint = peopleStudentHint({ short, dups, holeApproved: approved, lineHint: nums?.hint || "" });
     const act = kind === "balance" ? (full ? "recheck" : "load") : peopleStudentAction({ short, dups, journal: Boolean(row.journal), holeApproved: approved });
