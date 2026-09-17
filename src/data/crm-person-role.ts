@@ -11,16 +11,25 @@ export type PersonRoleInput = {
   status?: unknown;
 };
 
+/** Карточка Customer: removed 0 активен, 1 фильтр «все», 2 архив. is_study 2 — только фильтр списка, не роль. */
+export function diskIsArchive(it: PersonRoleInput) {
+  if (Number(it.removed) === 1) return false;
+  if (Number(it.removed) === 2) return true;
+  const studyRaw = it.is_study;
+  const study = studyRaw === "" || studyRaw == null ? NaN : Number(studyRaw);
+  return study === 2;
+}
+
 /**
  * Экран «Клиенты» — только учится. Экран «Лиды» — воронка.
  * is_study=1 всегда ученик: хвост lead_status_id / карточка на доске Alfa не делает лидом.
- * Иначе Чуднова (худ. школа) сидит в «Ожидает старта».
+ * Архив — removed=2. Старый штамп диска is_study=2 ещё читаем.
  */
 export function personRole(it: PersonRoleInput): PersonRole {
   if (Number(it.removed) === 1) return "удалён";
+  if (diskIsArchive(it)) return "архив";
   const studyRaw = it.is_study;
   const study = studyRaw === "" || studyRaw == null ? NaN : Number(studyRaw);
-  if (study === 2) return "архив";
   if (study === 1) return "учится";
   if (study === 0) return "лид";
   if (String(it.crm_funnel || "") === "1") return "лид";
@@ -33,7 +42,7 @@ export function personRole(it: PersonRoleInput): PersonRole {
  *  is_study=0 — лид (новый, в группе, или бывший клиент).
  *  crm_funnel=1 — на доске CRM, даже если is_study ещё 1 (кроме архива).
  *  is_study=1 без воронки — ученик (Чуднова в «Ожидает старта»).
- *  is_study=2 — архив, в том числе лид в архиве. */
+ *  removed=2 — архив (и старый диск is_study=2). */
 export function dossierAuditRole(it: PersonRoleInput): "лид" | "клиент" | "архив" {
   const r = personRole(it);
   if (r === "архив") return "архив";
