@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { classifyAudit, auditOnRight, moneyClose, alfaHeaderOf, alfaBalancePresent, shouldStampAlfaHeader } from "./crm-balance-audit-core.ts";
+import { classifyAudit, auditOnRight, moneyClose, alfaHeaderOf, alfaBalancePresent, shouldStampAlfaHeader, sameCustomerId } from "./crm-balance-audit-core.ts";
 
-describe("шаг 4 сверка остатка", () => {
+describe("шаг 5 сверка остатка", () => {
   it("совпало ±1 — ok справа", () => {
     const codes = classifyAudit({
       alfaOk: true,
@@ -40,11 +40,11 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(auditOnRight(lessonHole), true);
   });
 
-  it("шапка Alfa = customer.balance, не rest абонемента", () => {
+  it("шапка Alfa = customer.balance число, не rest и не строка", () => {
     assert.equal(alfaHeaderOf({ balance: 2025 }, 0, 1), 2025);
     assert.equal(alfaHeaderOf({ balance: -2125 }, 0, 2), -2125);
     assert.equal(alfaHeaderOf({ balance: 0 }, 8000, 1), 0);
-    assert.equal(alfaHeaderOf({ balance: "-987.5" }, 0, 1), -987.5);
+    assert.equal(alfaHeaderOf({ balance: "-987.5" }, 0, 1), 0);
     assert.equal(alfaBalancePresent({ balance: 1975 }), true);
     assert.equal(alfaBalancePresent({ balance: 0 }), true);
     assert.equal(alfaBalancePresent({ balance: "" }), false);
@@ -53,7 +53,11 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(shouldStampAlfaHeader({ alfaOk: true, headerOk: true, pendingPay: true }), false);
     assert.equal(shouldStampAlfaHeader({ alfaOk: false, headerOk: true, pendingPay: false }), false);
     assert.equal(shouldStampAlfaHeader({ alfaOk: true, headerOk: false, pendingPay: false }), false);
-    assert.equal(alfaHeaderOf({}, -987, 1), -987);
+    assert.equal(alfaHeaderOf({}, -987, 1), 0);
+    assert.equal(alfaHeaderOf({ balance: { m: 100 } }), 100);
+    assert.equal(alfaHeaderOf({ balance: { m: 100, c: 2 } }), 0);
+    assert.equal(sameCustomerId("12", 12), true);
+    assert.equal(sameCustomerId(12, 13), false);
   });
 
   it("ok и status — справа: будущий урок с ценой не дыра", () => {
@@ -261,38 +265,26 @@ describe("шаг 4 сверка остатка", () => {
     assert.ok(codes.includes("src"));
   });
 
-  it("модуль не пишет в Alfa и не подгоняет extras.balance кассой", () => {
+  it("модуль не пишет в Alfa, не качает кассу и журнал", () => {
     const src = readFileSync(new URL("./crm-balance-audit.ts", import.meta.url), "utf8");
     assert.doesNotMatch(src, /enqueueExport/);
     assert.doesNotMatch(src, /customer\.update/);
     assert.doesNotMatch(src, /applyCrmCustomer/);
     assert.doesNotMatch(src, /balance: String\(first\.cash\)/);
-    assert.doesNotMatch(src, /balance: String\(after\.cash\)/);
+    assert.doesNotMatch(src, /inboundCustomerPays/);
+    assert.doesNotMatch(src, /inboundCustomerLessons/);
+    assert.doesNotMatch(src, /pageSize: 10/);
     assert.match(src, /stampDossierAlfaBalance/);
     assert.match(src, /shouldStampAlfaHeader/);
     assert.match(src, /shown\.alfa/);
     assert.match(src, /pay\.create/);
-    assert.match(src, /skipHoleInbound/);
-    assert.match(src, /inboundCustomerLessons/);
-    assert.match(src, /full: true/);
-    assert.match(src, /keepAlfaProbe/);
-    assert.match(src, /held.write \? \{ lessonsAlfa: held.alfa/);
-    assert.match(src, /extraLessons/);
-    assert.match(src, /inboundCustomerPays/);
-    assert.match(src, /moneyNeed/);
-    assert.match(src, /markPayJournalIncomplete\(id\)/);
-    assert.doesNotMatch(src, /first.cash < shown.alfa - 1/);
-    assert.match(src, /paysRecheckAt: ""/);
     assert.match(src, /stampCustomerSync/);
     assert.match(src, /payCustomerFilled/);
-    assert.match(src, /alfaHeaderOf/);
-    assert.match(src, /is_study: study/);
-    assert.match(src, /shown\.study/);
-    assert.match(src, /alfaStudy === 0 \|\| alfaStudy === 2/);
-    assert.doesNotMatch(src, /isPayJournalComplete/);
-    assert.doesNotMatch(src, /live \? rest/);
-    assert.match(src, /for \(let i = 0; i < 4/);
+    assert.match(src, /sameCustomerId/);
+    assert.match(src, /id: cid, page: 0/);
+    assert.match(src, /кассы нет, не сверяем/);
     assert.match(src, /диск: \$\{err\}/);
+    assert.doesNotMatch(src, /is_study: study/);
   });
 
   it("касса и открытие карточки не затирают extras.balance", () => {
