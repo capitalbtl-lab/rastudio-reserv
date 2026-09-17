@@ -125,6 +125,7 @@ function DraftForm({
   const [fromId, setFromId] = useState<PlanFromId>("2015");
   const [study, setStudy] = useState<"1" | "2">("1");
   const [leads, setLeads] = useState(true);
+  const [archGroups, setArchGroups] = useState(true);
 
   function when(): HistoryWhen {
     if (kind === "weekly") return { kind: "weekly", days };
@@ -308,9 +309,14 @@ function DraftForm({
           Архив
         </Chip>
         {study === "1" && mode === "auto" ? (
-          <Chip on={leads} onClick={() => setLeads((v) => !v)}>
-            Лиды действующих групп
-          </Chip>
+          <>
+            <Chip on={leads} onClick={() => setLeads((v) => !v)}>
+              Лиды действующих групп
+            </Chip>
+            <Chip on={archGroups} onClick={() => setArchGroups((v) => !v)}>
+              Архив действующих групп
+            </Chip>
+          </>
         ) : null}
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -332,6 +338,7 @@ function DraftForm({
               study,
               label,
               leads: study === "1" && leads,
+              archGroups: study === "1" && archGroups,
             });
           }}
         >
@@ -415,6 +422,9 @@ export function HistoryPlanPanel({
         </button>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight">Синхронизация расписания</p>
+        {historyWorker?.silent ? (
+          <p className="text-[0.75rem] text-amber-800">Процесс истории молчит — ночные слоты не поедут, пока не жив воркер.</p>
+        ) : null}
           <p
             className={cn(
               "h-5 truncate text-[0.72rem] leading-5",
@@ -601,6 +611,12 @@ export function HistoryPlanPanel({
             <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">{r.study === "2" ? "Архив" : "Сейчас ходят"}</span>
             {r.study === "1" && r.mode === "auto" && r.leads === false ? (
               <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">без лидов</span>
+            ) : null}
+            {r.study === "1" && r.mode === "auto" && r.archGroups === false ? (
+              <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">без архива групп</span>
+            ) : null}
+            {r.mode !== "auto" ? (
+              <span className="h-7 rounded-full bg-amber-50 px-2.5 text-[0.72rem] font-semibold leading-7 text-amber-900">один шаг, не 1–5</span>
             ) : null}
           </div>
           <p className="mt-2 text-[0.72rem] text-muted">

@@ -337,4 +337,20 @@ describe("пульт Истории", () => {
     assert.match(String(rows[0].text), /готово/);
   });
 
+
+  it("ночной автомат без архива групп — короткая труба", () => {
+    const r = scheduleOf({ id: "a", mode: "auto", archGroups: false, when: { kind: "daily" }, at: "04:00", dateFromId: "1" });
+    assert.deepEqual(planRuleToJob(r).pipe, ["people", "groups", "balance", "audit"]);
+  });
+
+  it("интервал без lastFired не due сразу после 04:00", () => {
+    const p = policyOf({
+      planEnabled: true,
+      plan: [{ id: "i", on: true, mode: "auto", when: { kind: "interval", every: 6, unit: "month" }, at: "04:00" }],
+    });
+    const marked = markPlanDue(p, msk(2026, 8, 15, 15, 0));
+    assert.equal(marked.plan[0].dueAt, "");
+    assert.ok(marked.plan[0].lastFiredAt);
+  });
+
 });

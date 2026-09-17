@@ -6,7 +6,7 @@ import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts"
 import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd, groupJournalGreen } from "./crm-inbound-core.ts";
 import { loadSyncPolicy, saveSyncPolicyRun } from "./crm-sync-policy.ts";
 import { appendPlanLog, loadPlanLog } from "./crm-sync-plan-log.ts";
-import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, scheduleOf, stampPlanFired, stampPlanSkip } from "./crm-sync-policy-core.ts";
+import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, scheduleOf, stampPlanFired, stampPlanSkip, stampPlanRun, stampPlanHandsExcept } from "./crm-sync-policy-core.ts";
 import {
   emptyJournalJob,
   jobGapOf,
@@ -209,6 +209,7 @@ export type StartJournalJobOpts = {
   src?: "hands" | "plan";
   fromPipe?: boolean;
   skipLeads?: boolean;
+  id?: string;
 };
 
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
@@ -491,7 +492,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   if (!items.length && !loopPullKind(mode)) {
     const saved = saveJournalJob({
       ...emptyJournalJob(),
-      id: `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      id: opts.fromPipe && opts.id ? String(opts.id) : `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       mode,
       kind,
       study,
@@ -529,7 +530,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   const ice = iceWindowOrNow(freezeIce, opts.dateFrom, freezeIce ? undefined : "", days);
   const job: JournalJob = {
     ...emptyJournalJob(),
-    id: `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    id: opts.fromPipe && opts.id ? String(opts.id) : `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     running: true,
     stop: false,
     mode,
@@ -609,11 +610,38 @@ function pipeShouldContinue(job: JournalJob) {
   return true;
 }
 
+function closePlanSlot(job: JournalJob, ok: boolean) {
+  const pol = loadSyncPolicy();
+  const card = pol.plan.find((r) => r.lastJobId && r.lastJobId === job.id && r.lastSkip === "run");
+  if (!card) return;
+  if (ok) {
+    saveSyncPolicyRun(stampPlanFired(pol, card.id, job.id || "", new Date()).plan);
+    return;
+  }
+  saveSyncPolicyRun(
+    pol.plan.map((r) => (r.id === card.id ? { ...r, lastSkip: "pipe" } : r)),
+  );
+  notePlan({
+    kind: "fail",
+    text: `${card.label || modeRu(card.mode)}: труба оборвалась · ${job.msg || "стоп"}`.slice(0, 280),
+    mode: card.mode,
+    jobId: job.id,
+    reason: "pipe",
+    src: "plan",
+  });
+}
+
 function continueAutoPipe(job: JournalJob) {
-  if (!pipeShouldContinue(job)) return;
+  if (!pipeShouldContinue(job)) {
+    closePlanSlot(job, false);
+    return;
+  }
   const rest = job.pipe.map(String).filter(Boolean);
   const next = rest[0];
-  if (!next) return;
+  if (!next) {
+    closePlanSlot(job, true);
+    return;
+  }
   notePlan({
     kind: "pipe",
     text: `Дальше ${modeRu(next === "groups-archived" ? "groups" : next, next === "groups-archived" || next === "balance" ? (next === "balance" ? "balance" : "group") : "")}.`,
@@ -624,6 +652,7 @@ function continueAutoPipe(job: JournalJob) {
   });
   const days = Number(job.recheckDays) || 4000;
   const base = {
+    id: job.id,
     study: job.study,
     dateFrom: job.dateFrom,
     recheckDays: days,
@@ -744,7 +773,7 @@ export function tickHistoryPlan(now = new Date()) {
   const pol = loadSyncPolicy();
   const job = loadJournalJob();
   if (job.running && !job.stop) {
-    const skipped = stampPlanSkip(pol, "hands");
+    const skipped = stampPlanHandsExcept(pol, job.id || "");
     if (JSON.stringify(skipped.plan.map((r) => r.lastSkip)) !== JSON.stringify(pol.plan.map((r) => r.lastSkip))) {
       saveSyncPolicyRun(skipped.plan);
       const who = String(job.cur || "");
@@ -779,7 +808,7 @@ export function tickHistoryPlan(now = new Date()) {
   const dec = planFireDecision(before, started);
   const live = loadSyncPolicy();
   if (dec === "hands") {
-    const skipped = stampPlanSkip(live, "hands");
+    const skipped = stampPlanHandsExcept(live, started.id || job.id || "");
     if (JSON.stringify(skipped.plan.map((r) => r.lastSkip)) !== JSON.stringify(live.plan.map((r) => r.lastSkip))) {
       saveSyncPolicyRun(skipped.plan);
       notePlan({
@@ -790,6 +819,11 @@ export function tickHistoryPlan(now = new Date()) {
         src: "plan",
       });
     }
+    return;
+  }
+  const liveJob = loadJournalJob();
+  if (liveJob.running && !liveJob.stop) {
+    saveSyncPolicyRun(stampPlanRun(live, rule.id, liveJob.id || started.id || "").plan);
     return;
   }
   saveSyncPolicyRun(stampPlanFired(live, rule.id, started.id || "", now).plan);

@@ -62,6 +62,7 @@ export type HistorySchedule = {
   study: "1" | "2";
   label: string;
   leads: boolean;
+  archGroups: boolean;
   dueAt: string;
   lastFiredAt: string;
   lastJobId: string;
@@ -204,6 +205,7 @@ export function scheduleOf(raw: unknown, fallbackId = ""): HistorySchedule {
     study: r.study === "2" ? "2" : "1",
     label: String(r.label || "").trim().slice(0, 80),
     leads: r.leads !== false,
+    archGroups: r.archGroups !== false,
     dueAt: String(r.dueAt || ""),
     lastFiredAt: String(r.lastFiredAt || ""),
     lastJobId: String(r.lastJobId || ""),
@@ -278,7 +280,7 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
       recheckDays: planFromIdToRecheckDays(fromId),
       dateFrom: planDateFrom(fromId, now),
       archived: rule.study === "2",
-      pipe: rule.study === "2" ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL],
+      pipe: rule.study === "2" || rule.archGroups === false ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL],
       skipLeads: Boolean(rule.study === "1" && rule.leads === false),
     };
   }
@@ -435,6 +437,7 @@ export function markPlanDue(policy: CrmSyncPolicy, now = new Date()): CrmSyncPol
       if (r.dueAt) {
         const due = Date.parse(r.dueAt);
         if (Number.isFinite(due) && now.getTime() - due > PLAN_DUE_MS) {
+          if (r.lastSkip === "run") return r;
           if (r.lastSkip === "hands") {
             return { ...r, dueAt: "", lastSkip: "hands" };
           }
@@ -443,6 +446,7 @@ export function markPlanDue(policy: CrmSyncPolicy, now = new Date()): CrmSyncPol
         return r;
       }
       if (!r.lastFiredAt) {
+        if (r.when.kind === "interval") return { ...r, lastFiredAt: now.toISOString() };
         if (!whenHits(r.when, now) || !slotReached(now, r.at)) return r;
         return { ...r, dueAt: now.toISOString(), lastSkip: "" };
       }
@@ -481,9 +485,30 @@ export function stampPlanSkip(policy: CrmSyncPolicy, reason: string, now = new D
     plan: policy.plan.map((r) => {
       if (!r.dueAt || r.lastSkip) return r;
       if (reason === "hands") {
+        if (r.when.kind === "ymd") return { ...r, lastSkip: "hands" };
         return { ...r, dueAt: "", lastSkip: "hands", lastFiredAt: now.toISOString() };
       }
       return { ...r, lastSkip: reason };
+    }),
+  };
+}
+
+/** Слот поехал, due ещё не закрыт — труба не доехала. */
+export function stampPlanRun(policy: CrmSyncPolicy, id: string, jobId: string): CrmSyncPolicy {
+  return {
+    ...policy,
+    plan: policy.plan.map((r) => (r.id === id ? { ...r, lastJobId: jobId, lastSkip: "run" } : r)),
+  };
+}
+
+export function stampPlanHandsExcept(policy: CrmSyncPolicy, exceptJobId: string, now = new Date()): CrmSyncPolicy {
+  return {
+    ...policy,
+    plan: policy.plan.map((r) => {
+      if (r.lastJobId === exceptJobId && r.lastSkip === "run") return r;
+      if (!r.dueAt || r.lastSkip) return r;
+      if (r.when.kind === "ymd") return { ...r, lastSkip: "hands" };
+      return { ...r, dueAt: "", lastSkip: "hands", lastFiredAt: now.toISOString() };
     }),
   };
 }
@@ -613,6 +638,7 @@ export function emptyDraft(): Omit<HistorySchedule, "id" | "dueAt" | "lastFiredA
     study: "1",
     label: "",
     leads: true,
+    archGroups: true,
   };
 }
 
