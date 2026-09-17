@@ -125,7 +125,7 @@ export function payNum(v: unknown) {
 
 /** Alfa PayType: 1 доход, 9 товар (старый 2), 5 возврат (старый 3), 6 корректировка. Тип, не комментарий. */
 export function alfaPayTypeIdOf(item: Record<string, unknown>) {
-  return Number(item.pay_type_id || item.payTypeId || item.type_id || 0) || 0;
+  return Number(item.pay_type_id || item.payTypeId || 0) || 0;
 }
 
 export function isGoodsArticle(item: Record<string, unknown>) {
@@ -156,16 +156,15 @@ export function skipAlfaGoodsPay(item: Record<string, unknown>) {
 
 export function kindFromAlfaPay(item: Record<string, unknown>): PayKind {
   const typeId = alfaPayTypeIdOf(item);
+  const label = String(item.pay_type || item.type_name || item.name || "").toLowerCase();
+  if (typeId === 6 || /коррект/.test(label)) return "correct";
   if (typeId === 1) return "income";
   if (typeId === 9 || typeId === 2) return "product";
   if (typeId === 5 || typeId === 3) return "refund";
-  if (typeId === 6) return "correct";
   const itemId = Number(item.pay_item_id || item.payItemId) || 0;
   const income = payNum(item.income);
   if (itemId === 7 || income < 0) return "correct";
   if (Number(item.commodity_id || item.commodityId)) return "product";
-  const label = String(item.pay_type || item.type_name || "").toLowerCase();
-  if (/коррект/.test(label)) return "correct";
   if (/товар|продаж/.test(label)) return "product";
   if (/возврат/.test(label)) return "refund";
   const expenditure = payNum(item.expenditure);
