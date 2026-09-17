@@ -92,11 +92,14 @@ function payTypeOf(row: { payTypeId?: unknown; kind?: unknown }) {
   return Number.isFinite(n) && KNOWN_PAY.has(n) ? n : 0;
 }
 
-function rowSum(row: { income?: unknown; expenditure?: unknown }) {
+function rowSum(row: { income?: unknown; expenditure?: unknown; kind?: unknown; payTypeId?: unknown }) {
   const a = step5Money(row.income);
   const b = step5Money(row.expenditure);
   if (!a.ok || !b.ok) return { ok: false, n: 0 };
-  return { ok: true, n: a.n - b.n };
+  let n = a.n - b.n;
+  const refund = String(row.kind || "") === "refund" || Number(row.payTypeId) === 5 || Number(row.payTypeId) === 3;
+  if (refund) n = n <= 0 ? n : -n;
+  return { ok: true, n };
 }
 
 function isLessonType(t: number) {
@@ -270,7 +273,8 @@ async function peekAlfaPaySplit(
         const rawDate = String((item as { document_date?: string }).document_date || "").trim();
         if (!rawDate) continue;
         const kind = kindFromAlfaPay(item as Record<string, unknown>);
-        const n = payNum((item as { income?: unknown }).income) - payNum((item as { expenditure?: unknown }).expenditure);
+        let n = payNum((item as { income?: unknown }).income) - payNum((item as { expenditure?: unknown }).expenditure);
+        if (kind === "refund") n = n <= 0 ? n : -n;
         if (kind === "product") { goodsN += 1; goodsSum += n; }
         else if (kind === "correct") { corrN += 1; corrSum += n; }
         else { paysN += 1; paysSum += n; }

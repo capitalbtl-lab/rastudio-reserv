@@ -188,7 +188,9 @@ export function rowDelta(row: Pick<PayRow, "kind" | "income" | "expenditure" | "
   if (row.deleted) return 0;
   if (row.kind === "product") return -goodsAbs(row);
   if (row.kind === "refund" && row.refundOfGoods) return refundAbs(row);
-  return payNum(row.income) - payNum(row.expenditure);
+  const n = payNum(row.income) - payNum(row.expenditure);
+  if (row.kind === "refund") return n <= 0 ? n : -n;
+  return n;
 }
 
 export function refundAbs(row: Pick<PayRow, "income" | "expenditure">) {

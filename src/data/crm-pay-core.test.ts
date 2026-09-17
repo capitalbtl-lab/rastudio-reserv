@@ -293,6 +293,7 @@ describe("журнал денег", () => {
     assert.equal(rowDelta({ kind: "correct", income: 50000, expenditure: 0 }), 50000);
     assert.equal(rowDelta({ kind: "correct", income: -28405, expenditure: 0 }), -28405);
     assert.equal(rowDelta({ kind: "refund", income: 0, expenditure: 100 }), -100);
+    assert.equal(rowDelta({ kind: "refund", income: 100, expenditure: 0 }), -100);
     assert.equal(rowDelta({ kind: "refund", income: 0, expenditure: 2000, refundOfGoods: true }), 2000);
     const chudnova: PayRow[] = [
       row({ id: 1, kind: "income", income: 100, expenditure: 0 }),
