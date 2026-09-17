@@ -774,6 +774,7 @@ export function tickHistoryPlan(now = new Date()) {
     archived: opts.archived,
     pipe: opts.pipe,
     src: "plan",
+    skipLeads: Boolean((opts as { skipLeads?: boolean }).skipLeads),
   });
   const dec = planFireDecision(before, started);
   const live = loadSyncPolicy();

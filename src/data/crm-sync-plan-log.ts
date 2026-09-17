@@ -51,7 +51,38 @@ export function mergePlanLog(cur: PlanLogEvent[], row: PlanLogEvent, max = PLAN_
 }
 
 export function planLogSyncs(log: PlanLogEvent[], n = PLAN_LOG_SYNCS): PlanLogEvent[] {
-  return log.filter((e) => e.kind === "start" || e.kind === "done").slice(0, n);
+  const out: PlanLogEvent[] = [];
+  const seen = new Set<string>();
+  for (const e of log) {
+    if (e.kind !== "start" && e.kind !== "done" && e.kind !== "fail" && e.kind !== "stop") continue;
+    const key = e.jobId || `${e.at}|${e.kind}`;
+    if (e.jobId && seen.has(e.jobId)) continue;
+    if (e.jobId) seen.add(e.jobId);
+    const pair =
+      e.jobId && e.kind === "start"
+        ? log.find((x) => x.jobId === e.jobId && (x.kind === "done" || x.kind === "fail" || x.kind === "stop"))
+        : e.jobId && e.kind !== "start"
+          ? log.find((x) => x.jobId === e.jobId && x.kind === "start")
+          : undefined;
+    if (e.kind === "start" && pair) {
+      out.push({
+        ...e,
+        kind: pair.kind === "done" ? "done" : pair.kind,
+        text: `${e.text} → ${pair.text}`,
+      });
+    } else if (e.kind !== "start" && pair) {
+      out.push({
+        ...pair,
+        kind: e.kind === "done" ? "done" : e.kind,
+        text: `${pair.text} → ${e.text}`,
+        at: pair.at || e.at,
+      });
+    } else {
+      out.push(e);
+    }
+    if (out.length >= n) break;
+  }
+  return out;
 }
 
 export function loadPlanLog(): PlanLogEvent[] {

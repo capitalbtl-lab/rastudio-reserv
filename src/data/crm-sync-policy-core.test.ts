@@ -15,6 +15,8 @@ import {
   pickDueRule,
   planFireDecision,
   planRuleToJob,
+  stampPlanSkip,
+  planLogSessions,
   policyOf,
   scheduleOf,
   slotOpen,
@@ -144,11 +146,11 @@ describe("пульт Истории", () => {
     assert.equal(job.dateFrom, "2025-09-15");
   });
 
-  it("архив пульта не качает с 2015 — год или два", () => {
+  it("архив пульта: «с 2015» это 2015, два года — два", () => {
     const r = scheduleOf({ id: "a", mode: "people", study: "2", when: { kind: "daily" }, at: "04:00", dateFromId: "2015" });
     const job = planRuleToJob(r, msk(2026, 8, 15, 12, 0));
     assert.equal(job.study, "2");
-    assert.equal(job.dateFrom, "2025-09-15");
+    assert.equal(job.dateFrom, "2015-01-01");
     const two = scheduleOf({ id: "b", mode: "people", study: "2", when: { kind: "daily" }, at: "04:00", dateFromId: "2" });
     assert.equal(planRuleToJob(two, msk(2026, 8, 15, 12, 0)).dateFrom, "2024-09-15");
   });
@@ -286,4 +288,53 @@ describe("пульт Истории", () => {
     assert.equal(ymdOf(nxt!), "2027-03-15");
     assert.ok(markPlanDue(fired, msk(2027, 2, 15, 4, 5)).plan[0].dueAt);
   });
+
+  it("ночной автомат без лидов — skipLeads", () => {
+    const r = scheduleOf({ id: "a", mode: "auto", leads: false, when: { kind: "daily" }, at: "04:00", dateFromId: "1" });
+    assert.equal(r.leads, false);
+    assert.equal(planRuleToJob(r).skipLeads, true);
+    const on = scheduleOf({ id: "b", mode: "auto", when: { kind: "daily" }, at: "04:00" });
+    assert.equal(on.leads, true);
+    assert.equal(Boolean(planRuleToJob(on).skipLeads), false);
+  });
+
+  it("руки не сжигают слот: due снимается, на завтра due снова", () => {
+    const due = msk(2026, 8, 15, 4, 0).toISOString();
+    const p = policyOf({
+      planEnabled: true,
+      plan: [{ id: "n", on: true, mode: "auto", when: { kind: "daily" }, at: "04:00", dueAt: due }],
+    });
+    const skipped = stampPlanSkip(p, "hands", msk(2026, 8, 15, 4, 5));
+    assert.equal(skipped.plan[0].dueAt, "");
+    assert.equal(skipped.plan[0].lastSkip, "hands");
+    const same = markPlanDue(skipped, msk(2026, 8, 15, 12, 0));
+    assert.equal(same.plan[0].dueAt, "");
+    const nxt = markPlanDue(skipped, msk(2026, 8, 16, 4, 1));
+    assert.ok(nxt.plan[0].dueAt);
+    assert.notEqual(nxt.plan[0].lastSkip, "expired");
+  });
+
+  it("две карточки 04:00: руки на второй не expired через 36 ч", () => {
+    const old = msk(2026, 8, 14, 4, 0).toISOString();
+    const p = policyOf({
+      planEnabled: true,
+      plan: [{ id: "b", on: true, mode: "auto", when: { kind: "daily" }, at: "04:00", dueAt: old, lastSkip: "hands" }],
+    });
+    const marked = markPlanDue(p, msk(2026, 8, 16, 12, 0));
+    assert.equal(marked.plan[0].lastSkip, "hands");
+    assert.notEqual(marked.plan[0].lastSkip, "expired");
+    assert.equal(marked.plan[0].dueAt, "");
+  });
+
+  it("лог сессии — старт и done с одним jobId одна строка", () => {
+    const rows = planLogSessions([
+      { at: "2", kind: "done", text: "готово", jobId: "j1" },
+      { at: "1", kind: "start", text: "старт автомат", jobId: "j1" },
+      { at: "0", kind: "start", text: "другой", jobId: "j2" },
+    ], 10);
+    assert.equal(rows.length, 2);
+    assert.match(String(rows[0].text), /старт автомат/);
+    assert.match(String(rows[0].text), /готово/);
+  });
+
 });

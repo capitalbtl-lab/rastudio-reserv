@@ -12,6 +12,7 @@ import {
   pad2,
   planFromIdToRecheckDays,
   planModeMeta,
+  planLogSessions,
   whenLabel,
   type CrmSyncPolicy,
   type HistoryPlanMode,
@@ -123,6 +124,7 @@ function DraftForm({
   const [recheckDays, setRecheckDays] = useState(7);
   const [fromId, setFromId] = useState<PlanFromId>("2015");
   const [study, setStudy] = useState<"1" | "2">("1");
+  const [leads, setLeads] = useState(true);
 
   function when(): HistoryWhen {
     if (kind === "weekly") return { kind: "weekly", days };
@@ -267,7 +269,7 @@ function DraftForm({
         <>
           <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Окно перепроверки</p>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            {(study === "2" ? PLAN_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PLAN_FROM_OPTS).map((o) => (
+            {PLAN_FROM_OPTS.map((o) => (
               <Chip key={o.id} on={fromId === o.id} onClick={() => setFromId(o.id)}>
                 {o.label}
               </Chip>
@@ -289,7 +291,7 @@ function DraftForm({
         <>
           <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Годы (красная качка)</p>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            {(study === "2" ? PLAN_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PLAN_FROM_OPTS).map((o) => (
+            {PLAN_FROM_OPTS.map((o) => (
               <Chip key={o.id} on={fromId === o.id} onClick={() => setFromId(o.id)}>
                 {o.label}
               </Chip>
@@ -302,12 +304,14 @@ function DraftForm({
         <Chip on={study === "1"} onClick={() => setStudy("1")}>
           Сейчас ходят
         </Chip>
-        <Chip on={study === "2"} onClick={() => {
-          setStudy("2");
-          if (fromId !== "1" && fromId !== "2") setFromId("1");
-        }}>
+        <Chip on={study === "2"} onClick={() => setStudy("2")}>
           Архив
         </Chip>
+        {study === "1" && mode === "auto" ? (
+          <Chip on={leads} onClick={() => setLeads((v) => !v)}>
+            Лиды действующих групп
+          </Chip>
+        ) : null}
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10" onClick={onCancel}>
@@ -318,23 +322,23 @@ function DraftForm({
           disabled={busy || !canSave}
           className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
           onClick={() => {
-            const from = study === "2" && fromId !== "1" && fromId !== "2" ? "1" : fromId;
             onSave({
               on: true,
               mode,
               when: when(),
               at,
-              recheckDays: mode === "auto" ? planFromIdToRecheckDays(from) : recheckDays,
-              dateFromId: from,
+              recheckDays: mode === "auto" ? planFromIdToRecheckDays(fromId) : recheckDays,
+              dateFromId: fromId,
               study,
               label,
+              leads: study === "1" && leads,
             });
           }}
         >
           Сохранить расписание
         </button>
       </div>
-      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. Автомат: сначала дырки слева, потом перепроверка. Окно — чипы лет на этой карточке. Лиды в ночном слоте — как галка шага 1.</p>
+      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. Автомат: сначала дырки слева, потом перепроверка. Окно — чипы лет на этой карточке. Лиды ночью — чип на карточке, галку шага 1 не трогает. Архив «с 2015» качает с 2015.</p>
     </div>
   );
 }
@@ -456,7 +460,7 @@ export function HistoryPlanPanel({
         <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
           <p className="text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Последние синхронизации</p>
           {(() => {
-            const rows = (planLog || []).filter((e) => e.kind === "start" || e.kind === "done").slice(0, 10);
+            const rows = planLogSessions(planLog || [], 10);
             if (!rows.length) return <p className="mt-2 text-[0.78rem] text-muted">Ещё не было. Старт, стоп и сбои появятся здесь.</p>;
             return (
               <ul className="mt-2 space-y-1.5">
@@ -503,10 +507,7 @@ export function HistoryPlanPanel({
         </Chip>
         <Chip
           on={runStudy === "2"}
-          onClick={() => {
-            setRunStudy("2");
-            if (runFrom !== "1" && runFrom !== "2") setRunFrom("1");
-          }}
+          onClick={() => setRunStudy("2")}
         >
           Архив клиентов
         </Chip>
@@ -524,7 +525,7 @@ export function HistoryPlanPanel({
           </>
         ) : null}
         <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Окно перепроверки</p>
-        {(runStudy === "2" ? PLAN_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PLAN_FROM_OPTS).map((o) => (
+        {PLAN_FROM_OPTS.map((o) => (
           <Chip key={o.id} on={runFrom === o.id} onClick={() => setRunFrom(o.id)}>
             {o.label}
           </Chip>
@@ -539,7 +540,7 @@ export function HistoryPlanPanel({
             if (!window.confirm("Перепроверить сейчас? Сначала доберёт дырки слева, потом всех справа. Окно — чипы лет. Чип «Лиды действующих групп» режет только этот прогон, галку шага 1 не трогает.")) return;
             onRunAuto({
               study: runStudy,
-              dateFromId: runStudy === "2" && runFrom !== "1" && runFrom !== "2" ? "1" : runFrom,
+              dateFromId: runFrom,
               leads: runStudy === "1" && runLeads,
               archGroups: runStudy === "1" && runArchGroups,
             });
@@ -598,6 +599,9 @@ export function HistoryPlanPanel({
               </span>
             ) : null}
             <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">{r.study === "2" ? "Архив" : "Сейчас ходят"}</span>
+            {r.study === "1" && r.mode === "auto" && r.leads === false ? (
+              <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">без лидов</span>
+            ) : null}
           </div>
           <p className="mt-2 text-[0.72rem] text-muted">
             следующий слот {fmtSlot(r)}

@@ -61,6 +61,7 @@ export type HistorySchedule = {
   dateFromId: PlanFromId;
   study: "1" | "2";
   label: string;
+  leads: boolean;
   dueAt: string;
   lastFiredAt: string;
   lastJobId: string;
@@ -202,6 +203,7 @@ export function scheduleOf(raw: unknown, fallbackId = ""): HistorySchedule {
     dateFromId: from,
     study: r.study === "2" ? "2" : "1",
     label: String(r.label || "").trim().slice(0, 80),
+    leads: r.leads !== false,
     dueAt: String(r.dueAt || ""),
     lastFiredAt: String(r.lastFiredAt || ""),
     lastJobId: String(r.lastJobId || ""),
@@ -252,9 +254,8 @@ export function planDateFrom(id: string, now = new Date()): string {
   return `${y}-${pad2(w.mo)}-${pad2(d)}`;
 }
 
-export function planFromIdOf(study: "1" | "2", id: string): PlanFromId {
-  if (study === "2") return id === "2" ? "2" : "1";
-  return PLAN_FROM_OPTS.some((o) => o.id === id) ? (id as PlanFromId) : "2015";
+export function planFromIdOf(_study: "1" | "2", id: string): PlanFromId {
+  return PLAN_FROM_OPTS.some((o) => o.id === id) ? (id as PlanFromId) : _study === "2" ? "1" : "2015";
 }
 
 /** Синяя таблица пауз: годы с пульта → окно перепроверки. */
@@ -278,6 +279,7 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
       dateFrom: planDateFrom(fromId, now),
       archived: rule.study === "2",
       pipe: rule.study === "2" ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL],
+      skipLeads: Boolean(rule.study === "1" && rule.leads === false),
     };
   }
   const meta = planModeMeta(rule.mode);
@@ -433,6 +435,9 @@ export function markPlanDue(policy: CrmSyncPolicy, now = new Date()): CrmSyncPol
       if (r.dueAt) {
         const due = Date.parse(r.dueAt);
         if (Number.isFinite(due) && now.getTime() - due > PLAN_DUE_MS) {
+          if (r.lastSkip === "hands") {
+            return { ...r, dueAt: "", lastSkip: "hands" };
+          }
           return { ...r, dueAt: "", lastSkip: "expired" };
         }
         return r;
@@ -470,10 +475,16 @@ export function stampPlanFired(policy: CrmSyncPolicy, id: string, jobId: string,
   };
 }
 
-export function stampPlanSkip(policy: CrmSyncPolicy, reason: string): CrmSyncPolicy {
+export function stampPlanSkip(policy: CrmSyncPolicy, reason: string, now = new Date()): CrmSyncPolicy {
   return {
     ...policy,
-    plan: policy.plan.map((r) => (r.dueAt && !r.lastSkip ? { ...r, lastSkip: reason } : r)),
+    plan: policy.plan.map((r) => {
+      if (!r.dueAt || r.lastSkip) return r;
+      if (reason === "hands") {
+        return { ...r, dueAt: "", lastSkip: "hands", lastFiredAt: now.toISOString() };
+      }
+      return { ...r, lastSkip: reason };
+    }),
   };
 }
 
@@ -601,5 +612,32 @@ export function emptyDraft(): Omit<HistorySchedule, "id" | "dueAt" | "lastFiredA
     dateFromId: "2015",
     study: "1",
     label: "",
+    leads: true,
   };
 }
+
+export type PlanLogLite = { at?: string; kind?: string; text?: string; jobId?: string; src?: string; who?: string; cid?: number; mode?: string };
+
+/** Одна сессия = старт + итог с одним jobId. */
+export function planLogSessions(log: PlanLogLite[], n = 10): PlanLogLite[] {
+  const out: PlanLogLite[] = [];
+  const seen = new Set<string>();
+  for (const e of log || []) {
+    if (!e || (e.kind !== "start" && e.kind !== "done" && e.kind !== "fail" && e.kind !== "stop")) continue;
+    if (e.jobId && seen.has(e.jobId)) continue;
+    if (e.jobId) seen.add(e.jobId);
+    const pair = e.jobId
+      ? (log || []).find((x) => x.jobId === e.jobId && x !== e && (x.kind === "start" || x.kind === "done" || x.kind === "fail" || x.kind === "stop"))
+      : undefined;
+    const start = e.kind === "start" ? e : pair && pair.kind === "start" ? pair : undefined;
+    const end = e.kind !== "start" ? e : pair && pair.kind !== "start" ? pair : undefined;
+    if (start && end) {
+      out.push({ ...start, kind: end.kind, text: `${start.text || ""} → ${end.text || ""}`.trim() });
+    } else {
+      out.push(e);
+    }
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
