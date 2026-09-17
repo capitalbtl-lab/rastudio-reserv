@@ -212,8 +212,8 @@ describe("журнал денег", () => {
     assert.equal(kindFromAlfaPay({ pay_type_id: 6, income: 50000, note: "набор робот" }), "correct");
     assert.equal(kindFromAlfaPay({ pay_type_id: 1, income: 100, note: "продажа товара" }), "income");
     assert.equal(kindFromAlfaPay({ pay_type_id: 6, income: -5950 }), "correct");
-    assert.equal(kindFromAlfaPay({ id: 23523, income: -5950 }), "correct");
-    assert.equal(kindFromAlfaPay({ pay_item_id: 7, income: 10 }), "correct");
+    assert.equal(kindFromAlfaPay({ pay_type_id: 6, income: -5950 }), "correct");
+    assert.equal(kindFromAlfaPay({ pay_type_id: 6, pay_item_id: 7, income: 10 }), "correct");
     assert.equal(kindFromAlfaPay({ pay_type_id: 2, income: 200 }), "product");
     assert.equal(kindFromAlfaPay({ pay_type_id: 3, expenditure: 50 }), "refund");
     assert.equal(kindFromAlfaPay({ commodity_id: 9, income: 200 }), "product");
@@ -221,7 +221,8 @@ describe("журнал денег", () => {
     assert.equal(kindFromAlfaPay({ pay_type: "Корректировка", income: 1 }), "correct");
     assert.equal(kindFromAlfaPay({ pay_type_id: 6, type_id: 5, income: 50000 }), "correct");
     assert.equal(kindFromAlfaPay({ pay_type_id: 5, pay_type: "Корректировка", income: 50000 }), "correct");
-    assert.equal(kindFromAlfaPay({ expenditure: 80 }), "refund");
+    assert.equal(kindFromAlfaPay({ expenditure: 80 }), "income");
+    assert.equal(kindFromAlfaPay({ pay_type_id: 5, income: 50000 }), "refund");
     assert.equal(payNum(-28405), -28405);
     assert.equal(payNum("-28 405,00"), -28405);
     assert.equal(payNum("4050"), 4050);

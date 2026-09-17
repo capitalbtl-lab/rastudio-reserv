@@ -156,19 +156,12 @@ export function skipAlfaGoodsPay(item: Record<string, unknown>) {
 
 export function kindFromAlfaPay(item: Record<string, unknown>): PayKind {
   const typeId = alfaPayTypeIdOf(item);
-  const label = String(item.pay_type || item.type_name || item.name || "").toLowerCase();
+  const label = String(item.pay_type || item.type_name || "").toLowerCase();
   if (typeId === 6 || /коррект/.test(label)) return "correct";
-  if (typeId === 1) return "income";
-  if (typeId === 9 || typeId === 2) return "product";
-  if (typeId === 5 || typeId === 3) return "refund";
-  const itemId = Number(item.pay_item_id || item.payItemId) || 0;
-  const income = payNum(item.income);
-  if (itemId === 7 || income < 0) return "correct";
-  if (Number(item.commodity_id || item.commodityId)) return "product";
+  if (typeId === 5 || typeId === 3 || /возврат/.test(label)) return "refund";
+  if (typeId === 9 || typeId === 2 || Number(item.commodity_id || item.commodityId)) return "product";
   if (/товар|продаж/.test(label)) return "product";
-  if (/возврат/.test(label)) return "refund";
-  const expenditure = payNum(item.expenditure);
-  if (expenditure && !income) return "refund";
+  if (typeId === 1) return "income";
   return "income";
 }
 
