@@ -465,7 +465,7 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
           </thead>
           <tbody>
             {items.map((p) => {
-              const sum = Number(p.income || 0) - Number(p.expenditure || 0);
+              const sum = rowSum(p);
               return (
                 <tr key={`${p.branchId}:${p.id}:${p.customerId}`} className={cn("border-t border-black/6", p.deleted && "opacity-50")}>
                   <td className="px-2 py-2 whitespace-nowrap tabular-nums">{p.documentDate || "—"}</td>
