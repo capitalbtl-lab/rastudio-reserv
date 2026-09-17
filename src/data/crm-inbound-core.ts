@@ -251,6 +251,7 @@ export function iceWindowOrNow(
   const from = String(dateFrom || "").trim();
   const to = String(dateTo || "").trim();
   if (recheck && from && to) return { from, to };
+  if (recheck && from && from <= "2015-01-01") return { from, to: to || "" };
   if (recheck) return recheckWindowYmd(recheckDays, now);
   return { from: from || "2015-01-01", to: "" };
 }

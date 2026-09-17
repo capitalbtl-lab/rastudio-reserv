@@ -817,10 +817,10 @@ async function inboundPayWindow(
         extra: prev?.extra,
         done: true,
         empty: liveN === 0,
-        full: prev?.full === true,
-        mode: "window",
-        from: prev?.from,
-        to: prev?.to,
+        full: prev?.full === true || String(dateFrom || "") <= "2015-01-01",
+        mode: String(dateFrom || "") <= "2015-01-01" ? "full" : "window",
+        from: dateFrom || prev?.from,
+        to: dateTo || prev?.to,
       },
   };
   save(next, { keepAll: true });

@@ -1873,8 +1873,8 @@ function PeopleFillList({
                   text={`дубликатов нет · лишних ${pairCount(row.loadDupsN, row.recheckDupsN, row.extraN ?? 0)}`}
                 />
                 <CheckLine
-                  on={Boolean(row.paysScanned || row.pays)}
-                  text={`касса загружена · платежей ${row.cashPaysN ?? 0} (${Math.round(Number(row.cashPaysSum) || 0)} ₽) · корректировок ${row.cashCorrN ?? 0} (${Math.round(Number(row.cashCorrSum) || 0)} ₽) · товаров ${row.cashGoodsN ?? 0} (${Math.round(Number(row.cashGoodsSum) || 0)} ₽)`}
+                  on={Boolean(row.pays)}
+                  text={`касса загружена${row.pays ? "" : " · нет А"} · платежей ${row.cashPaysN ?? 0} (${Math.round(Number(row.cashPaysSum) || 0)} ₽) · корректировок ${row.cashCorrN ?? 0} (${Math.round(Number(row.cashCorrSum) || 0)} ₽) · товаров ${row.cashGoodsN ?? 0} (${Math.round(Number(row.cashGoodsSum) || 0)} ₽)`}
                 />
                 <CheckLine
                   on={Boolean(row.paysRechecked)}

@@ -533,7 +533,7 @@ export async function auditOne(cid: number, branchId: number) {
     };
   }
 
-  if (!first.paysComplete) {
+  if (!first.paysComplete && !((Number(first.liveFair) || 0) >= 1 && !first.payPending)) {
     return {
       hit: {
         cid: id,
