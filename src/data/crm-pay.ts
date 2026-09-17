@@ -294,7 +294,7 @@ export function payCustomerFilled(customerId: number) {
   return payFillFull(customerId);
 }
 
-export function customerBalance(customerId: number, fallback?: number | string, writeoffSum = 0) {
+export function customerBalance(customerId: number, fallback?: number | string, writeoffSum?: number) {
   const id = Number(customerId) || 0;
   const rows = paysOf(id);
   const paySum = displayedBalance(rows, undefined, true);
@@ -303,7 +303,16 @@ export function customerBalance(customerId: number, fallback?: number | string, 
   const pending =
     localPaysPending().some((x) => Number(x.customerId) === id) ||
     pendingExportIds(["pay.create", "pay.update", "pay.delete"]).has(id);
-  return ledgerMoney({ paySum, writeoffSum, snap, complete: payCustomerFilled(id), liveCtt, pending });
+  let wo = writeoffSum;
+  if (wo == null || !Number.isFinite(Number(wo))) {
+    try {
+      const { loadCustomerCalendar } = require("./group-cards") as typeof import("./group-cards");
+      wo = writeoffSumOf(loadCustomerCalendar(id), id);
+    } catch {
+      wo = 0;
+    }
+  }
+  return ledgerMoney({ paySum, writeoffSum: Number(wo) || 0, snap, complete: payCustomerFilled(id), liveCtt, pending });
 }
 
 export function isPayJournalComplete(customerId: number) {
