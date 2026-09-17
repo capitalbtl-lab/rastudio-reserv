@@ -58,7 +58,9 @@ function methodName(id?: string) {
 function rowSum(p: { kind?: string; income?: number; expenditure?: number; refundOfGoods?: boolean }) {
   if (p.kind === "product") return -(Math.abs(Number(p.expenditure || 0) || Number(p.income || 0)));
   if (p.kind === "refund" && p.refundOfGoods) return Math.abs(Number(p.expenditure || 0) || Number(p.income || 0));
-  return Number(p.income || 0) - Number(p.expenditure || 0);
+  const n = Number(p.income || 0) - Number(p.expenditure || 0);
+  if (p.kind === "refund") return n <= 0 ? n : -n;
+  return n;
 }
 
 type CashRow = {
