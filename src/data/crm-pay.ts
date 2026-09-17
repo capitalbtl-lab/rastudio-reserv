@@ -1,1 +1,1 @@
-/home/workdir/artifacts/step4-canon-crm-pay.ts
+RESTORE_FROM_DISK
