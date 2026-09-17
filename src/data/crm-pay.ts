@@ -1,1 +1,1 @@
-RESTORE_FROM_DISK
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
