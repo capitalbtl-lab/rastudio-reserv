@@ -1959,11 +1959,18 @@ type AuditUiRow = {
   cashPaysSum?: number;
   cashCorrSum?: number;
   cashGoodsSum?: number;
+  alfaPaysN?: number;
+  alfaCorrN?: number;
+  alfaGoodsN?: number;
+  alfaPaysSum?: number;
+  alfaCorrSum?: number;
+  alfaGoodsSum?: number;
+  alfaSplitOk?: boolean;
 };
 
 function asAuditRow(
   r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number; cashPaysN?: number; cashCorrN?: number; cashGoodsN?: number; cashPaysSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
-  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string },
+  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean },
 ): AuditUiRow {
   const codes = h?.codes;
   return {
@@ -1984,6 +1991,13 @@ function asAuditRow(
     cashPaysSum: r.cashPaysSum,
     cashCorrSum: r.cashCorrSum,
     cashGoodsSum: r.cashGoodsSum,
+    alfaPaysN: h?.alfaPaysN,
+    alfaCorrN: h?.alfaCorrN,
+    alfaGoodsN: h?.alfaGoodsN,
+    alfaPaysSum: h?.alfaPaysSum,
+    alfaCorrSum: h?.alfaCorrSum,
+    alfaGoodsSum: h?.alfaGoodsSum,
+    alfaSplitOk: h?.alfaSplitOk,
     alfaRole: (codes || []).includes("лид") ? "лид" : (codes || []).includes("архив") ? "архив" : r.alfaRole,
     status: r.status,
     study: r.study,
@@ -2164,17 +2178,17 @@ function AuditFillList({
                 <tr>
                   <td>платежи</td>
                   <td>{row.cashPaysN ?? 0} ({rubAudit(row.cashPaysSum)})</td>
-                  <td className="text-muted">в шапке нет разбивки</td>
+                  <td>{row.alfaSplitOk ? `${row.alfaPaysN ?? 0} (${rubAudit(row.alfaPaysSum)})` : "ещё не снимали"}</td>
                 </tr>
                 <tr>
                   <td>корректировки</td>
                   <td>{row.cashCorrN ?? 0} ({rubAudit(row.cashCorrSum)})</td>
-                  <td className="text-muted">в шапке нет разбивки</td>
+                  <td>{row.alfaSplitOk ? `${row.alfaCorrN ?? 0} (${rubAudit(row.alfaCorrSum)})` : "ещё не снимали"}</td>
                 </tr>
                 <tr>
                   <td>товары</td>
                   <td>{row.cashGoodsN ?? 0} ({rubAudit(row.cashGoodsSum)})</td>
-                  <td className="text-muted">в шапке нет разбивки</td>
+                  <td>{row.alfaSplitOk ? `${row.alfaGoodsN ?? 0} (${rubAudit(row.alfaGoodsSum)})` : "ещё не снимали"}</td>
                 </tr>
                 <tr>
                   <td>Клиенты / формула</td>
@@ -2189,7 +2203,7 @@ function AuditFillList({
               </tbody>
             </table>
             <p className="mt-1 text-[0.72rem] text-muted">
-              Разбивка кассы — строки pay/index с шага 4. Alfa на шаге 5 отдаёт одну шапку Customer.balance.
+              Касса — диск шага 4. Alfa — живой pay/index при «Перепроверить», без записи на диск. Шапка отдельно в итоге.
               {row.extra ? ` ${row.extra}.` : ""}
             </p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">

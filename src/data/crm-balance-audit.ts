@@ -49,6 +49,13 @@ export type AuditHit = {
   repaired: boolean;
   at: string;
   extra: string;
+  alfaPaysN?: number;
+  alfaCorrN?: number;
+  alfaGoodsN?: number;
+  alfaPaysSum?: number;
+  alfaCorrSum?: number;
+  alfaGoodsSum?: number;
+  alfaSplitOk?: boolean;
 };
 
 export type AuditReport = {
@@ -222,6 +229,63 @@ export async function diskAudit(cid: number, branchId: number) {
     dSiteWithout6,
     dSiteWithoutRefund,
     journal: journal.length,
+  };
+}
+
+async function peekAlfaPaySplit(
+  request: (path: string, body: Record<string, unknown>, token: string) => Promise<unknown>,
+  token: string,
+  branch: number,
+  cid: number,
+) {
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  const { kindFromAlfaPay, payNum } = await import("./crm-pay-core");
+  const { uniqueBranches } = await import("./crm-ledger-core");
+  const from = "2015-01-01";
+  const to = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+  let paysN = 0, corrN = 0, goodsN = 0;
+  let paysSum = 0, corrSum = 0, goodsSum = 0;
+  let pages = 0;
+  const seen = new Set<number>();
+  for (const bid of uniqueBranches(branch)) {
+    for (let page = 0; page < 20; page += 1) {
+      if (step5SessionStopped()) return { ok: false as const };
+      const json = await request(`/v2api/${bid}/pay/index`, {
+        page,
+        pageSize: 500,
+        customer_id: cid,
+        date_from: from,
+        date_to: to,
+      }, token);
+      pages += 1;
+      const pack = crmUnwrapIndex(json);
+      const items = pack.items || [];
+      if (!items.length) break;
+      for (const item of items) {
+        const id = Number((item as { id?: number }).id) || 0;
+        if (id > 0) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+        }
+        const rawDate = String((item as { document_date?: string }).document_date || "").trim();
+        if (!rawDate) continue;
+        const kind = kindFromAlfaPay(item as Record<string, unknown>);
+        const n = payNum((item as { income?: unknown }).income) - payNum((item as { expenditure?: unknown }).expenditure);
+        if (kind === "product") { goodsN += 1; goodsSum += n; }
+        else if (kind === "correct") { corrN += 1; corrSum += n; }
+        else { paysN += 1; paysSum += n; }
+      }
+      if (items.length < 500) break;
+    }
+  }
+  return {
+    ok: true as const,
+    alfaPaysN: paysN,
+    alfaCorrN: corrN,
+    alfaGoodsN: goodsN,
+    alfaPaysSum: paysSum,
+    alfaCorrSum: corrSum,
+    alfaGoodsSum: goodsSum,
   };
 }
 
@@ -605,6 +669,15 @@ export async function auditOne(cid: number, branchId: number) {
     dSiteWithoutRefund: Number.isFinite(first.dSiteWithoutRefund) ? first.dSiteWithoutRefund - (shown.ok ? shown.alfa : 0) : Number.NaN,
   });
 
+  let alfaSplit: Awaited<ReturnType<typeof peekAlfaPaySplit>> | null = null;
+  if (shown.ok && shown.token && !shown.stopped && !shown.authStop) {
+    try {
+      alfaSplit = await peekAlfaPaySplit(shown.request, shown.token, shown.branch || branch, id);
+    } catch {
+      alfaSplit = { ok: false as const };
+    }
+  }
+
   if (shown.ok && shown.headerOk) {
     const { upsertDossier } = await import("./dossiers");
     const extras: Record<string, string> = {
@@ -642,6 +715,17 @@ export async function auditOne(cid: number, branchId: number) {
       repaired: false,
       at,
       extra,
+      ...(alfaSplit && alfaSplit.ok
+        ? {
+            alfaPaysN: alfaSplit.alfaPaysN,
+            alfaCorrN: alfaSplit.alfaCorrN,
+            alfaGoodsN: alfaSplit.alfaGoodsN,
+            alfaPaysSum: alfaSplit.alfaPaysSum,
+            alfaCorrSum: alfaSplit.alfaCorrSum,
+            alfaGoodsSum: alfaSplit.alfaGoodsSum,
+            alfaSplitOk: true,
+          }
+        : { alfaSplitOk: false }),
     } satisfies AuditHit,
   };
 }
