@@ -30,7 +30,6 @@ import {
   liveCttOf,
   cttRestSum,
   markRefundOfGoods,
-  remainderClose,
   alfaPayTypeIdOf,
   isGoodsArticle,
   OPENING_NOTE,
@@ -78,7 +77,7 @@ export function cashPayLabel(row: Pick<PayRow, "customerId" | "customerName">, p
 }
 
 type PayPollState = { hits: string[]; branches: Record<string, PayPollStamp>; lastNote?: string; fill?: PayFillCursor };
-type PayFill = { bid: number; page: number; done?: boolean; empty?: boolean };
+type PayFill = { bid: number; page: number; extra?: number; done?: boolean; empty?: boolean; full?: boolean; mode?: "full" | "window"; from?: string; to?: string };
 type Store = { at: string; items: PayRow[]; poll?: PayPollState; complete?: number[]; payFill?: Record<string, PayFill> };
 
 let mem: Store | null = null;
@@ -256,7 +255,7 @@ export function payFillEmpty(customerId: number) {
   const id = Number(customerId) || 0;
   if (!id) return false;
   const cur = load().payFill?.[String(id)];
-  return Boolean(cur?.done && cur.empty);
+  return Boolean(cur?.full && cur.empty);
 }
 
 export function clearPayFill(customerId: number) {
@@ -285,10 +284,15 @@ export function resetStudentPayDisk(customerId: number) {
   return { ok: true as const, n: kept.length };
 }
 
-/** Касса дочитана этим id (complete[]). Строка «остаток на диске» сюда не входит. */
-export function payCustomerFilled(customerId: number) {
+/** А канона 4: payFill.full. complete[] не закон шага 4. */
+export function payFillFull(customerId: number) {
   const id = Number(customerId) || 0;
-  return Boolean(id && completeSetOf(load()).has(id));
+  if (!id) return false;
+  return load().payFill?.[String(id)]?.full === true;
+}
+
+export function payCustomerFilled(customerId: number) {
+  return payFillFull(customerId);
 }
 
 export function customerBalance(customerId: number, fallback?: number | string, writeoffSum = 0) {
@@ -312,9 +316,6 @@ export function markPayJournalComplete(customerId: number) {
   const id = Number(customerId) || 0;
   if (!id) return;
   const store = load();
-  const set = new Set(store.complete || []);
-  set.add(id);
-  store.complete = [...set];
   const prev = store.payFill?.[String(id)];
   const liveN = paysOf(id).filter((x) => !x.deleted).length;
   store.payFill = {
@@ -322,8 +323,13 @@ export function markPayJournalComplete(customerId: number) {
     [String(id)]: {
       bid: Number(prev?.bid) || 1,
       page: Number(prev?.page) || 0,
+      extra: prev?.extra,
       done: true,
       empty: prev?.empty ?? liveN === 0,
+      full: true,
+      mode: prev?.mode || "full",
+      from: prev?.from,
+      to: prev?.to,
     },
   };
   save(store);
@@ -630,6 +636,8 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
   const id = Number(item.id || 0) || 0;
   const income = payNum(item.income);
   const expenditure = payNum(item.expenditure);
+  const rawDate = String(item.document_date || "").trim();
+  if (!rawDate || !ruDateIso(rawDate)) return null;
   if (!id && !income && !expenditure) return null;
   const cid = payCustomerIdOf(item, customerId);
   const kind = kindFromAlfaPay(item);
@@ -642,7 +650,7 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
     income,
     expenditure,
     note: String(item.note || "").trim(),
-    documentDate: String(item.document_date || item.date || ruToday()),
+    documentDate: rawDate,
     at: new Date().toISOString(),
     ...extrasOf({
       cttId: payCttIdOf(item),
@@ -807,7 +815,17 @@ async function inboundPayWindow(
   const prev = next.payFill?.[String(customerId)];
   next.payFill = {
     ...(next.payFill || {}),
-    [String(customerId)]: { bid: Number(prev?.bid) || branches[0], page: Number(prev?.page) || 0, done: true, empty: liveN === 0 },
+    [String(customerId)]: {
+        bid: Number(prev?.bid) || branches[0],
+        page: Number(prev?.page) || 0,
+        extra: prev?.extra,
+        done: true,
+        empty: liveN === 0,
+        full: prev?.full === true,
+        mode: "window",
+        from: prev?.from,
+        to: prev?.to,
+      },
   };
   save(next, { keepAll: true });
   return merged;
@@ -837,8 +855,7 @@ export async function inboundCustomerPays(
   const filled = payCustomerFilled(customerId);
   const have = paysOf(customerId).some((x) => !x.deleted);
   if (!opts?.force && filled) return paysOf(customerId);
-  if (!opts?.force && payFillScanned(customerId) && (have || payFillEmpty(customerId))) return paysOf(customerId);
-  if (!opts?.force && payFillScanned(customerId) && !have) {
+  if (!opts?.force && payFillScanned(customerId) && !have && !filled) {
     delete store.payFill[String(customerId)];
   }
   if (cur && !cur.done) {
@@ -944,40 +961,6 @@ export async function inboundCustomerPays(
     }
     if (!failed && extraFinished) done = true;
   }
-  const known: number[] = [];
-  try {
-    const { findDossier } = await import("./dossiers");
-    const { parseDossierCtt } = await import("./pupil-tariffs");
-    const d = findDossier({ crmId: customerId });
-    known.push(...parseDossierCtt(d?.extras).map((t) => Number(t.id) || 0).filter((n) => n > 0));
-  } catch {
-    /* диск абонементов необязателен */
-  }
-  const unlabeled = raw.some((it) => !payCttIdOf(it));
-  if (done && unlabeled && known.length && !overBudget()) {
-    for (const ctt of [...new Set(known)]) {
-      for (let p = 0; p < 6; p += 1) {
-        try {
-          const json = await request(
-            `/v2api/${branchId}/pay/index`,
-            { page: p, pageSize: PAY_CUSTOMER_PAGE, customer_id: customerId, ctt_id: ctt },
-            token,
-          );
-          const pack = crmUnwrapIndex(json);
-          raw.push(
-            ...pack.items.map((it) => ({
-              ...it,
-              branch_id: Number(it.branch_id || branchId) || branchId,
-              ctt_id: Number(it.ctt_id || ctt) || ctt,
-            })),
-          );
-          if (pack.items.length < PAY_INBOUND_PAGE) break;
-        } catch {
-          break;
-        }
-      }
-    }
-  }
   if (resetGone()) return paysOf(customerId);
   const pulled = raw
     .map((it) => {
@@ -992,33 +975,24 @@ export async function inboundCustomerPays(
   await stampPayCustomerNames(pulled).catch(() => null);
   if (failed) throw new Error("Alfa не ответила, нажмите снова");
   if (done) {
-    let headerOk = false;
-    try {
-      const { crmUnwrapIndex } = await import("./crm-leads-stages");
-      const { alfaHeaderOf } = await import("./crm-balance-audit-core");
-      const { loadCustomerCalendar } = await import("./group-cards");
-      const json = await request(`/v2api/${branchId}/customer/index`, { page: 0, pageSize: 10, id: customerId }, token);
-      const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === customerId);
-      const live = merged.filter((x) => !x.deleted);
-      const cash = balanceOf(live) - writeoffSumOf(loadCustomerCalendar(customerId), customerId);
-      if (hit && remainderClose(cash, alfaHeaderOf(hit, 0, 0), live.length > 0)) {
-        markPayJournalComplete(customerId);
-        headerOk = true;
-      } else if (hit) {
-        const next = load();
-        next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0, done: true, empty: live.length === 0 } };
-        save(next, { keepAll: true });
-        headerOk = true;
-      }
-    } catch {
-      /* шапки нет — не complete */
-    }
-    if (!headerOk) {
-      const next = load();
-      const liveN = merged.filter((x) => !x.deleted).length;
-      next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0, done: true, empty: liveN === 0 } };
-      save(next, { keepAll: true });
-    }
+    const next = load();
+    const prevFill = next.payFill?.[String(customerId)];
+    const liveN = merged.filter((x) => !x.deleted).length;
+    next.payFill = {
+      ...(next.payFill || {}),
+      [String(customerId)]: {
+        bid: Number(fillBid) || branches[0],
+        page: Number(fillPage) || 0,
+        extra: prevFill?.extra,
+        done: true,
+        empty: liveN === 0,
+        full: true,
+        mode: "full",
+        from: prevFill?.from,
+        to: prevFill?.to,
+      },
+    };
+    save(next, { keepAll: true });
   }
   return merged;
 }
