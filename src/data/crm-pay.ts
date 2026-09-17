@@ -638,11 +638,6 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
   const cid = payCustomerIdOf(item, customerId);
   const kind = kindFromAlfaPay(item);
   const typeId = alfaPayTypeIdOf(item);
-  const goodsRefund = kind === "refund" && isGoodsArticle(item);
-  if (kind === "refund" && !goodsRefund && income && !expenditure) {
-    expenditure = income;
-    income = 0;
-  }
   return {
     id: id || 0,
     customerId: cid,
