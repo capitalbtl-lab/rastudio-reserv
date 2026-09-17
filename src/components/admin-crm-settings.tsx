@@ -517,6 +517,14 @@ type StudentHit = {
   extraN?: number;
   holeIds?: number[];
   extraIds?: number[];
+  loadLessonsDisk?: number;
+  loadLessonsAlfa?: number;
+  loadPaysN?: number;
+  loadDupsN?: number;
+  recheckLessonsDisk?: number;
+  recheckLessonsAlfa?: number;
+  recheckPaysN?: number;
+  recheckDupsN?: number;
   dups?: boolean;
   holeApproved?: boolean;
 };
@@ -637,6 +645,18 @@ function CheckLine({ on, text }: { on: boolean; text: string }) {
       {text}
     </span>
   );
+}
+
+function pairCount(before?: number, after?: number, now?: number) {
+  const left = before != null && Number.isFinite(Number(before)) ? String(Math.max(0, Number(before) || 0)) : "—";
+  const rightRaw = after != null && Number.isFinite(Number(after)) ? Number(after) : now;
+  const right = rightRaw != null && Number.isFinite(Number(rightRaw)) ? String(Math.max(0, Number(rightRaw) || 0)) : "—";
+  return `до ${left} → после ${right}`;
+}
+
+function rubShort(n?: number | null) {
+  if (n == null || !Number.isFinite(Number(n))) return "";
+  return ` · ${Math.round(Number(n))} ₽`;
 }
 
 const DETAIL_FIELDS = ["домашнее задание", "тема", "комментарий", "таблица учеников"] as const;
@@ -1830,18 +1850,37 @@ function PeopleFillList({
         </div>
         {shown ? (
           <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[0.72rem] leading-snug ring-1 ring-black/10">
-            <CheckLine on={Boolean(row.journal) && !short} text="календарь загружен" />
-            <CheckLine on={Boolean(row.rechecked) && !dups} text="календарь перепроверен" />
-            {kind === "balance" ? null : (
-              <CheckLine on={row.holeN != null || row.extraN != null} text={nums ? nums.line : "набор id ещё не сверяли"} />
-            )}
-            <CheckLine on={Boolean(row.rechecked) && !dups && !short} text="дубликатов нет" />
             {kind === "balance" ? (
               <>
-                <CheckLine on={Boolean(row.paysScanned || row.pays)} text="касса загружена" />
-                <CheckLine on={Boolean(row.paysRechecked)} text="касса перепроверена" />
+                <CheckLine
+                  on={Boolean(row.journal) && !short}
+                  text={`календарь загружен · диск ${row.loadLessonsDisk ?? row.lessons} · Alfa ${row.loadLessonsAlfa ?? row.alfa ?? "—"}`}
+                />
+                <CheckLine
+                  on={Boolean(row.rechecked) && !dups}
+                  text={`календарь перепроверен · диск ${pairCount(row.loadLessonsDisk, row.recheckLessonsDisk, row.lessons)} · Alfa ${pairCount(row.loadLessonsAlfa, row.recheckLessonsAlfa, row.alfa)}`}
+                />
+                <CheckLine
+                  on={Boolean(row.rechecked) && !dups && !short}
+                  text={`дубликатов нет · лишних ${pairCount(row.loadDupsN, row.recheckDupsN, row.extraN ?? 0)}`}
+                />
+                <CheckLine
+                  on={Boolean(row.paysScanned || row.pays)}
+                  text={`касса загружена · строк ${row.loadPaysN ?? row.cashRows ?? "—"}`}
+                />
+                <CheckLine
+                  on={Boolean(row.paysRechecked)}
+                  text={`касса перепроверена · строк ${pairCount(row.loadPaysN, row.recheckPaysN, row.cashRows)}`}
+                />
               </>
-            ) : null}
+            ) : (
+              <>
+                <CheckLine on={Boolean(row.journal) && !short} text="календарь загружен" />
+                <CheckLine on={Boolean(row.rechecked) && !dups} text="календарь перепроверен" />
+                <CheckLine on={row.holeN != null || row.extraN != null} text={nums ? nums.line : "набор id ещё не сверяли"} />
+                <CheckLine on={Boolean(row.rechecked) && !dups && !short} text="дубликатов нет" />
+              </>
+            )}
             <p className="mt-1 text-muted">{row.lessons ? ruLessons(row.lessons) : "занятий на диске нет"}{row.at ? ` · ${ruAt(row.at)}` : ""}</p>
           </div>
         ) : null}

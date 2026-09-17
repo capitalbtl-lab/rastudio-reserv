@@ -41,6 +41,15 @@ export type CustomerSyncStamp = {
   lessonsExtraN?: number;
   /** Окно пробы жёлтых, у кого уже есть счёт: 30 → 90 → 180. Нет ключа — полное 2015. */
   lessonsWindowDays?: number;
+  /** Счётчики шага 4: первая полная загрузка vs последняя перепроверка. */
+  loadLessonsDisk?: number;
+  loadLessonsAlfa?: number;
+  loadPaysN?: number;
+  loadDupsN?: number;
+  recheckLessonsDisk?: number;
+  recheckLessonsAlfa?: number;
+  recheckPaysN?: number;
+  recheckDupsN?: number;
 };
 
 type Store = { at: string; byId: Record<string, CustomerSyncStamp> };
@@ -96,6 +105,41 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
   const store = load();
   const prev = store.byId[String(id)] || {};
   const next: CustomerSyncStamp = { ...prev, ...patch };
+  if (patch.lessonsResetAt) {
+    delete next.loadLessonsDisk;
+    delete next.loadLessonsAlfa;
+    delete next.loadDupsN;
+    delete next.recheckLessonsDisk;
+    delete next.recheckLessonsAlfa;
+    delete next.recheckDupsN;
+  }
+  if (patch.paysResetAt) {
+    delete next.loadPaysN;
+    delete next.recheckPaysN;
+  }
+  const diskN = patch.lessonsDisk != null ? Number(patch.lessonsDisk) : undefined;
+  const alfaN = patch.lessonsAlfa != null ? Number(patch.lessonsAlfa) : undefined;
+  const extraN = patch.lessonsExtraN != null ? Number(patch.lessonsExtraN) : undefined;
+  const payN = (patch as CustomerSyncStamp & { paysRows?: number }).paysRows;
+  if (diskN != null && Number.isFinite(diskN) && !patch.lessonsRecheckAt) {
+    if (next.loadLessonsDisk == null) next.loadLessonsDisk = diskN;
+    if (alfaN != null && Number.isFinite(alfaN) && next.loadLessonsAlfa == null) next.loadLessonsAlfa = alfaN;
+    if (extraN != null && Number.isFinite(extraN) && next.loadDupsN == null) next.loadDupsN = extraN;
+  }
+  if (patch.lessonsRecheckAt) {
+    if (diskN != null && Number.isFinite(diskN)) next.recheckLessonsDisk = diskN;
+    else if (prev.lessonsDisk != null) next.recheckLessonsDisk = Number(prev.lessonsDisk) || 0;
+    if (alfaN != null && Number.isFinite(alfaN)) next.recheckLessonsAlfa = alfaN;
+    else if (prev.lessonsAlfa != null) next.recheckLessonsAlfa = Number(prev.lessonsAlfa) || 0;
+    if (extraN != null && Number.isFinite(extraN)) next.recheckDupsN = extraN;
+    else if (prev.lessonsExtraN != null) next.recheckDupsN = Number(prev.lessonsExtraN) || 0;
+  }
+  if (payN != null && Number.isFinite(Number(payN))) {
+    const n = Math.max(0, Number(payN) || 0);
+    if (patch.paysRecheckAt) next.recheckPaysN = n;
+    else if (patch.paysAt && next.loadPaysN == null) next.loadPaysN = n;
+  }
+  delete next.paysRows;
   if (patch.lessonFill === undefined && "lessonFill" in patch) delete next.lessonFill;
   if (patch.paysRecheckAt === "") delete next.paysRecheckAt;
   if (patch.paysAt === "") delete next.paysAt;

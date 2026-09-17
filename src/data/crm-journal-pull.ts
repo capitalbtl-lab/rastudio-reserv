@@ -812,6 +812,14 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         extraN: sync.lessonsExtraN,
         holeIds: lessonGapIds(p.cid, sync.lessonsSeenIds).hole,
         extraIds: lessonGapIds(p.cid, sync.lessonsSeenIds).extra,
+        loadLessonsDisk: sync.loadLessonsDisk,
+        loadLessonsAlfa: sync.loadLessonsAlfa,
+        loadPaysN: sync.loadPaysN,
+        loadDupsN: sync.loadDupsN,
+        recheckLessonsDisk: sync.recheckLessonsDisk,
+        recheckLessonsAlfa: sync.recheckLessonsAlfa,
+        recheckPaysN: sync.recheckPaysN,
+        recheckDupsN: sync.recheckDupsN,
         dups,
         journal,
         pays,
@@ -1558,6 +1566,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     if (scanDone) {
       stampCustomerSync(cid, {
         paysAt: payAt,
+        paysRows: paysOf(cid).filter((x) => !x.deleted).length,
         ...(recheck ? { paysRecheckAt: payAt } : {}),
       });
     }
