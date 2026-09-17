@@ -29,24 +29,24 @@ export const STEP_LOAD: Record<HistLoadTab, LoadGuide> = {
     ],
     alfa: [
       {
-        api: "POST /v2api/{branchId}/cgi/index  { group_id }",
-        apiHint: "Состав группы. cgi — таблица «кто записан на этот курс». branchId — филиал (1 Коломна … 4). group_id — номер группы в Alfa.",
+        api: "POST /v2api/{branchId}/cgi/index?group_id={groupId}",
+        apiHint: "Состав группы. cgi — таблица «кто записан на этот курс». group_id в query, как схема v2api. Не withGroups карточки клиента.",
         fields: [
           "customer_id — номер ученика в Alfa, главный ключ человека",
           "живая запись cgi — он сейчас в группе; выбывших в live не берём",
         ],
       },
       {
-        api: "POST /v2api/{branchId}/customer/index  { id, is_study 0|1|2 }",
-        apiHint: "Карточка человека. Только если у нас нет карточки, нет ФИО или на диске ещё «лид». is_study: 0 лид, 1 клиент, 2 архив.",
+        api: "POST /v2api/{branchId}/customer/index  { id, page: 0 }",
+        apiHint: "Карточка человека. Только если у нас нет карточки, нет ФИО или на диске ещё «лид». is_study на карточке: 0 лид, 1 клиент. 2 — фильтр списка, не архив. Архив — removed=2.",
         fields: [
           "id → customerId — тот же номер ученика",
           "name — ФИО ребёнка (если в поле телефон — не считаем именем)",
           "legal_name — заказчик / родитель",
           "phone, email, dob, gender — телефон, почта, дата рождения, пол",
           "адрес из custom-полей — как в карточке Alfa «адрес проживания»",
-          "is_study 0|1|2 — лид / клиент / архив",
-          "removed — удалён в Alfa; paid_till — оплачено до; paid_count — сколько уроков оплачено",
+          "is_study 0|1 — лид / клиент. 2 не писать на карточку",
+          "removed 0 активен, 2 архив; paid_till — оплачено до; paid_count — сколько уроков оплачено",
           "balance шапки — снимок денег в карточке, это не журнал занятий и не касса",
           "teacher_ids, группы в карточке Alfa — педагоги и курсы, как их видит CRM",
         ],

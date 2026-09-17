@@ -38,6 +38,14 @@ function p(partial: Partial<ArchivePerson> & { cid: number }): ArchivePerson {
 }
 
 describe("рабочий архив", () => {
+  it("карточка архива: removed=2 даже если is_study=1", () => {
+    const was = p({ cid: 77, study: 1, removed: "2", paidCount: 3, fio: "Бывший Клиент" });
+    assert.equal(archiveEligible(was, new Set(), empty.filters), true);
+    const lead = p({ cid: 78, study: 0, removed: "2", fio: "Архивный Лид" });
+    assert.equal(archiveWasClient(lead), false);
+    assert.equal(archiveEligible(lead, new Set(), empty.filters), false);
+  });
+
   it("пересечение с группами текущих, не с пустых ссылок архивного", () => {
     const live = p({ cid: 1, study: 1, fio: "Живой", groupLinks: [{ id: 585, branchId: 2 }] });
     const mate = p({ cid: 10, fio: "Горбатюк Илья", groupLinks: [{ id: 585, branchId: 2 }] });
@@ -203,7 +211,7 @@ describe("рабочий архив", () => {
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /listDossierCrm\(\)/);
     assert.doesNotMatch(pull, /live && live.has\(x.cid\)/);
-    assert.match(pull, /x.study === 2 && \(scoped \|\| Boolean\(allow && allow.has\(x.cid\)\)\)/);
+    assert.match(pull, /diskIsArchive\(\{ is_study: x.study, removed: x.removed, status: x.status \}\) && \(scoped \|\| Boolean\(allow && allow.has\(x.cid\)\)\)/);
     const addAt = pull.indexOf('kind === "archiveAdd"');
     const addNext = pull.indexOf('kind === "archives"', addAt + 1);
     const addChunk = pull.slice(addAt, addNext > addAt ? addNext : addAt + 1800);

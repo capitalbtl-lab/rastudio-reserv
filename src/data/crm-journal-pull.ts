@@ -20,7 +20,7 @@ import { journalJobSnapshot, parseJobItems, historyWorkerBeat } from "./crm-jour
 import { loadRosterPolicy } from "./crm-roster";
 import { loadPlanLog } from "./crm-sync-plan-log";
 import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady, journalGroupNow, groupJournalGreen, type GroupPeriodHit, type GroupWhollyHit } from "./crm-inbound-core";
-import { dossierAuditRole } from "./crm-person-role";
+import { diskIsArchive, dossierAuditRole } from "./crm-person-role";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -489,15 +489,15 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
     const lead = x.study === 0 || x.status === "лид";
     if (lead) return study === "1";
     if (study === "1") {
-      if (x.study === 2 && !pol?.archiveInLive) return false;
+      if (diskIsArchive({ is_study: x.study, removed: x.removed, status: x.status }) && !pol?.archiveInLive) return false;
       if (pol?.attendDays && !attendedSince(x.cid, pol.attendDays)) return false;
       return true;
     }
     if (study === "2") {
-      return x.study === 2 && (scoped || Boolean(allow && allow.has(x.cid)));
+      return diskIsArchive({ is_study: x.study, removed: x.removed, status: x.status }) && (scoped || Boolean(allow && allow.has(x.cid)));
     }
     if (x.study === 1) return true;
-    if (x.study === 2) return scoped || Boolean(allow && allow.has(x.cid));
+    if (diskIsArchive({ is_study: x.study, removed: x.removed, status: x.status })) return scoped || Boolean(allow && allow.has(x.cid));
     return false;
   });
   filtered.sort((a, b) => {
@@ -1889,7 +1889,7 @@ export async function journalPull(opts: {
       saveStore(store);
       return { ok: false as const, error: store.note, more: false, ...snap() };
     }
-    if (study !== 2 || String(d.status || "") === "удалён" || String(d.extras?.removed || "") === "1") {
+    if (!diskIsArchive({ is_study: study, removed: d.extras?.removed, status: d.status }) || String(d.status || "") === "удалён" || String(d.extras?.removed || "") === "1") {
       store.note = "В рабочий архив можно добавить только архивного клиента.";
       store.at = new Date().toISOString();
       saveStore(store);
@@ -1905,7 +1905,7 @@ export async function journalPull(opts: {
   if (kind === "audit") {
     const study = opts.study === "2" ? "2" : "1";
     const people = rankedStudentIds(study).filter((p) => {
-      if (study === "2") return p.study === 2;
+      if (study === "2") return diskIsArchive({ is_study: p.study, removed: p.removed, status: p.status });
       const d = findDossier({ crmId: p.cid });
       return (
         dossierAuditRole({

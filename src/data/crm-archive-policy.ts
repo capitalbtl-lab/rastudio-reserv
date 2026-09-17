@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { dirname, join } from "node:path";
 import { isPhoneLike } from "./client-display.ts";
 import { pupilNameOk } from "./crm-slots-core.ts";
+import { diskIsArchive } from "./crm-person-role.ts";
 
 export type ArchivePolicyFilters = {
   fio: boolean;
@@ -305,8 +306,12 @@ export function parseArchiveUiFilters(raw: string, prev: ArchivePolicyFilters = 
   }
 }
 
+export function archiveCard(p: Pick<ArchivePerson, "study" | "removed" | "status">) {
+  return diskIsArchive({ is_study: p.study, removed: p.removed, status: p.status });
+}
+
 export function archiveEligible(p: ArchivePerson, keys: Set<string>, filters: ArchivePolicyFilters = DEFAULT_ARCHIVE_FILTERS, liveCids?: Set<number>) {
-  if (p.study !== 2) return false;
+  if (!archiveCard(p)) return false;
   if (archiveRemoved(p)) return false;
   if (liveCids?.has(p.cid)) return false;
   if (!archiveWasClient(p)) return false;
@@ -348,7 +353,7 @@ export function recountArchivePolicy(
   const next = new Set<number>();
   for (const cid of keepManual) {
     const row = byCid.get(cid);
-    if (!row || row.study !== 2 || archiveRemoved(row) || !archiveWasClient(row) || liveCids?.has(cid)) {
+    if (!row || !archiveCard(row) || archiveRemoved(row) || !archiveWasClient(row) || liveCids?.has(cid)) {
       keepManual.delete(cid);
       continue;
     }
@@ -357,7 +362,7 @@ export function recountArchivePolicy(
   }
   const kept = next.size;
   for (const p of people) {
-    if (p.study !== 2 || archiveRemoved(p)) continue;
+    if (!archiveCard(p) || archiveRemoved(p)) continue;
     disk += 1;
     if (!archiveWasClient(p)) {
       leadsSkip += 1;
@@ -417,10 +422,10 @@ export function isArchiveWorking(cid: number, pol?: ArchivePolicy) {
   return id > 0 && p.working.includes(id);
 }
 
-export function overlayAllowsCustomer(study: number, cid: number, pol?: ArchivePolicy) {
+export function overlayAllowsCustomer(study: number, cid: number, pol?: ArchivePolicy, removed?: string | number) {
+  if (diskIsArchive({ is_study: study, removed })) return isArchiveWorking(cid, pol);
   if (study === 1) return true;
-  if (study === 0 || !Number.isFinite(study) || study !== 2) return false;
-  return isArchiveWorking(cid, pol);
+  return false;
 }
 
 export function dropArchiveWorking(cid: number, pol?: ArchivePolicy) {

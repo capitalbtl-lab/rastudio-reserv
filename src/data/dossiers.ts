@@ -10,7 +10,7 @@ import { clientCardId } from "./ids";
 import { schoolLabelOfSubject } from "./schedule-map";
 import type { DossiersReq } from "./dossiers-fn";
 import { logAdmin } from "./admin-settings";
-import { customerPullCandidate, personRole } from "./crm-person-role";
+import { customerPullCandidate, diskIsArchive, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
 import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, archiveFioOk, archiveAgeYears, archiveWasClient, type ArchivePerson } from "./crm-archive-policy";
 
@@ -590,7 +590,7 @@ function isArchivedLeadOnSite(d: Dossier, activeLeadIds: Set<number>, currentMap
   const study = studyRaw === "" ? null : Number(studyRaw);
   const st = String(d.status || "");
   if (st === "учится" || study === 1 || String(ex.crm_current) === "1") return false;
-  if (st === "архив" || study === 2) return true;
+  if (st === "архив" || diskIsArchive({ is_study: study, removed: ex.removed, status: st })) return true;
   if ((st === "лид" || study === 0) && id && !activeLeadIds.has(id)) return true;
   return false;
 }
@@ -702,11 +702,13 @@ export function applyCrmCustomer(
   extras.paid_count = String(item.paid_count ?? extras.paid_count ?? "");
   const fromGroup = namesFromGroup(extras.groups);
   const study = Number(item.is_study);
-  const alfaRemoved = item.removed === 1 || item.removed === "1" || item.removed === 2 || item.removed === "2" || item.removed === true;
-  const reallyArchived = Boolean(archived) || alfaRemoved || study === 2;
-  extras.removed = "0";
-  extras.crm_current = reallyArchived ? "0" : study === 1 ? "1" : "0";
-  extras.is_study = reallyArchived ? "2" : String(Number.isFinite(study) ? study : "");
+  const remN = Number(item.removed);
+  const alfaDeleted = remN === 1 || item.removed === true;
+  const alfaArchived = remN === 2;
+  const reallyArchived = Boolean(archived) || alfaArchived;
+  extras.removed = alfaDeleted ? "1" : alfaArchived || reallyArchived ? "2" : "0";
+  extras.crm_current = reallyArchived || alfaDeleted ? "0" : study === 1 ? "1" : "0";
+  extras.is_study = study === 0 || study === 1 ? String(study) : reallyArchived ? "1" : "";
   const courseName = fromGroup.courses[0] || "";
   const teacherFromIds = idList(extras.teacher_ids)
     .map((n) => teacherMap[String(n)] || "")
@@ -786,7 +788,10 @@ export function archivePeopleFromDisk(): ArchivePerson[] {
 }
 
 export function archiveDiskCount() {
-  return loadStore().items.filter((d) => Number(d.extras?.is_study) === 2 && String(d.status || "") !== "удалён").length;
+  return loadStore().items.filter((d) => {
+    if (String(d.status || "") === "удалён") return false;
+    return diskIsArchive({ is_study: d.extras?.is_study, removed: d.extras?.removed, status: d.status });
+  }).length;
 }
 
 export function stampDossierLiveTariff(ids: number[], live: boolean) {

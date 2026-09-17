@@ -1830,7 +1830,9 @@ function PeopleFillList({
           <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[0.72rem] leading-snug ring-1 ring-black/10">
             <CheckLine on={Boolean(row.journal) && !short} text="календарь загружен" />
             <CheckLine on={Boolean(row.rechecked) && !dups} text="календарь перепроверен" />
-            <CheckLine on={row.holeN != null || row.extraN != null} text={nums ? nums.line : "набор id ещё не сверяли"} />
+            {kind === "balance" ? null : (
+              <CheckLine on={row.holeN != null || row.extraN != null} text={nums ? nums.line : "набор id ещё не сверяли"} />
+            )}
             <CheckLine on={Boolean(row.rechecked) && !dups && !short} text="дубликатов нет" />
             {kind === "balance" ? (
               <>

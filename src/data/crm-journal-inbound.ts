@@ -1215,10 +1215,10 @@ export async function inboundCustomerLessonsChunk(offset = 0, take = 1) {
   const { overlayAllowsCustomer, loadArchivePolicy } = await import("./crm-archive-policy");
   const pol = loadArchivePolicy();
   const ranked = listDossierCrm()
-    .filter((x) => overlayAllowsCustomer(x.study, x.cid, pol) && x.status !== "удалён" && x.removed !== "1")
+    .filter((x) => overlayAllowsCustomer(x.study, x.cid, pol, x.removed) && x.status !== "удалён" && x.removed !== "1")
     .sort((a, b) => {
-      const ra = a.study === 1 ? 0 : a.study === 2 ? 1 : 2;
-      const rb = b.study === 1 ? 0 : b.study === 2 ? 1 : 2;
+      const ra = a.study === 1 && a.removed !== "2" ? 0 : 1;
+      const rb = b.study === 1 && b.removed !== "2" ? 0 : 1;
       return ra - rb || a.cid - b.cid;
     });
   const ids = ranked.map((x) => x.cid);
