@@ -1953,10 +1953,16 @@ type AuditUiRow = {
   study?: number;
   funnel?: string;
   leadStatus?: number;
+  cashPaysN?: number;
+  cashCorrN?: number;
+  cashGoodsN?: number;
+  cashPaysSum?: number;
+  cashCorrSum?: number;
+  cashGoodsSum?: number;
 };
 
 function asAuditRow(
-  r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number },
+  r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number; cashPaysN?: number; cashCorrN?: number; cashGoodsN?: number; cashPaysSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
   h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string },
 ): AuditUiRow {
   const codes = h?.codes;
@@ -1972,6 +1978,12 @@ function asAuditRow(
     extra: h?.extra,
     at: h?.at,
     seen: Boolean(h),
+    cashPaysN: r.cashPaysN,
+    cashCorrN: r.cashCorrN,
+    cashGoodsN: r.cashGoodsN,
+    cashPaysSum: r.cashPaysSum,
+    cashCorrSum: r.cashCorrSum,
+    cashGoodsSum: r.cashGoodsSum,
     alfaRole: (codes || []).includes("лид") ? "лид" : (codes || []).includes("архив") ? "архив" : r.alfaRole,
     status: r.status,
     study: r.study,
@@ -2140,6 +2152,46 @@ function AuditFillList({
             {recOnCard ? null : <p className="text-[0.78rem] leading-snug font-medium">{seg.rec}</p>}
             {rest.length ? <p className="text-[0.72rem] leading-snug text-muted">{rest.join(" · ")}</p> : null}
             <p className="text-[0.72rem] text-muted">{(row.groups || []).slice(0, 3).join(" · ") || "групп на карточке нет"}</p>
+            <table className="mt-2 w-full text-left text-[0.72rem] leading-snug">
+              <thead>
+                <tr className="text-muted">
+                  <th className="py-0.5 font-medium">Откуда</th>
+                  <th className="py-0.5 font-medium">Касса (строки шага 4)</th>
+                  <th className="py-0.5 font-medium">Alfa</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>платежи</td>
+                  <td>{row.cashPaysN ?? 0} ({rubAudit(row.cashPaysSum)})</td>
+                  <td className="text-muted">в шапке нет разбивки</td>
+                </tr>
+                <tr>
+                  <td>корректировки</td>
+                  <td>{row.cashCorrN ?? 0} ({rubAudit(row.cashCorrSum)})</td>
+                  <td className="text-muted">в шапке нет разбивки</td>
+                </tr>
+                <tr>
+                  <td>товары</td>
+                  <td>{row.cashGoodsN ?? 0} ({rubAudit(row.cashGoodsSum)})</td>
+                  <td className="text-muted">в шапке нет разбивки</td>
+                </tr>
+                <tr>
+                  <td>Клиенты / формула</td>
+                  <td>{rubAudit(row.clients)}</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>шапка / итог</td>
+                  <td>{rubAudit(row.cash)}</td>
+                  <td>{row.seen ? (fail ? "нет ответа" : rubAudit(row.alfaMoney)) : "ещё не снимали"}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-1 text-[0.72rem] text-muted">
+              Разбивка кассы — строки pay/index с шага 4. Alfa на шаге 5 отдаёт одну шапку Customer.balance.
+              {row.extra ? ` ${row.extra}.` : ""}
+            </p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">
               {withHint(
                 <button
