@@ -1782,7 +1782,7 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: 
         continue;
       }
       applyCrmCustomer(item, branch, true, cur.teachers, { persist: true, quiet: true, byCrmOnly: true });
-      const row = archivePersonFrom(findDossier({ crmId: id }) || { crmId: id, extras: { is_study: "2" }, child: { fio: child } });
+      const row = archivePersonFrom(findDossier({ crmId: id }) || { crmId: id, extras: { removed: "2" }, child: { fio: child } });
       if (archiveWasClient(row)) addArchiveWorkingMany([id], "catalog");
       wrote = true;
       cid = id;
@@ -2152,8 +2152,7 @@ export async function reclassifyRolesFromCrm() {
       d.status = "лид";
     } else if (archive.has(id)) {
       if (was === "учится") left.push(id);
-      d.extras.is_study = "2";
-      d.extras.removed = "0";
+      d.extras.removed = "2";
       d.status = "архив";
     } else {
       d.extras.removed = "1";

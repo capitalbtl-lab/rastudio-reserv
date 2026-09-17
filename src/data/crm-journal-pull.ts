@@ -876,7 +876,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
   };
 }
 
-/** Архив как в Alfa: is_study=2. Не рабочий отбор шага 2. Для чипа шага 5. */
+/** Архив как в Alfa: removed=2 (старый диск is_study=2). Не рабочий отбор шага 2. Для чипа шага 5. */
 function cashCardOf(cid: number) {
   const live = paysOf(cid).filter((x) => !x.deleted);
   const cashPaySum = balanceOf(live);

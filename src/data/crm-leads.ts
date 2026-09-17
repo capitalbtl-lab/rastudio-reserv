@@ -789,7 +789,7 @@ export async function archiveLead(branchId: number, leadId: number, actor: CrmAc
   try {
     const { upsertDossier, findDossier } = await import("./dossiers");
     const d = findDossier({ crmId: id });
-    upsertDossier({ crmId: id, extras: { ...(d?.extras || {}), is_study: "2", removed: "0" } } as never);
+    upsertDossier({ crmId: id, extras: { ...(d?.extras || {}), removed: "2" } } as never);
   } catch {
     /* досье */
   }
@@ -799,7 +799,7 @@ export async function archiveLead(branchId: number, leadId: number, actor: CrmAc
     branchId: branch,
     entityId: id,
     actor,
-    body: { removed: 1, is_study: 2 },
+    body: { removed: 2 },
   });
   return { ok: true as const, queued: true as const };
 }

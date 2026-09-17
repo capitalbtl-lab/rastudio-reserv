@@ -63,6 +63,7 @@ export function customerPullCandidate(d: { crmId?: number; status?: string; extr
   return String(d.extras?.is_study || "") === "0" || d.status === "лид";
 }
 
+/** 2 здесь только код фильтра списка customer/index (лиды+клиенты). В карточку Alfa не писать. Архив карточки = removed=2. */
 export function personIsStudy(role: PersonRole): 0 | 1 | 2 {
   if (role === "архив") return 2;
   if (role === "лид") return 0;
