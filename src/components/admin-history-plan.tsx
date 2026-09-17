@@ -542,7 +542,7 @@ export function HistoryPlanPanel({
         ))}
         <button
           type="button"
-          className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+          className="h-9 rounded-full bg-red-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
           disabled={busy || run || !onRunAuto}
           onClick={() => {
             if (!onRunAuto) return;
