@@ -899,7 +899,17 @@ function cashCardOf(cid: number) {
   const cashRemain = cashPaySum - cashWriteoff;
   const raw = Number(findDossier({ crmId: cid })?.extras?.balance);
   const cashHeader = Number.isFinite(raw) ? raw : null;
-  return { cashPaySum, cashWriteoff, cashRemain, cashHeader };
+  let cashPaysN = 0;
+  let cashCorrN = 0;
+  let cashGoodsN = 0;
+  for (const row of live) {
+    const k = String(row.kind || "");
+    const t = Number(row.payTypeId);
+    if (k === "product" || t === 9 || t === 2) cashGoodsN += 1;
+    else if (k === "correct" || t === 6) cashCorrN += 1;
+    else cashPaysN += 1;
+  }
+  return { cashPaySum, cashWriteoff, cashRemain, cashHeader, cashPaysN, cashCorrN, cashGoodsN };
 }
 
 export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: boolean }) {

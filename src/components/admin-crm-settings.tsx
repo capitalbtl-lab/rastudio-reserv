@@ -507,6 +507,9 @@ type StudentHit = {
   paysScanned?: boolean;
   paysEmpty?: boolean;
   cashRows?: number;
+  cashPaysN?: number;
+  cashCorrN?: number;
+  cashGoodsN?: number;
   rechecked?: boolean;
   paysRechecked?: boolean;
   done: boolean;
@@ -1868,7 +1871,7 @@ function PeopleFillList({
                 />
                 <CheckLine
                   on={Boolean(row.paysScanned || row.pays)}
-                  text={`касса загружена · строк ${row.loadPaysN ?? row.cashRows ?? "—"}`}
+                  text={`касса загружена · платежей ${row.cashPaysN ?? 0} · корректировок ${row.cashCorrN ?? 0} · товаров ${row.cashGoodsN ?? 0}`}
                 />
                 <CheckLine
                   on={Boolean(row.paysRechecked)}
