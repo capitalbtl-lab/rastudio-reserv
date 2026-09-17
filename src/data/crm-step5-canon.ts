@@ -102,16 +102,21 @@ export function step5AuditGapMs(opts: { recheck?: boolean; staleHeader?: boolean
   return 5000;
 }
 
+function moneyAsHeader(raw: unknown): { ok: boolean; header: number } {
+  const m = step5Money(raw);
+  return { ok: m.ok, header: m.n };
+}
+
 export function parseAlfaHeaderCanon(customer: Record<string, unknown> | null | undefined): { ok: boolean; header: number } {
   if (!customer) return { ok: false, header: 0 };
   if (!Object.prototype.hasOwnProperty.call(customer, "balance")) return { ok: false, header: 0 };
   const raw = customer.balance;
   if (raw == null) return { ok: false, header: 0 };
-  if (typeof raw === "number" || typeof raw === "string") return step5Money(raw);
+  if (typeof raw === "number" || typeof raw === "string") return moneyAsHeader(raw);
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     const vals = Object.values(raw as Record<string, unknown>);
     if (vals.length !== 1) return { ok: false, header: 0 };
-    return step5Money(vals[0]);
+    return moneyAsHeader(vals[0]);
   }
   return { ok: false, header: 0 };
 }
