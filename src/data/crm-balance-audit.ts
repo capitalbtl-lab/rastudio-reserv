@@ -198,8 +198,8 @@ export async function diskAudit(cid: number, branchId: number) {
   const clients = d ? customerBalance(id, snap, wo.n) : 0;
   return {
     name: String(d?.child?.fio || "").trim() || `клиент ${id}`,
-    clients,
-    cash: Number.isFinite(formulaSite) ? formulaSite : 0,
+    clients: Number.isFinite(formulaSite) ? formulaSite : Number.NaN,
+    cash: Number.isFinite(formulaSite) ? formulaSite : Number.NaN,
     cashLessons,
     cashAll,
     cashAllOk,
@@ -330,8 +330,11 @@ async function alfaShow(branch: number, cid: number, study = Number.NaN) {
     let retried = false;
     for (;;) {
       try {
-        const bodies: Array<Record<string, unknown>> = [{ id: cid, page: 0, is_study: 2 }];
-        if (Number(study) === 0) bodies.push({ id: cid, page: 0, is_study: 0 });
+        const bodies: Array<Record<string, unknown>> = [
+          { id: cid, page: 0, is_study: 2 },
+          { id: cid, page: 0, is_study: 0 },
+          { id: cid, page: 0, is_study: 1 },
+        ];
         let hit: Record<string, unknown> | undefined;
         for (const body of bodies) {
           const json = await request(`/v2api/${bid}/customer/index`, body, t);
@@ -422,8 +425,12 @@ function codesFromCanon(p: {
   alien: boolean;
   dSiteWithout6: number;
   dSiteWithoutRefund: number;
+  miss?: "" | "id" | "balance";
 }): { codes: AuditCode[]; c: boolean; main: string; dCash: number } {
-  if (!p.headerOk) return { codes: ["нет ответа"], c: false, main: "", dCash: 0 };
+  if (!p.headerOk) {
+    const miss = p.miss === "id" ? "нет id" : p.miss === "balance" ? "нет balance" : "нет ответа";
+    return { codes: [miss], c: false, main: "", dCash: 0 };
+  }
   const r = step5Reasons({
     sverka: p.sverka,
     hasH: p.headerOk,
@@ -667,6 +674,7 @@ export async function auditOne(cid: number, branchId: number) {
 
   const judged = codesFromCanon({
     headerOk: Boolean(shown.ok && shown.headerOk),
+    miss: shown.miss || (shown.authStop ? "" : shown.ok ? "balance" : "id"),
     sverka,
     pending: false,
     formulaSite: first.formulaSite,
@@ -727,9 +735,9 @@ export async function auditOne(cid: number, branchId: number) {
       cid: id,
       branchId: shown.branch || branch,
       name: first.name,
-      clients: Number.isFinite(first.formulaSite) ? first.formulaSite : 0,
-      alfa: shown.ok && shown.headerOk ? shown.alfa : 0,
-      cash: Number.isFinite(first.formulaSite) ? first.formulaSite : first.cash,
+      clients: Number.isFinite(first.formulaSite) ? first.formulaSite : Number.NaN,
+      alfa: shown.ok && shown.headerOk ? shown.alfa : Number.NaN,
+      cash: Number.isFinite(first.formulaSite) ? first.formulaSite : Number.NaN,
       cttRest: 0,
       codes: judged.codes,
       repaired: false,

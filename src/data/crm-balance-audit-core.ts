@@ -19,6 +19,8 @@ export type AuditCode =
   | "wo0"
   | "unknown"
   | "нет ответа"
+  | "нет id"
+  | "нет balance"
   | "лид"
   | "архив"
   | "header-stale"

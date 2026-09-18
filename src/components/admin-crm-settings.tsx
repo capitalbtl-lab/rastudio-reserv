@@ -1201,7 +1201,10 @@ function auditFail(codes?: string[]) {
 }
 
 function moneyCloseUi(a?: number, b?: number) {
-  return Math.abs((Number(a) || 0) - (Number(b) || 0)) <= 1;
+  const x = Number(a);
+  const y = Number(b);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  return Math.abs(x - y) <= 1;
 }
 
 type AuditSegIn = {
@@ -1223,6 +1226,7 @@ function rowMatched(r: AuditSegIn) {
   if (!moneyCloseUi(r.clients, r.alfaMoney) || !moneyCloseUi(r.cash, r.alfaMoney)) return false;
   const zero = moneyCloseUi(r.clients, 0) && moneyCloseUi(r.cash, 0);
   if (zero && (r.codes || []).includes("snap") && !(r.codes || []).includes("ok")) return false;
+  if ((r.codes || []).includes("лид") && !(r.codes || []).includes("ok")) return false;
   return true;
 }
 
@@ -1245,6 +1249,8 @@ const AUDIT_WORD: Record<string, string> = {
   wo0: "Нулевые списания",
   unknown: "Не разобрали",
   "нет ответа": "Нет ответа Alfa",
+  "нет id": "id не найден",
+  "нет balance": "нет balance",
   лид: "Лид в Альфе",
   архив: "Архив в Альфе",
 };
