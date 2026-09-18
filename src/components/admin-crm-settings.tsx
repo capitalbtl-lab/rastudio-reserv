@@ -2307,7 +2307,7 @@ function AuditFillList({
       <div className="mt-3 grid items-stretch gap-3 lg:grid-cols-2">
         <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <h4 className="font-display text-[1.05rem] text-rose-900">Слева · {nNeed}</h4>
+            <h4 className="font-display text-[1.05rem] text-rose-900">Не совпало · {nNeed}</h4>
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
           <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Сегмент и что сделать — на карточке. Справа только когда Клиенты = шапка = касса.</p>
@@ -2338,11 +2338,11 @@ function AuditFillList({
           ) : (
             <p className="mt-3 text-sm text-muted">
               {role !== "all"
-                ? `В роли «${AUDIT_ROLE_HEAD[role].label}» слева никого.`
+                ? `В роли «${AUDIT_ROLE_HEAD[role].label}» в «Не совпало» никого.`
                 : reason === "ok"
                   ? "В этом фильтре слева никого."
                   : reason === "all"
-                    ? "Слева пусто — все сверенные совпали."
+                    ? "Не совпало пусто — все сверенные совпали."
                     : "В этом сегменте никого нет."}
             </p>
           )}
