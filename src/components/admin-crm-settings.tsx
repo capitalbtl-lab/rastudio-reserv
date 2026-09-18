@@ -96,7 +96,7 @@ function BtnCluster({
 }) {
   const cls = tone === "red" ? "bg-red-50 ring-red-200" : "bg-sky-50 ring-sky-300";
   return (
-    <span className={cn("inline-flex flex-wrap items-center gap-1 rounded-2xl p-1 ring-1", cls)}>
+    <span className={cn("inline-flex flex-wrap items-center gap-1.5 overflow-visible rounded-[1.35rem] p-1.5 ring-1", cls)}>
       {children}
     </span>
   );
@@ -1120,7 +1120,7 @@ function GroupFillList({
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
           <p className="mt-1 text-[0.72rem] text-muted">Ещё не жали «Загрузить явки» по всем кварталам срока. Это не пропуск в списке — их {nNeed} из {scoped.length}.</p>
-          {listNeed.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listNeed.map(renderGroup)}</ul> : <p className="mt-3 text-sm text-muted">Все группы этой школы уже загружены.</p>}
+          {listNeed.length ? <ul className="mt-2 space-y-2 p-0.5 [overflow-anchor:none]">{listNeed.map(renderGroup)}</ul> : <p className="mt-3 text-sm text-muted">Все группы этой школы уже загружены.</p>}
         </section>
         <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
           <div className="flex flex-wrap items-center gap-2">
@@ -1128,7 +1128,7 @@ function GroupFillList({
             {pager(safeDone, pagesDone, setPageDone)}
           </div>
           <p className="mt-1 text-[0.72rem] text-muted">Все обработанные группы этой школы. Если группа справа — кварталы срока сверены, пропуска нет. Пока {nDone} из {scoped.length}.</p>
-          {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderGroup)}</ul> : <p className="mt-3 text-sm text-muted">Пока ни одна группа не загружена до конца.</p>}
+          {listDone.length ? <ul className="mt-2 space-y-2 p-0.5 [overflow-anchor:none]">{listDone.map(renderGroup)}</ul> : <p className="mt-3 text-sm text-muted">Пока ни одна группа не загружена до конца.</p>}
         </section>
       </div>
     </div>
@@ -1973,7 +1973,7 @@ function PeopleFillList({
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
           <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Кассы ещё нет — ученик здесь." : "Личный календарь ещё неполный — ученик здесь. Галка «одобрить» — не «Добрать», журнал не закроется."}</p>
-          {listNeed.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listNeed.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Все ученики этого списка уже загружены.</p>}
+          {listNeed.length ? <ul className="mt-2 space-y-2 p-0.5 [overflow-anchor:none]">{listNeed.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Все ученики этого списка уже загружены.</p>}
         </section>
         <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
           <div className="flex flex-wrap items-center gap-2">
@@ -1981,7 +1981,7 @@ function PeopleFillList({
             {pager(safeDone, pagesDone, setPageDone)}
           </div>
           <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Касса на месте. Перепроверить — сверка с Alfa." : "Календарь на месте. Перепроверить — сверка с Alfa."}</p>
-          {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Пока ни один ученик не загружен до конца.</p>}
+          {listDone.length ? <ul className="mt-2 space-y-2 p-0.5 [overflow-anchor:none]">{listDone.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Пока ни один ученик не загружен до конца.</p>}
         </section>
       </div>
     </div>
@@ -2358,7 +2358,7 @@ function AuditFillList({
           </div>
           <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Сегмент и что сделать — на карточке. Справа только когда Клиенты = шапка = касса.</p>
           {listNeed.length ? (
-            <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto [overflow-anchor:none]">
+            <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto p-0.5 [overflow-anchor:none]">
               {listNeed.map((row, i) => {
                 const prev = i > 0 ? listNeed[i - 1] : null;
                 const byRole = role === "all";
@@ -2400,7 +2400,7 @@ function AuditFillList({
           </div>
           <p className="mt-1 shrink-0 text-[0.72rem] text-muted">{role === "архив" ? "В Альфе архив. Шапку не сверяем." : "Клиенты = шапка Alfa = касса ±1 ₽. Трогать не нужно."}</p>
           {listDone.length ? (
-            <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto [overflow-anchor:none]">{listDone.map(renderPerson)}</ul>
+            <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto p-0.5 [overflow-anchor:none]">{listDone.map(renderPerson)}</ul>
           ) : (
             <p className="mt-3 text-sm text-muted">
               {role !== "all"
@@ -5064,7 +5064,7 @@ export function AdminCrmSettings() {
         title="Воронка продаж"
         hint="Как в AlfaCRM: Настройки → Воронки продаж. «Не разобрано» системный, его нельзя сдвинуть. Остальные — перетащите или кнопками вверх/вниз."
       >
-        <div className="overflow-hidden rounded-xl ring-1 ring-black/8">
+        <div className="rounded-xl p-px ring-1 ring-black/8"><div className="overflow-hidden rounded-[0.7rem]">
           <table className="w-full text-left">
             <thead className="bg-black/[0.03] text-[0.72rem] font-bold uppercase tracking-[0.08em] text-muted">
               <tr>
@@ -5186,6 +5186,7 @@ export function AdminCrmSettings() {
               ))}
             </tbody>
           </table>
+        </div>
         </div>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <label className="block min-w-[12rem] flex-1">
