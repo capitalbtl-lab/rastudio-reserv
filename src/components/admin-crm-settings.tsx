@@ -1322,6 +1322,7 @@ const AUDIT_REASON_CHIPS: { id: string; label: string }[] = [
   { id: "show", label: "Показ в Клиентах" },
   { id: "ctt", label: "Спутали с абонементом" },
   { id: "status", label: "Урок ещё не проведён" },
+  { id: "money", label: "Цифры не сошлись" },
   { id: "fail", label: "Нет ответа Alfa" },
   { id: "wait", label: "Не сверяли" },
 ];
@@ -1361,7 +1362,9 @@ function auditReasonHit(r: AuditSegIn, id: string) {
 }
 
 function rubAudit(n?: number) {
-  const v = Math.round(Number(n) || 0);
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "не собрали";
+  const v = Math.round(x);
   if (v > 0) return `+${v} ₽`;
   return `${v} ₽`;
 }
@@ -2142,11 +2145,19 @@ function AuditFillList({
     const who = auditRole(row);
     const roleWord = alfaRoleLabel(who);
     const rest = auditCodeWords(row.codes).filter((w) => w !== primary && w !== "Лид в Альфе" && w !== "Архив в Альфе");
+    const codes = row.codes || [];
+    const miss =
+      codes.includes("нет id") ? "id не найден"
+      : codes.includes("нет balance") ? "нет balance"
+      : codes.includes("нет ответа") ? "Alfa не ответила"
+      : "";
     const money = !row.seen
       ? "ещё не сверяли"
-      : fail
-        ? `Клиенты ${rubAudit(row.clients)} · касса ${rubAudit(row.cash)} · Alfa не ответила`
-        : `Клиенты ${rubAudit(row.clients)} · Alfa ${rubAudit(row.alfaMoney)} · касса ${rubAudit(row.cash)}`;
+      : who === "лид" && !full
+        ? miss || "кассы нет — не сверяли"
+        : miss
+          ? `Клиенты ${rubAudit(row.clients)} · касса ${rubAudit(row.cash)} · ${miss}`
+          : `Клиенты ${rubAudit(row.clients)} · Alfa ${rubAudit(row.alfaMoney)} · касса ${rubAudit(row.cash)}`;
     const recOnCard = role === "all";
     return (
       <li
@@ -4884,12 +4895,13 @@ export function AdminCrmSettings() {
                   }
                   const run = fillLoading?.kind === "audit";
                   const clientRows = rows.filter((r) => peopleStudy === "2" || auditRole(r) === "клиент");
+                  const leadN = rows.filter((r) => auditRole(r) === "лид").length;
                   const scanned = clientRows.filter((r) => r.seen).length;
                   const okN = clientRows.filter((r) => rowMatched(r)).length;
-                  const holeN = clientRows.filter((r) => {
-                    const id = auditSeg(r).id;
-                    return id === "cash-hi" || id === "cash-lo" || id === "goods";
-                  }).length;
+                  const mismatchN = clientRows.filter((r) => r.seen && !rowMatched(r) && !auditFail(r.codes)).length;
+                  const failN = rows.filter((r) => r.seen && auditFail(r.codes)).length;
+                  const waitN = rows.filter((r) => !r.seen).length;
+                  const holeN = mismatchN;
                   const showN = clientRows.filter((r) => auditSeg(r).id === "show").length;
                   const total = peopleStudy === "2" ? archPeople.length : livePeople.length;
                   const archSide = p?.archive;
@@ -4915,7 +4927,7 @@ export function AdminCrmSettings() {
                         </p>
                       ) : null}
                       <p className="mt-3 text-sm">
-                        {peopleStudy === "2" ? "архив" : "текущих"} {total} · сверено {scanned} · совпало {okN} · дыра {holeN} · ошибка показа {showN}
+                        {peopleStudy === "2" ? "архив" : "текущих"} {total} · клиентов сверено {scanned} · совпало {okN} · не сошлось {mismatchN} · лидов {leadN} · нет ответа {failN} · ещё не сверяли {waitN}{run ? " · очередь идёт, цифры догоняют" : ""}{showN ? ` · показ ${showN}` : ""}
                       </p>
                       <div className="mt-3 flex min-w-0 w-full flex-nowrap items-center gap-2">
                         {withHint(
