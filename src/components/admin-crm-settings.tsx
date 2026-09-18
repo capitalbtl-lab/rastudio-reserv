@@ -1473,7 +1473,14 @@ function applyJobStatus<T extends {
     ...res,
     progress,
     lastStudents: res.lastStudents ?? base.lastStudents,
-    lastAudit: res.lastAudit ?? base.lastAudit,
+    lastAudit: res.lastAudit
+      ? {
+          ...(res.lastAudit as object),
+          rows: Array.isArray((res.lastAudit as { rows?: unknown }).rows)
+            ? [...((res.lastAudit as { rows: unknown[] }).rows)]
+            : (res.lastAudit as { rows?: unknown }).rows,
+        }
+      : base.lastAudit,
     lastArchiveCatalog: res.lastArchiveCatalog ?? base.lastArchiveCatalog,
     lastLife: res.lastLife ?? base.lastLife,
     lastArchives: res.lastArchives ?? base.lastArchives,
