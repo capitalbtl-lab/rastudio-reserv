@@ -2226,7 +2226,7 @@ function AuditFillList({
                 <tr>
                   <td>платежи</td>
                   <td>{row.cashPaysN ?? 0} ({rubAudit(row.cashPaysSum)})</td>
-                  <td>{row.alfaSplitOk ? `${row.alfaPaysN ?? 0} ({rubAudit(row.alfaPaysSum)})` : "ещё не снимали"}</td>
+                  <td>{row.alfaSplitOk ? `${row.alfaPaysN ?? 0} (${rubAudit(row.alfaPaysSum)})` : "ещё не снимали"}</td>
                 </tr>
                 <tr>
                   <td>списания занятий</td>
@@ -2246,11 +2246,7 @@ function AuditFillList({
                 <tr>
                   <td>Клиенты / формула</td>
                   <td>{rubAudit(row.clients)}</td>
-                  <td>
-                    {row.seen && row.woSum != null && Number.isFinite(Number(row.woSum))
-                      ? `${rubAudit((Number(row.cashPaysSum) || 0) + (Number(row.cashCorrSum) || 0) + (Number(row.cashRefundSum) || 0))} − ${rubAudit(Math.abs(Number(row.woSum)))}${Number(row.cashGoodsN) || Number(row.alfaGoodsN) ? ` − ${rubAudit(Math.abs(Number(row.cashGoodsSum) || Number(row.alfaGoodsSum) || 0))}` : ""}`
-                      : "—"}
-                  </td>
+                  <td>—</td>
                 </tr>
                 <tr>
                   <td>шапка / итог</td>
