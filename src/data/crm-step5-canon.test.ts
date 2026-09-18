@@ -4,6 +4,7 @@ import {
   step5CanSverka,
   step5Role,
   step5SkipNote,
+  step5StudyNum,
   step5AuditGapMs,
   sameCustomerId,
   parseAlfaHeaderCanon,
@@ -28,6 +29,19 @@ describe("шаг 5 канон", () => {
     assert.equal(step5Role(2, 0), "архив");
     assert.equal(step5Role(1, 1), "не разобрали");
     assert.equal(step5Role("1", "0"), "клиент");
+    assert.equal(Number.isNaN(step5StudyNum("")), true);
+    assert.equal(Number.isNaN(step5StudyNum("  ")), true);
+    assert.equal(step5StudyNum("0"), 0);
+    assert.equal(step5StudyNum(1), 1);
+    assert.equal(step5Role(step5StudyNum(""), step5StudyNum("")), "не разобрали");
+    assert.equal(step5CanSverka({
+      hasDossier: true,
+      payFilled: true,
+      livePays: 4,
+      isStudy: step5StudyNum(""),
+      removed: step5StudyNum(""),
+      inArchiveSet: false,
+    }), false);
   });
 
   it("старый диск is_study=2 сверяем только в наборе шага 2", () => {

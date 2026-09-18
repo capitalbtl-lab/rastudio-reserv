@@ -1230,7 +1230,6 @@ function rowMatched(r: AuditSegIn) {
   if (!moneyCloseUi(r.clients, r.alfaMoney) || !moneyCloseUi(r.cash, r.alfaMoney)) return false;
   const zero = moneyCloseUi(r.clients, 0) && moneyCloseUi(r.cash, 0);
   if (zero && (r.codes || []).includes("snap") && !(r.codes || []).includes("ok")) return false;
-  if ((r.codes || []).includes("лид") && !(r.codes || []).includes("ok")) return false;
   return true;
 }
 
@@ -1292,30 +1291,28 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   if (auditFail(codes)) {
     return { id: "fail", label: "Нет ответа Alfa", rec: "Клиент есть, Alfa не ответила. «Перепроверить». Если снова тишина — обрыв или 429, не бан." };
   }
+  const goods = codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods");
+  const goodsNote = goods ? " Товар в ленте, в остаток Alfa не входит." : "";
   if (rowMatched(r)) {
-    return { id: "ok", label: "Совпало", rec: "Клиенты, шапка и касса сходятся ±1 ₽. Трогать не нужно." };
+    return { id: "ok", label: "Совпало", rec: "Клиенты, шапка и касса сходятся ±1 ₽. Трогать не нужно." + goodsNote };
   }
   const header = Number.isFinite(r.alfaMoney as number) && moneyCloseUi(r.clients, r.alfaMoney);
   const cashHi = Number.isFinite(r.alfaMoney as number) && (Number(r.cash) || 0) > (Number(r.alfaMoney) || 0) + 1;
   const cashLo = Number.isFinite(r.alfaMoney as number) && (Number(r.cash) || 0) < (Number(r.alfaMoney) || 0) - 1;
-  const goods = codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods");
-  if (goods) {
-    return { id: "goods", label: "Товар в ленте, не в остатке", rec: "Платёж «Продажа товара» не влияет на остаток клиента. В формуле и шапке товара нет." };
-  }
   if (header && cashHi) {
     if (codes.includes("lessons") || codes.includes("wo") || codes.includes("status")) {
-      return { id: "cash-hi", label: "Касса больше шапки", rec: "На диске мало списаний. Шаг 2: календарь этого человека «Перепроверить». Шапку не подгонять." };
+      return { id: "cash-hi", label: "Касса больше шапки", rec: "На диске мало списаний. Шаг 2: календарь этого человека «Перепроверить». Шапку не подгонять." + goodsNote };
     }
     if (codes.includes("snap")) {
       return { id: "snap", label: "Касса не дочитана", rec: "Шаг 4: касса «Перепроверить» с начала. Потом снова шаг 5." };
     }
-    return { id: "cash-hi", label: "Касса больше шапки", rec: "Сначала шаг 2 (календарь), затем шаг 4 (касса). Шапку не трогать." };
+    return { id: "cash-hi", label: "Касса больше шапки", rec: "Сначала шаг 2 (календарь), затем шаг 4 (касса). Шапку не трогать." + goodsNote };
   }
   if (header && cashLo) {
     if (codes.includes("status") && !codes.includes("pays") && !codes.includes("snap")) {
       return { id: "status", label: "Урок ещё не проведён", rec: "В календаре цена, урок не проведён. Alfa ещё не списала. Ждать занятие, в Alfa не писать." };
     }
-    return { id: "cash-lo", label: "Касса меньше шапки", rec: "Не все оплаты на диске. Шаг 4: загрузить / перепроверить кассу. Затем снова сверка." };
+    return { id: "cash-lo", label: "Касса меньше шапки", rec: "Не все оплаты на диске. Шаг 4: загрузить / перепроверить кассу. Затем снова сверка." + goodsNote };
   }
   if (codes.includes("ctt")) {
     return { id: "ctt", label: "Спутали с абонементом", rec: "Сравнивали rest абонемента с общей шапкой. «Перепроверить» на шаге 5 — в Клиентах должна быть шапка, не rest." };
@@ -1327,9 +1324,9 @@ function auditSeg(r: AuditSegIn): AuditSeg {
     return { id: "snap", label: "Касса не дочитана", rec: "Шаг 4 дочитать кассу, потом шаг 5." };
   }
   if (codes.includes("lessons") || codes.includes("wo")) {
-    return { id: "cash-hi", label: "Касса больше шапки", rec: "Шаг 2 перепроверить календарь, потом шаг 5. Шапку не трогать." };
+    return { id: "cash-hi", label: "Касса больше шапки", rec: "Шаг 2 перепроверить календарь, потом шаг 5. Шапку не трогать." + goodsNote };
   }
-  return { id: "money", label: "Цифры не сошлись", rec: "«Перепроверить» на шаге 5. Если касса пустая — шаг 4. Если занятий мало — шаг 2." };
+  return { id: "money", label: "Цифры не сошлись", rec: "«Перепроверить» на шаге 5. Если касса пустая — шаг 4. Если занятий мало — шаг 2." + goodsNote };
 }
 
 const AUDIT_REASON_CHIPS: { id: string; label: string }[] = [
@@ -2318,7 +2315,7 @@ function AuditFillList({
               </tbody>
             </table>
             <p className="mt-1 text-[0.72rem] text-muted">
-              Касса — диск шага 4. Alfa — живой pay/index и lesson/index при «Перепроверить», без записи на диск. Товар в ленте, в шапку Alfa не входит. Шапка — Customer.balance.
+              Касса — диск шага 4. Alfa — живой pay/index и lesson/index при «Перепроверить», без записи на диск. Товар в ленте, в шапку Alfa не входит. Платёж «Продажа товара» не влияет на остаток клиента. Шапка — Customer.balance.
               {row.extra ? ` ${row.extra}.` : ""}
             </p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">

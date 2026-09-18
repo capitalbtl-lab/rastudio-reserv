@@ -290,12 +290,16 @@ describe("шаг 5 сверка остатка", () => {
     assert.match(src, /lesson\/index/);
     assert.match(src, /нет роли/);
     assert.match(src, /нет сверки/);
-    assert.doesNotMatch(src, /is_study: study/);
+    assert.match(src, /step5StudyNum/);
+    assert.doesNotMatch(src, /study: Number\(d\?\.extras\?\.is_study\)/);
+    assert.match(src, /alfa: Number\.NaN/);
+    assert.doesNotMatch(src, /extras\.is_study =/);
+    assert.doesNotMatch(src, /extras\.removed =/);
   });
 
   it("карточка шага 5: товар не в формуле, живые списания, чипы пропуска", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
-    assert.match(ui, /не влияет на остаток/);
+    assert.match(ui, /не влияет на остаток клиента/);
     assert.match(ui, /Товар в ленте, в шапку Alfa не входит/);
     assert.match(ui, /const n = pay \+ corr - wo;/);
     assert.match(ui, /alfaWoOk/);
@@ -305,6 +309,8 @@ describe("шаг 5 сверка остатка", () => {
     assert.match(ui, /headerStamped/);
     assert.match(ui, /Касса не закрыта шагом 4/);
     assert.doesNotMatch(ui, /if \(who === "лид"\)/);
+    assert.doesNotMatch(ui, /includes\("лид"\) && !\(r\.codes \|\| \[\]\)\.includes\("ok"\)/);
+    assert.match(ui, /Товар в ленте, в остаток Alfa не входит/);
     assert.doesNotMatch(ui, /Продажа товара вычитает из остатка/);
     assert.doesNotMatch(ui, /платежи − списания − товар/);
   });

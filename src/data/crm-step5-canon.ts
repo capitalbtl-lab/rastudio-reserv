@@ -81,6 +81,14 @@ export function step5RoleDefined(isStudy: unknown, removed: unknown) {
   return step5Role(isStudy, removed) !== "не разобрали";
 }
 
+/** Пустая строка — не 0 (лид). Number("") === 0 ломает роль. */
+export function step5StudyNum(raw: unknown): number {
+  if (raw == null) return Number.NaN;
+  if (typeof raw === "string" && !raw.trim()) return Number.NaN;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : Number.NaN;
+}
+
 /** Остаток сайта для сверки с шапкой: лента без товара − списания. Товар не вычитаем. */
 export function step5RemainderFormula(cashLessons: number, writeoff: number) {
   return (Number(cashLessons) || 0) - (Number(writeoff) || 0);

@@ -25,6 +25,7 @@ import {
   step5MoscowDay,
   step5Reasons,
   step5SkipNote,
+  step5StudyNum,
   step5Ymd,
   step5RemainderFormula,
 } from "./crm-step5-canon";
@@ -235,8 +236,8 @@ export async function diskAudit(cid: number, branchId: number) {
     goodsNet: goodsNet,
     refundGoodsSum: refundGoodsSumOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
     corrLooksGoods: payRows.some((r) => corrLooksGoods(r as { kind?: string; note?: string })),
-    study: Number(d?.extras?.is_study),
-    removed: Number(d?.extras?.removed),
+    study: step5StudyNum(d?.extras?.is_study),
+    removed: step5StudyNum(d?.extras?.removed),
     hasDossier: Boolean(d),
     headerAt: String(d?.extras?.headerAt || ""),
     extraN: Number(sync.lessonsExtraN) || 0,
@@ -248,7 +249,12 @@ export async function diskAudit(cid: number, branchId: number) {
     dSiteWithout6,
     dSiteWithoutRefund,
     journal: journal.length,
-    headerStamped: step5Money(d?.extras?.header).ok ? step5Money(d?.extras?.header).n : Number.NaN,
+    headerStamped: (() => {
+      const raw = d?.extras?.header;
+      if (raw == null || (typeof raw === "string" && !String(raw).trim())) return Number.NaN;
+      const m = step5Money(raw);
+      return m.ok ? m.n : Number.NaN;
+    })(),
   };
 }
 
@@ -528,13 +534,14 @@ export async function auditOne(cid: number, branchId: number) {
         cid: id,
         branchId: branch,
         name: "",
-        clients: 0,
-        alfa: 0,
-        cash: 0,
+        clients: Number.NaN,
+        alfa: Number.NaN,
+        cash: Number.NaN,
         codes: ["нет ответа"] as AuditCode[],
         repaired: false,
         at,
         extra: "стоп",
+        headerStamped: Number.NaN,
       } satisfies AuditHit,
       stopped: true,
     };
@@ -545,13 +552,14 @@ export async function auditOne(cid: number, branchId: number) {
         cid: 0,
         branchId: branch,
         name: "",
-        clients: 0,
-        alfa: 0,
-        cash: 0,
+        clients: Number.NaN,
+        alfa: Number.NaN,
+        cash: Number.NaN,
         codes: ["нет ответа"] as AuditCode[],
         repaired: false,
         at,
         extra: "Нет номера ученика.",
+        headerStamped: Number.NaN,
       } satisfies AuditHit,
     };
   }
@@ -565,13 +573,14 @@ export async function auditOne(cid: number, branchId: number) {
         cid: id,
         branchId: branch,
         name: `клиент ${id}`,
-        clients: 0,
-        alfa: 0,
-        cash: 0,
+        clients: Number.NaN,
+        alfa: Number.NaN,
+        cash: Number.NaN,
         codes: ["нет ответа"] as AuditCode[],
         repaired: false,
         at,
         extra: `диск: ${err}`,
+        headerStamped: Number.NaN,
       } satisfies AuditHit,
     };
   }
@@ -583,12 +592,13 @@ export async function auditOne(cid: number, branchId: number) {
         branchId: branch,
         name: first.name,
         clients: 0,
-        alfa: 0,
+        alfa: Number.NaN,
         cash: 0,
         codes: ["нет ответа"],
         repaired: false,
         at,
         extra: "Досье нет, шаг 5 не создаёт.",
+        headerStamped: Number.NaN,
       } satisfies AuditHit,
     };
   }
@@ -680,7 +690,7 @@ export async function auditOne(cid: number, branchId: number) {
         branchId: branch,
         name: first.name,
         clients: first.clients,
-        alfa: 0,
+        alfa: Number.NaN,
         cash: first.cash,
         woSum: first.woCal,
         woN: first.woN,
@@ -688,6 +698,7 @@ export async function auditOne(cid: number, branchId: number) {
         repaired: false,
         at,
         extra: "стоп на 429",
+        headerStamped: first.headerStamped,
       } satisfies AuditHit,
       stopped: true,
     };
@@ -699,7 +710,7 @@ export async function auditOne(cid: number, branchId: number) {
         branchId: branch,
         name: first.name,
         clients: first.clients,
-        alfa: 0,
+        alfa: Number.NaN,
         cash: first.cash,
         woSum: first.woCal,
         woN: first.woN,
@@ -707,6 +718,7 @@ export async function auditOne(cid: number, branchId: number) {
         repaired: false,
         at,
         extra: "401/403: сессию шага 5 стопать",
+        headerStamped: first.headerStamped,
       } satisfies AuditHit,
       authStop: true,
     };
@@ -757,10 +769,6 @@ export async function auditOne(cid: number, branchId: number) {
       C: judged.c ? "1" : "0",
     };
     if (shown.lessonCount != null) extras.headerC = String(shown.lessonCount);
-    const st = Number(shown.study);
-    const rem = Number(shown.removed);
-    if (st === 0 || st === 1) extras.is_study = String(st);
-    if (rem === 0 || rem === 1 || rem === 2) extras.removed = String(rem);
     upsertDossier({ crmId: id, source: "step5-header", extras, persist: true, byCrmOnly: true });
     step5CompleteAdd(id);
   }
