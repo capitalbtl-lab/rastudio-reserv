@@ -1369,6 +1369,28 @@ function rubAudit(n?: number) {
   return `${v} ₽`;
 }
 
+function alfaFormulaCalc(row: {
+  seen?: boolean;
+  woSum?: number;
+  alfaSplitOk?: boolean;
+  alfaPaysSum?: number;
+  alfaCorrSum?: number;
+  alfaGoodsSum?: number;
+  cashPaysSum?: number;
+  cashCorrSum?: number;
+  cashGoodsSum?: number;
+}) {
+  if (!row.seen || row.woSum == null || !Number.isFinite(Number(row.woSum))) return "—";
+  const pay = Number(row.alfaSplitOk ? row.alfaPaysSum : row.cashPaysSum) || 0;
+  const corr = Number(row.alfaSplitOk ? row.alfaCorrSum : row.cashCorrSum) || 0;
+  const goods = Math.abs(Number(row.alfaSplitOk ? row.alfaGoodsSum : row.cashGoodsSum) || 0);
+  const wo = Math.abs(Number(row.woSum) || 0);
+  const n = pay + corr - wo - goods;
+  const corrBit = !corr ? "" : ` ${corr > 0 ? "+" : "−"} ${rubAudit(Math.abs(corr))}`;
+  const goodsBit = goods ? ` − ${rubAudit(goods)}` : "";
+  return `${rubAudit(pay)} − ${rubAudit(wo)}${corrBit}${goodsBit} = ${rubAudit(n)}`;
+}
+
 function patchPeopleSide(
   side:
     | { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number }
@@ -2246,7 +2268,7 @@ function AuditFillList({
                 <tr>
                   <td>Клиенты / формула</td>
                   <td>{rubAudit(row.clients)}</td>
-                  <td>—</td>
+                  <td className="whitespace-normal">{alfaFormulaCalc(row)}</td>
                 </tr>
                 <tr>
                   <td>шапка / итог</td>
