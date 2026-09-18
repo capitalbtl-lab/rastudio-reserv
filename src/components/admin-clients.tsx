@@ -323,6 +323,7 @@ export function AdminClients({
   const [addingGroup, setAddingGroup] = useState("");
   const [view, setView] = useState<"дети" | "группы">("дети");
   const [tariffHave, setTariffHave] = useState<TariffHave>("all");
+  const [diskTariffCounts, setDiskTariffCounts] = useState({ all: 0, with: 0, without: 0 });
   const [liveTariffIds, setLiveTariffIds] = useState<Set<number>>(() => new Set(readLiveIds()));
   const [liveTariffBusy, setLiveTariffBusy] = useState(false);
   const [liveReady, setLiveReady] = useState(() => readLiveIds().length > 0);
@@ -451,6 +452,7 @@ export function AdminClients({
         total?: number;
         counts?: typeof counts;
         branchCounts?: Record<number, number>;
+        tariffCounts?: { all: number; with: number; without: number };
         lastCrmSync?: string;
         all?: number;
         error?: string;
@@ -463,6 +465,7 @@ export function AdminClients({
         if (res.counts) setCounts(res.counts);
         if (res.archive) setArchiveInfo(res.archive);
         if (res.branchCounts) setBranchCounts(res.branchCounts);
+        if (res.tariffCounts) setDiskTariffCounts(res.tariffCounts);
         if (res.lastCrmSync) setSynced(res.lastCrmSync);
         clientsSnap = {
           q: nextQ,
@@ -900,11 +903,16 @@ export function AdminClients({
   }, [rows, cap, tariffHave, liveSet]);
   const funnelOn = status === "лид" && view === "дети";
   const tariffCounts = useMemo(() => {
-    const pool = funnelOn ? funnelItems.map((it) => Number(it.customerId || it.id) || 0) : rows.map((r) => Number(r.crmId) || 0);
-    let withN = 0;
-    for (const id of pool) if (id && liveSet.has(id)) withN += 1;
-    return { all: pool.length, with: withN, without: Math.max(0, pool.length - withN), ready: true };
-  }, [funnelOn, funnelItems, rows, liveSet]);
+    if (funnelOn) {
+      const pool = funnelItems.map((it) => Number(it.customerId || it.id) || 0);
+      let withN = 0;
+      for (const id of pool) if (id && liveSet.has(id)) withN += 1;
+      return { all: pool.length, with: withN, without: Math.max(0, pool.length - withN), ready: true };
+    }
+    if (diskTariffCounts.all > 0) return { ...diskTariffCounts, ready: true };
+    const n = status === "лид" ? counts.лид : status === "архив" ? counts.архив : counts.учится;
+    return { all: n, with: 0, without: n, ready: true };
+  }, [funnelOn, funnelItems, liveSet, diskTariffCounts, status, counts]);
   const chipCounts = useMemo(() => {
     const next = { ...branchCounts };
     if (!funnelOn || !funnelItems.length) return next;
@@ -1383,7 +1391,7 @@ export function AdminClients({
               className={cn("rounded-full px-2.5 py-1 text-[0.75rem] font-semibold transition-colors duration-[var(--motion-quick)]", branch === 0 ? "bg-fg text-white" : "text-muted hover:bg-surface-2 hover:text-fg")}
             >
               Все
-              <span className="ml-1 tabular-nums opacity-70">{branchSum}</span>
+              <span className="ml-1 tabular-nums opacity-70">{status === "лид" ? counts.лид : status === "архив" ? counts.архив : counts.учится}</span>
             </button>
             {([1, 2, 3, 4] as const).map((id) => (
               <button

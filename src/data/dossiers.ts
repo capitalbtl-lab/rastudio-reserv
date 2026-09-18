@@ -2200,7 +2200,20 @@ function viewOf(d: Dossier) {
   const child = isPhoneLike(d.child.fio) ? "" : d.child.fio;
   const parent = isPhoneLike(d.parent.fio) ? "" : d.parent.fio;
   const home = Number(d.branchId) || 0;
-  const branchIds = home ? [home] : [];
+  const branchIds = (() => {
+    const set = new Set<number>();
+    if (home >= 1 && home <= 4) set.add(home);
+    for (const raw of String(ex.crm_current_branches || "").split(",")) {
+      const b = Number(raw.trim()) || 0;
+      if (b >= 1 && b <= 4) set.add(b);
+    }
+    for (const g of d.groupLinks || []) {
+      if (g.active === false) continue;
+      const b = Number(g.branchId) || 0;
+      if (b >= 1 && b <= 4) set.add(b);
+    }
+    return [...set];
+  })();
   const links = (d.groupLinks || []).filter((g) => g.active !== false);
   return {
     id: d.id,
@@ -2329,6 +2342,7 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
   const views = viewsMemo.views as ClientView[];
   const counts = { все: 0, учится: 0, лид: 0, архив: 0 };
   const branchCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  const tariffCounts = { all: 0, with: 0, without: 0 };
   const hidden = (d: ClientView) => d.status === "удалён";
   const chipStatus = !want || want === "все" ? "" : want;
   const policy = loadArchivePolicy();
@@ -2351,8 +2365,11 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
     }
     if (chipStatus && d.status !== chipStatus) continue;
     if (chipStatus === "архив" && d.status === "архив" && !archiveAll && !needle && !inWorking(d)) continue;
-    const b = Number(d.branchId) || 0;
-    if (branchCounts[b] != null) branchCounts[b] += 1;
+    tariffCounts.all += 1;
+    if (d.hasLiveTariff) tariffCounts.with += 1;
+    else tariffCounts.without += 1;
+    const ids = d.branchIds && d.branchIds.length ? d.branchIds : [Number(d.branchId) || 0];
+    for (const b of ids) if (branchCounts[b] != null) branchCounts[b] += 1;
   }
   const items = views.filter((d) => {
     if (d.status === "удалён") return false;
@@ -2367,7 +2384,10 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
         if (d.status !== "учится") return false;
       }
     }
-    if (branchId && Number(d.branchId) !== branchId) return false;
+    if (branchId) {
+      const ids = d.branchIds && d.branchIds.length ? d.branchIds : [Number(d.branchId) || 0];
+      if (!ids.includes(branchId)) return false;
+    }
     if (ageBand && d.ageBand !== ageBand) return false;
     if (!needle) return true;
     const hay = `${d.displayName} ${d.child} ${d.parent} ${d.phone} ${d.city} ${d.branch} ${d.courses.join(" ")} ${d.schools.join(" ")} ${d.gender} ${d.crmId || ""} ${d.cardId || ""}`
@@ -2383,6 +2403,7 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
     all: store.items.length,
     counts,
     branchCounts,
+    tariffCounts,
     lastCrmSync: store.lastCrmSync || "",
     archive: {
       disk: archiveDisk,
