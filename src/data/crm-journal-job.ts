@@ -707,7 +707,7 @@ function continueAutoPipe(job: JournalJob) {
     return;
   }
   if (next === "audit") {
-    startJournalJob({ ...base, mode: "audit", kind: "audit", recheck: false, archived: job.archived });
+    startJournalJob({ ...base, mode: "audit", kind: "audit", recheck: false, archived: job.archived, skipLeads: false });
     return;
   }
   const rule = scheduleOf({
@@ -1444,7 +1444,7 @@ function doneMsg(job: JournalJob) {
   if (job.mode === "groups") return `Готово · ${job.n} порций. Кто слева — ещё не все кварталы.`;
   if (job.mode === "group-one") return job.recheck ? "Группа перепроверена." : "Порция группы записана.";
   if (job.mode === "details") return `${job.n} порций ДЗ.`;
-  if (job.mode === "audit") return `Сверили ${job.n} текущих.`;
+  if (job.mode === "audit") return `Сверили ${job.n}. Пустая лента — нули, 0=0 вправо.`;
   if (job.mode === "probe") return job.msg || `${job.items[0]?.name || ""}: счёт.`;
   if (job.mode === "person") return job.msg || "Записали на сайт.";
   if (job.mode === "life") return job.msg || "Сроки групп уточнены.";

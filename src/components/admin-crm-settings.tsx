@@ -1261,7 +1261,7 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   const codes = r.codes || [];
   const who = auditRole(r);
   if (who === "лид") {
-    return { id: "lead", label: "Лид в Альфе", rec: "В Альфе лид. Кассы нет — не сверяем. Касса есть — шапка balance, в том числе 0." };
+    return { id: "lead", label: "Лид в Альфе", rec: "Пустая лента — нули. Формула 0 и шапка 0 — Совпало. Пульт на шаге 5 лидов не отсекает." };
   }
   if (who === "архив") {
     return { id: "arch", label: "Архив в Альфе", rec: "Карточка в архиве. Как текущего не сверять. Либо вернуть в ученики в Alfa." };

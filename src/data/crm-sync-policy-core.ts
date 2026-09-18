@@ -17,6 +17,7 @@ export const HISTORY_PLAN_MODES = [
 export type HistoryPlanMode = (typeof HISTORY_PLAN_MODES)[number]["id"];
 
 /** После состава: календарь → группы → касса → сверка. */
+/** Шаг 5 в трубе: пустая лента = нули, товар минус, лидов не отсекаем. */
 export const AUTO_PIPE: HistoryPlanMode[] = ["people", "groups", "balance", "audit"];
 /** Живые: плюс архив групп действующих, потом касса. */
 export const AUTO_PIPE_FULL: string[] = ["people", "groups", "archivesPupils", "groups-archived", "balance", "audit"];
