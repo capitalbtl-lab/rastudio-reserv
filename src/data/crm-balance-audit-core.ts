@@ -23,6 +23,8 @@ export type AuditCode =
   | "нет balance"
   | "лид"
   | "архив"
+  | "нет роли"
+  | "нет сверки"
   | "header-stale"
   | "product"
   | "orphan-type"

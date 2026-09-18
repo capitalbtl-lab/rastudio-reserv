@@ -44,7 +44,7 @@ describe("шаг 5 сверка остатка", () => {
     assert.equal(alfaHeaderOf({ balance: 2025 }, 0, 1), 2025);
     assert.equal(alfaHeaderOf({ balance: -2125 }, 0, 2), -2125);
     assert.equal(alfaHeaderOf({ balance: 0 }, 8000, 1), 0);
-    assert.equal(alfaHeaderOf({ balance: "-987.5" }, 0, 1), 0);
+    assert.equal(alfaHeaderOf({ balance: "-987.5" }, 0, 1), -987.5);
     assert.equal(alfaBalancePresent({ balance: 1975 }), true);
     assert.equal(alfaBalancePresent({ balance: 0 }), true);
     assert.equal(alfaBalancePresent({ balance: "" }), false);
@@ -284,7 +284,24 @@ describe("шаг 5 сверка остатка", () => {
     assert.match(src, /id: cid, page: 0/);
     assert.match(src, /кассы нет, не сверяем/);
     assert.match(src, /диск: \$\{err\}/);
+    assert.match(src, /peekAlfaLessonCommission/);
+    assert.match(src, /lesson\/index/);
+    assert.match(src, /нет роли/);
+    assert.match(src, /нет сверки/);
     assert.doesNotMatch(src, /is_study: study/);
+  });
+
+  it("карточка шага 5: товар не в формуле, живые списания, чипы пропуска", () => {
+    const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
+    assert.match(ui, /не влияет на остаток/);
+    assert.match(ui, /Товар в ленте, в шапку Alfa не входит/);
+    assert.match(ui, /const n = pay \+ corr - wo;/);
+    assert.match(ui, /alfaWoOk/);
+    assert.match(ui, /id: "no-id"/);
+    assert.match(ui, /id: "no-role"/);
+    assert.match(ui, /id: "no-sverka"/);
+    assert.doesNotMatch(ui, /Продажа товара вычитает из остатка/);
+    assert.doesNotMatch(ui, /платежи − списания − товар/);
   });
 
   it("касса и открытие карточки не затирают extras.balance", () => {
@@ -356,8 +373,8 @@ describe("шаг 5 сверка остатка", () => {
     assert.ok(refundGoods.includes("refund-goods"));
     const src = readFileSync(new URL("./crm-balance-audit.ts", import.meta.url), "utf8");
     assert.match(src, /goodsNetOf/);
+    assert.match(src, /step5RemainderFormula/);
     const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
-    assert.match(pay, /remainderClose/);
     const inbound = pay.slice(pay.indexOf("export async function inboundCustomerPays"), pay.indexOf("export type PayPollResult"));
     assert.doesNotMatch(inbound, /enqueueExport/);
   });

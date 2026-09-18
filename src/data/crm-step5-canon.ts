@@ -1,9 +1,12 @@
-/** Канон шага 5, редакция 46. Кассу и журнал не качает.
+/** Канон шага 5, редакция 47. Кассу и журнал не качает.
  * Пустая лента = нули: платежей 0, списаний 0, корректировок 0, товара 0.
- * Формула 0 и шапка 0 — Совпало. «Кассы нет — не сверяем» снято.
+ * Формула 0 и шапка 0 — Совпало.
 
- * Остаток = приходы + корректировки (±) + возвраты (вычитаются) − списания status=3 − товар.
- * Товар — расход, в шапку входит. Старое «товар не в остатке» снято.
+ * Остаток для сверки с Customer.balance (дока API: «текущий остаток, деньги»):
+ *   приходы + корректировки (±) + возвраты (вычитаются) − списания status=3 (commission).
+ * Товар в ленте pay есть, в остаток клиента не входит
+ * (дока ТМЦ: «Платёж „Продажа товара“ не влияет на остаток клиента»).
+ * Эталон шапки — customer/index.balance, не сумма pay/index.
  */
 
 export type Step5Role = "лид" | "клиент" | "архив" | "не разобрали";
@@ -64,8 +67,9 @@ export function step5Ymd(raw: unknown): string {
 }
 
 export function step5Role(isStudy: unknown, removed: unknown): Step5Role {
-  const rem = Number(removed);
-  const st = Number(isStudy);
+  const rem = typeof removed === "string" && !removed.trim() ? Number.NaN : Number(removed);
+  const st = typeof isStudy === "string" && !isStudy.trim() ? Number.NaN : Number(isStudy);
+  if (isStudy == null && removed == null) return "не разобрали";
   if (rem === 1) return "не разобрали";
   if (rem === 2 || st === 2) return "архив";
   if (st === 0) return "лид";
@@ -75,6 +79,11 @@ export function step5Role(isStudy: unknown, removed: unknown): Step5Role {
 
 export function step5RoleDefined(isStudy: unknown, removed: unknown) {
   return step5Role(isStudy, removed) !== "не разобрали";
+}
+
+/** Остаток сайта для сверки с шапкой: лента без товара − списания. Товар не вычитаем. */
+export function step5RemainderFormula(cashLessons: number, writeoff: number) {
+  return (Number(cashLessons) || 0) - (Number(writeoff) || 0);
 }
 
 export function step5CanSverka(p: {
@@ -89,8 +98,9 @@ export function step5CanSverka(p: {
   const rem = Number(p.removed);
   const st = Number(p.isStudy);
   if (rem === 1) return false;
+  if (!step5RoleDefined(p.isStudy, p.removed)) return false;
   if (st === 1 && rem === 0) return true;
-  if (st === 0 && rem === 0) return true;
+  if (st === 0 && rem === 0) return (Number(p.livePays) || 0) > 0;
   if ((rem === 2 || st === 2) && p.inArchiveSet) return true;
   return false;
 }
@@ -102,11 +112,13 @@ export function step5SkipNote(p: {
   inArchiveSet: boolean;
 }) {
   if (Number(p.removed) === 1) return "не разобрали";
+  if (step5Role(p.isStudy, p.removed) === "не разобрали") return "нет роли на досье, шапку не зовём";
   const st = Number(p.isStudy);
   const rem = Number(p.removed);
   if ((rem === 2 || st === 2) && !p.inArchiveSet) {
     return "не в наборе шага 2, не сверяем";
   }
+  if (st === 0 && rem === 0 && (Number(p.livePays) || 0) < 1) return "кассы нет, не сверяем";
   return "";
 }
 
@@ -197,15 +209,15 @@ export function step5Reasons(p: {
   const cashL = Number(p.cashLessons);
   const cashA = Number(p.cashAll);
   const dCash = cashL - header;
-  const dAll = cashA - header;
   const cashNewer = step5Newer(p.cashDate, p.headerAt);
+  const goodsOn = Number.isFinite(cashA) && Number.isFinite(cashL) && Math.abs(cashA - cashL) > 1;
   const c = !p.orphan && !p.alien && Math.abs(dSite) <= 1;
-  if (c && !cashNewer) return { main: "", tail: [], c: true };
+  if (c && !cashNewer) return { main: "", tail: goodsOn ? (["product"] as Step5Reason[]) : [], c: true };
   const extraN = Number(p.extraN) || 0;
   const holeN = Number(p.holeN) || 0;
   const flags: { k: Step5Reason; on: boolean }[] = [
     { k: "header-stale", on: cashNewer },
-    { k: "product", on: Number.isFinite(cashA) && Number.isFinite(cashL) && Math.abs(cashA - cashL) > 1 }, // продажа товара в формуле со знаком минус
+    { k: "product", on: goodsOn },
     { k: "orphan-type", on: Boolean(p.orphan) },
     { k: "alien-branch", on: Boolean(p.alien) },
     { k: "correct-only", on: Math.abs(dSite) > 1 && Number.isFinite(p.dSiteWithout6) && Math.abs(Number(p.dSiteWithout6)) <= 1 },

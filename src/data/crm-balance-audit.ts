@@ -1,6 +1,10 @@
-/** Шаг 5: сверка остатка с шапкой. А = payFill.full шага 4. Кассу не качает. */
+/** Шаг 5: сверка остатка с шапкой. А = payFill.full шага 4. Кассу не качает.
+ * Не stampDossierAlfaBalance (extras.balance) и не stampCustomerSync — только extras.header.
+ * diskAlfaRole не зовём. Лид в Альфе: шапки клиента нет — снято: лид с кассой в сверке.
+ * Лид без живой кассы: кассы нет, не сверяем.
+ */
 
-import { uniqueBranches } from "./crm-ledger-core";
+import { uniqueBranches, lessonWriteoffAmount } from "./crm-ledger-core";
 import { liveCttOf } from "./crm-pay-core";
 import {
   classifyAudit,
@@ -22,6 +26,7 @@ import {
   step5Reasons,
   step5SkipNote,
   step5Ymd,
+  step5RemainderFormula,
 } from "./crm-step5-canon";
 import { step5CompleteAdd, step5SessionStopped, step5WaitOrStop } from "./crm-step5-session";
 
@@ -58,6 +63,9 @@ export type AuditHit = {
   alfaSplitOk?: boolean;
   woSum?: number;
   woN?: number;
+  alfaWoSum?: number;
+  alfaWoN?: number;
+  alfaWoOk?: boolean;
 };
 
 export type AuditReport = {
@@ -193,9 +201,9 @@ export async function diskAudit(cid: number, branchId: number) {
   const sync = customerSyncOf(id);
   const jready = lessonsJournalReady(sync);
   const wo = writeoffCanon(cal as { lessonId?: unknown; status?: unknown; amount?: unknown }[], lessonsDisk, jready);
-  // Канон 5: товар в ленте pay есть, в остаток (формула / шапка) не входит.
+  // Канон 5 / дока ТМЦ: товар в ленте pay есть, в Customer.balance не входит.
   const goodsNet = goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]);
-  const formulaSite = cashAllOk && wo.ok ? cashLessons - wo.n - goodsNet : Number.NaN;
+  const formulaSite = cashAllOk && wo.ok ? step5RemainderFormula(cashLessons, wo.n) : Number.NaN;
   const without6 = lessonRows.filter((x) => x.t !== 6);
   const withoutRefund = lessonRows.filter((x) => x.t !== 5 && x.t !== 3);
   const dSiteWithout6 = cashAllOk && wo.ok && without6.length ? without6.reduce((s, x) => s + x.sum.n, 0) - wo.n : Number.NaN;
@@ -301,6 +309,48 @@ async function peekAlfaPaySplit(
   };
 }
 
+/** Живые списания шага 5: lesson/index, status по умолчанию 3. Журнал на диск не пишет. */
+async function peekAlfaLessonCommission(
+  request: (path: string, body: Record<string, unknown>, token: string) => Promise<unknown>,
+  token: string,
+  branch: number,
+  cid: number,
+) {
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  let n = 0;
+  let k = 0;
+  const seen = new Set<number>();
+  for (const bid of uniqueBranches(branch)) {
+    for (let page = 0; page < 20; page += 1) {
+      if (step5SessionStopped()) return { ok: false as const };
+      const json = await request(`/v2api/${bid}/lesson/index`, {
+        customer_id: cid,
+        page,
+        pageSize: 500,
+      }, token);
+      const pack = crmUnwrapIndex(json);
+      const items = pack.items || [];
+      if (!items.length) break;
+      for (const item of items) {
+        const id = Number((item as { id?: number }).id) || 0;
+        if (id > 0) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+        }
+        const st = Number((item as { status?: unknown }).status);
+        if (Number.isFinite(st) && st !== 3) continue;
+        const wo = lessonWriteoffAmount(item as Record<string, unknown>, cid);
+        if (wo > 0) {
+          n += wo;
+          k += 1;
+        }
+      }
+      if (items.length < 500) break;
+    }
+  }
+  return { ok: true as const, alfaWoSum: n, alfaWoN: k };
+}
+
 async function alfaShow(branch: number, cid: number, study = Number.NaN) {
   const { token, request } = await import("./alfacrm");
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
@@ -330,57 +380,23 @@ async function alfaShow(branch: number, cid: number, study = Number.NaN) {
   let authStop = false;
   let rejectCid = false;
   let stopped = false;
-  for (const bid of branches) {
+  const bodies: Record<string, unknown>[] = [
+    { id: cid, page: 0 },
+    { id: cid, page: 0, removed: 1 },
+    { id: cid, page: 0, is_study: 2 },
+    { id: cid, page: 0, is_study: Number(study) === 0 ? 0 : 1 },
+    { id: cid, page: 0, is_study: Number(study) === 0 ? 1 : 0 },
+  ];
+  outer: for (const bid of branches) {
     if (step5SessionStopped()) {
       stopped = true;
       break;
     }
-    let retried = false;
-    for (;;) {
-      try {
-        const json = await request(`/v2api/${bid}/customer/index`, { id: cid, page: 0, is_study: 2 }, t);
-        const items = crmUnwrapIndex(json).items;
-        const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
-        if (hit) {
-          found = hit;
-          used = bid;
-          switched = bid !== (Number(branch) || 1);
-        }
-        break;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (/\b401\b|\b403\b/.test(msg)) {
-          authStop = true;
-          break;
-        }
-        if (/\b400\b|\b422\b/.test(msg)) {
-          rejectCid = true;
-          break;
-        }
-        if (/\b429\b/.test(msg) && !retried) {
-          retried = true;
-          const go = await step5WaitOrStop(120000);
-          if (!go) {
-            stopped = true;
-            break;
-          }
-          continue;
-        }
-        break;
-      }
-    }
-    if (found || authStop || rejectCid || stopped) break;
-  }
-  if (!found && !authStop && !rejectCid && !stopped) {
-    const rest: Array<0 | 1> = Number(study) === 1 ? [1, 0] : [0, 1];
-    outer: for (const st of rest) {
-      for (const bid of branches) {
-        if (step5SessionStopped()) {
-          stopped = true;
-          break outer;
-        }
+    for (const body of bodies) {
+      let retried = false;
+      for (;;) {
         try {
-          const json = await request(`/v2api/${bid}/customer/index`, { id: cid, page: 0, is_study: st }, t);
+          const json = await request(`/v2api/${bid}/customer/index`, body, t);
           const items = crmUnwrapIndex(json).items;
           const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
           if (hit) {
@@ -389,23 +405,26 @@ async function alfaShow(branch: number, cid: number, study = Number.NaN) {
             switched = bid !== (Number(branch) || 1);
             break outer;
           }
+          break;
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          if (/401|403/.test(msg)) {
+          if (/\b401\b|\b403\b/.test(msg)) {
             authStop = true;
             break outer;
           }
-          if (/400|422/.test(msg)) {
-            rejectCid = true;
-            break outer;
+          if (/\b400\b|\b422\b/.test(msg)) {
+            break;
           }
-          if (/429/.test(msg)) {
+          if (/\b429\b/.test(msg) && !retried) {
+            retried = true;
             const go = await step5WaitOrStop(120000);
             if (!go) {
               stopped = true;
               break outer;
             }
+            continue;
           }
+          break;
         }
       }
     }
@@ -582,7 +601,7 @@ export async function auditOne(cid: number, branchId: number) {
         branchId: branch,
         name: first.name,
         clients: first.clients,
-        alfa: 0,
+        alfa: Number.NaN,
         cash: first.cash,
         woSum: first.woCal,
         woN: first.woN,
@@ -601,7 +620,7 @@ export async function auditOne(cid: number, branchId: number) {
         branchId: branch,
         name: first.name,
         clients: first.clients,
-        alfa: 0,
+        alfa: Number.NaN,
         cash: first.cash,
         woSum: first.woCal,
         woN: first.woN,
@@ -628,20 +647,21 @@ export async function auditOne(cid: number, branchId: number) {
     inArchiveSet: first.inArchiveSet,
   });
   if (!sverka) {
+    const noRole = /нет роли|не разобрали/.test(skip);
     return {
       hit: {
         cid: id,
         branchId: branch,
         name: first.name,
         clients: first.clients,
-        alfa: 0,
+        alfa: Number.NaN,
         cash: first.cash,
         woSum: first.woCal,
         woN: first.woN,
-        codes: ["snap"],
+        codes: (noRole ? ["нет роли"] : ["нет сверки"]) as AuditCode[],
         repaired: false,
         at,
-        extra: skip || "сверки нет",
+        extra: skip || "кассы нет, не сверяем",
       } satisfies AuditHit,
     };
   }
@@ -706,15 +726,22 @@ export async function auditOne(cid: number, branchId: number) {
   });
 
   let alfaSplit: Awaited<ReturnType<typeof peekAlfaPaySplit>> | null = null;
+  let alfaWo: Awaited<ReturnType<typeof peekAlfaLessonCommission>> | null = null;
   if (shown.ok && shown.token && !shown.stopped && !shown.authStop) {
     try {
       alfaSplit = await peekAlfaPaySplit(shown.request, shown.token, shown.branch || branch, id);
     } catch {
       alfaSplit = { ok: false as const };
     }
+    try {
+      alfaWo = await peekAlfaLessonCommission(shown.request, shown.token, shown.branch || branch, id);
+    } catch {
+      alfaWo = { ok: false as const };
+    }
   }
 
   if (shown.ok && shown.headerOk) {
+    // extras.header, не stampDossierAlfaBalance
     const { upsertDossier } = await import("./dossiers");
     const extras: Record<string, string> = {
       header: String(shown.alfa),
@@ -770,6 +797,13 @@ export async function auditOne(cid: number, branchId: number) {
             alfaSplitOk: true,
           }
         : { alfaSplitOk: false }),
+      ...(alfaWo && alfaWo.ok
+        ? {
+            alfaWoSum: alfaWo.alfaWoSum,
+            alfaWoN: alfaWo.alfaWoN,
+            alfaWoOk: true,
+          }
+        : { alfaWoOk: false }),
     } satisfies AuditHit,
   };
 }

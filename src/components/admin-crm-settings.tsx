@@ -1223,6 +1223,9 @@ type AuditSegIn = {
 
 function rowMatched(r: AuditSegIn) {
   if (!r.seen || auditFail(r.codes)) return false;
+  const codes = r.codes || [];
+  if (codes.includes("нет id") || codes.includes("нет роли") || codes.includes("нет сверки") || codes.includes("нет balance")) return false;
+  if (!Number.isFinite(r.alfaMoney as number)) return false;
   if (!moneyCloseUi(r.clients, r.alfaMoney) || !moneyCloseUi(r.cash, r.alfaMoney)) return false;
   const zero = moneyCloseUi(r.clients, 0) && moneyCloseUi(r.cash, 0);
   if (zero && (r.codes || []).includes("snap") && !(r.codes || []).includes("ok")) return false;
@@ -1251,6 +1254,8 @@ const AUDIT_WORD: Record<string, string> = {
   "нет ответа": "Нет ответа Alfa",
   "нет id": "id не найден",
   "нет balance": "нет balance",
+  "нет роли": "Нет роли на досье",
+  "нет сверки": "Сверки нет",
   лид: "Лид в Альфе",
   архив: "Архив в Альфе",
 };
@@ -1259,15 +1264,32 @@ type AuditSeg = { id: string; label: string; rec: string };
 
 function auditSeg(r: AuditSegIn): AuditSeg {
   const codes = r.codes || [];
+  const extra = String(r.extra || "");
   const who = auditRole(r);
+  if (!r.seen) {
+    return { id: "wait", label: "Не сверяли", rec: "Сверить всех текущих или на карточке «Перепроверить»." };
+  }
+  if (codes.includes("нет id") || extra === "id не найден") {
+    return { id: "no-id", label: "id не найден", rec: "В Alfa нет карточки с этим id. Это не «цифры не сошлись» и не «касса меньше шапки»." };
+  }
+  if (codes.includes("нет balance") || extra === "нет balance") {
+    return { id: "no-balance", label: "нет balance", rec: "Досье есть, поля balance нет. Шапку не с чем сверять." };
+  }
+  if (codes.includes("нет роли") || /нет роли на досье/.test(extra) || extra === "не разобрали") {
+    return { id: "no-role", label: "Нет роли на досье", rec: "Роль не разобрали, шапку не зовём. Это не «касса меньше шапки»." };
+  }
+  if (codes.includes("нет сверки") || /кассы нет, не сверяем|не в наборе шага 2, не сверяем|сверки нет/.test(extra)) {
+    return {
+      id: "no-sverka",
+      label: "Сверки нет",
+      rec: /кассы нет/.test(extra) ? "У лида нет живой кассы — шапку не сверяем." : "Не в наборе сверки. Шапку не зовём.",
+    };
+  }
   if (who === "лид") {
     return { id: "lead", label: "Лид в Альфе", rec: "Пустая лента — нули. Формула 0 и шапка 0 — Совпало. Пульт на шаге 5 лидов не отсекает." };
   }
   if (who === "архив") {
     return { id: "arch", label: "Архив в Альфе", rec: "Карточка в архиве. Как текущего не сверять. Либо вернуть в ученики в Alfa." };
-  }
-  if (!r.seen) {
-    return { id: "wait", label: "Не сверяли", rec: "Сверить всех текущих или на карточке «Перепроверить»." };
   }
   if (auditFail(codes)) {
     return { id: "fail", label: "Нет ответа Alfa", rec: "Клиент есть, Alfa не ответила. «Перепроверить». Если снова тишина — обрыв или 429, не бан." };
@@ -1275,12 +1297,12 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   if (rowMatched(r)) {
     return { id: "ok", label: "Совпало", rec: "Клиенты, шапка и касса сходятся ±1 ₽. Трогать не нужно." };
   }
-  const header = moneyCloseUi(r.clients, r.alfaMoney);
-  const cashHi = (Number(r.cash) || 0) > (Number(r.alfaMoney) || 0) + 1;
-  const cashLo = (Number(r.cash) || 0) < (Number(r.alfaMoney) || 0) - 1;
+  const header = Number.isFinite(r.alfaMoney as number) && moneyCloseUi(r.clients, r.alfaMoney);
+  const cashHi = Number.isFinite(r.alfaMoney as number) && (Number(r.cash) || 0) > (Number(r.alfaMoney) || 0) + 1;
+  const cashLo = Number.isFinite(r.alfaMoney as number) && (Number(r.cash) || 0) < (Number(r.alfaMoney) || 0) - 1;
   const goods = codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods");
-  if (header && goods) {
-    return { id: "goods", label: "Товар в ленте, не в остатке", rec: "Продажа товара вычитает из остатка. Формула: платежи − списания − товар." };
+  if (goods) {
+    return { id: "goods", label: "Товар в ленте, не в остатке", rec: "Платёж «Продажа товара» не влияет на остаток клиента. В формуле и шапке товара нет." };
   }
   if (header && cashHi) {
     if (codes.includes("lessons") || codes.includes("wo") || codes.includes("status")) {
@@ -1304,7 +1326,7 @@ function auditSeg(r: AuditSegIn): AuditSeg {
     return { id: "show", label: "Показ в Клиентах", rec: "«Перепроверить» на шаге 5: заново поставит шапку в карточку. Журнал и кассу не качать." };
   }
   if (codes.includes("snap") || codes.includes("pays")) {
-    return { id: "cash-lo", label: "Касса меньше шапки", rec: "Шаг 4 дочитать кассу, потом шаг 5." };
+    return { id: "snap", label: "Касса не дочитана", rec: "Шаг 4 дочитать кассу, потом шаг 5." };
   }
   if (codes.includes("lessons") || codes.includes("wo")) {
     return { id: "cash-hi", label: "Касса больше шапки", rec: "Шаг 2 перепроверить календарь, потом шаг 5. Шапку не трогать." };
@@ -1318,6 +1340,10 @@ const AUDIT_REASON_CHIPS: { id: string; label: string }[] = [
   { id: "cash-hi", label: "Касса больше шапки" },
   { id: "cash-lo", label: "Касса меньше шапки" },
   { id: "goods", label: "Товар в ленте, не в остатке" },
+  { id: "no-sverka", label: "Сверки нет" },
+  { id: "no-role", label: "Нет роли на досье" },
+  { id: "no-id", label: "id не найден" },
+  { id: "no-balance", label: "нет balance" },
   { id: "snap", label: "Касса не дочитана" },
   { id: "show", label: "Показ в Клиентах" },
   { id: "ctt", label: "Спутали с абонементом" },
@@ -1369,6 +1395,13 @@ function rubAudit(n?: number) {
   return `${v} ₽`;
 }
 
+function auditFormulaSigned(n: number) {
+  const v = Math.round(Number(n) || 0);
+  if (v > 0) return `+${v}`;
+  if (v < 0) return `\u2212${Math.abs(v)}`;
+  return "0";
+}
+
 function alfaFormulaCalc(row: {
   seen?: boolean;
   woSum?: number;
@@ -1376,19 +1409,21 @@ function alfaFormulaCalc(row: {
   alfaPaysSum?: number;
   alfaCorrSum?: number;
   alfaGoodsSum?: number;
+  alfaWoSum?: number;
+  alfaWoOk?: boolean;
   cashPaysSum?: number;
   cashCorrSum?: number;
   cashGoodsSum?: number;
 }) {
-  if (!row.seen || row.woSum == null || !Number.isFinite(Number(row.woSum))) return "—";
-  const pay = Number(row.alfaSplitOk ? row.alfaPaysSum : row.cashPaysSum) || 0;
-  const corr = Number(row.alfaSplitOk ? row.alfaCorrSum : row.cashCorrSum) || 0;
-  const goods = Math.abs(Number(row.alfaSplitOk ? row.alfaGoodsSum : row.cashGoodsSum) || 0);
-  const wo = Math.abs(Number(row.woSum) || 0);
-  const n = pay + corr - wo - goods;
-  const corrBit = !corr ? "" : ` ${corr > 0 ? "+" : "−"} ${rubAudit(Math.abs(corr))}`;
-  const goodsBit = goods ? ` − ${rubAudit(goods)}` : "";
-  return `${rubAudit(pay)} − ${rubAudit(wo)}${corrBit}${goodsBit} = ${rubAudit(n)}`;
+  if (!row.seen || !row.alfaSplitOk || !row.alfaWoOk) return "ещё не снимали";
+  const pay = Number(row.alfaPaysSum) || 0;
+  const corr = Number(row.alfaCorrSum) || 0;
+  const wo = Number(row.alfaWoSum) || 0;
+  const n = pay + corr - wo;
+  const bits = [auditFormulaSigned(pay)];
+  if (wo) bits.push(`\u2212${Math.round(Math.abs(wo))}`);
+  if (corr) bits.push(`${corr > 0 ? "+" : "\u2212"}${Math.round(Math.abs(corr))}`);
+  return `${bits.join(" ")} = ${auditFormulaSigned(n)} \u20BD`;
 }
 
 function patchPeopleSide(
@@ -2020,6 +2055,9 @@ type AuditUiRow = {
   alfaCorrSum?: number;
   alfaGoodsSum?: number;
   alfaSplitOk?: boolean;
+  alfaWoSum?: number;
+  alfaWoN?: number;
+  alfaWoOk?: boolean;
   woSum?: number;
   woN?: number;
 };
@@ -2028,7 +2066,7 @@ function asAuditRow(
   r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number; cashPaysN?: number;
   cashRefundN?: number; cashCorrN?: number; cashGoodsN?: number; cashPaysSum?: number;
   cashRefundSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
-  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; woSum?: number; woN?: number },
+  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; alfaWoSum?: number; alfaWoN?: number; alfaWoOk?: boolean; woSum?: number; woN?: number },
 ): AuditUiRow {
   const codes = h?.codes;
   return {
@@ -2058,6 +2096,9 @@ function asAuditRow(
     alfaCorrSum: h?.alfaCorrSum,
     alfaGoodsSum: h?.alfaGoodsSum,
     alfaSplitOk: h?.alfaSplitOk,
+    alfaWoSum: h?.alfaWoSum,
+    alfaWoN: h?.alfaWoN,
+    alfaWoOk: h?.alfaWoOk,
     woSum: h?.woSum,
     woN: h?.woN,
     alfaRole: (codes || []).includes("лид") ? "лид" : (codes || []).includes("архив") ? "архив" : r.alfaRole,
@@ -2253,7 +2294,7 @@ function AuditFillList({
                 <tr>
                   <td>списания занятий</td>
                   <td>{row.seen ? `${row.woN ?? "—"} (${row.woSum != null && Number.isFinite(row.woSum) ? rubAudit(-Math.abs(Number(row.woSum))) : "не собрали"})` : "ещё не снимали"}</td>
-                  <td>{row.seen ? `${row.woN ?? "—"} (${row.woSum != null && Number.isFinite(row.woSum) ? rubAudit(-Math.abs(Number(row.woSum))) : "не собрали"})` : "ещё не снимали"}</td>
+                  <td>{row.alfaWoOk ? `${row.alfaWoN ?? 0} (${row.alfaWoSum != null && Number.isFinite(row.alfaWoSum) ? rubAudit(-Math.abs(Number(row.alfaWoSum))) : "не собрали"})` : "ещё не снимали"}</td>
                 </tr>
                 <tr>
                   <td>корректировки</td>
@@ -2273,12 +2314,12 @@ function AuditFillList({
                 <tr>
                   <td>шапка / итог</td>
                   <td>{rubAudit(row.cash)}</td>
-                  <td>{row.seen ? (fail ? "нет ответа" : rubAudit(row.alfaMoney)) : "ещё не снимали"}</td>
+                  <td>{row.seen ? (fail ? "нет ответа" : miss ? miss : Number.isFinite(row.alfaMoney as number) ? rubAudit(row.alfaMoney) : "ещё не снимали") : "ещё не снимали"}</td>
                 </tr>
               </tbody>
             </table>
             <p className="mt-1 text-[0.72rem] text-muted">
-              Касса — диск шага 4. Alfa — живой pay/index при «Перепроверить», без записи на диск. Шапка отдельно в итоге.
+              Касса — диск шага 4. Alfa — живой pay/index и lesson/index при «Перепроверить», без записи на диск. Товар в ленте, в шапку Alfa не входит. Шапка — Customer.balance.
               {row.extra ? ` ${row.extra}.` : ""}
             </p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">

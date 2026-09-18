@@ -11,6 +11,7 @@ import {
   step5HasH,
   step5Newer,
   step5Reasons,
+  step5RemainderFormula,
 } from "./crm-step5-canon.ts";
 
 describe("шаг 5 канон", () => {
@@ -53,6 +54,12 @@ describe("шаг 5 канон", () => {
     assert.equal(step5CanSverka({ ...p, inArchiveSet: true }), true);
   });
 
+  it("нет роли на досье — шапку не зовём", () => {
+    assert.equal(step5Role("", ""), "не разобрали");
+    assert.equal(step5CanSverka({ hasDossier: true, payFilled: true, livePays: 3, isStudy: "", removed: "", inArchiveSet: false }), false);
+    assert.equal(step5SkipNote({ livePays: 3, isStudy: "", removed: "", inArchiveSet: false }), "нет роли на досье, шапку не зовём");
+  });
+
   it("пауза красной 5 с, синяя справа по окну", () => {
     assert.equal(step5AuditGapMs({ recheck: false }), 5000);
     assert.equal(step5AuditGapMs({ recheck: true, staleHeader: false }), 5000);
@@ -69,6 +76,28 @@ describe("шаг 5 канон", () => {
     assert.equal(step5HasH(100, "2026-09-17"), true);
     assert.equal(step5HasH(100, ""), false);
     assert.equal(step5Newer("2026-09-18", "2026-09-17"), true);
+  });
+
+  it("формула остатка без товара", () => {
+    assert.equal(step5RemainderFormula(148779, 146354), 2425);
+    assert.equal(step5RemainderFormula(148779, 146354) - 2500, -75);
+  });
+
+  it("товар в ленте не ломает C, если формула без товара = шапка", () => {
+    const r = step5Reasons({
+      sverka: true,
+      hasH: true,
+      pending: false,
+      formulaSite: 2425,
+      header: 2425,
+      cashLessons: 2425,
+      cashAll: 4925,
+      headerAt: "2026-09-01",
+      cashDate: "2026-09-01",
+    });
+    assert.equal(r.c, true);
+    assert.equal(r.main, "");
+    assert.deepEqual(r.tail, ["product"]);
   });
 
   it("C и причина header-stale", () => {
