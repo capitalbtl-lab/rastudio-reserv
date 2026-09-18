@@ -1280,7 +1280,7 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   const cashLo = (Number(r.cash) || 0) < (Number(r.alfaMoney) || 0) - 1;
   const goods = codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods");
   if (header && goods) {
-    return { id: "goods", label: "Товар в ленте, не в остатке", rec: "Товар есть в оплатах. В шапку и формулу остатка не входит — как сверка взаиморасчётов Alfa. Не чинить шапку товаром. Если цифры не сошлись — смотреть списания." };
+    return { id: "goods", label: "Товар в ленте, не в остатке", rec: "Продажа товара вычитает из остатка. Формула: платежи − списания − товар." };
   }
   if (header && cashHi) {
     if (codes.includes("lessons") || codes.includes("wo") || codes.includes("status")) {
@@ -2240,15 +2240,15 @@ function AuditFillList({
                 </tr>
                 <tr>
                   <td>товары</td>
-                  <td>{row.cashGoodsN ?? 0} ({rubAudit(row.cashGoodsSum)})</td>
-                  <td>{row.alfaSplitOk ? `${row.alfaGoodsN ?? 0} (${rubAudit(row.alfaGoodsSum)})` : "ещё не снимали"}</td>
+                  <td>{row.cashGoodsN ?? 0} ({rubAudit(row.cashGoodsSum ? -Math.abs(Number(row.cashGoodsSum)) : 0)})</td>
+                  <td>{row.alfaSplitOk ? `${row.alfaGoodsN ?? 0} (${rubAudit(row.alfaGoodsSum ? -Math.abs(Number(row.alfaGoodsSum)) : 0)})` : "ещё не снимали"}</td>
                 </tr>
                 <tr>
                   <td>Клиенты / формула</td>
                   <td>{rubAudit(row.clients)}</td>
                   <td>
                     {row.seen && row.woSum != null && Number.isFinite(Number(row.woSum))
-                      ? `${rubAudit((Number(row.cashPaysSum) || 0) + (Number(row.cashCorrSum) || 0) + (Number(row.cashRefundSum) || 0))} − ${rubAudit(Math.abs(Number(row.woSum)))}`
+                      ? `${rubAudit((Number(row.cashPaysSum) || 0) + (Number(row.cashCorrSum) || 0) + (Number(row.cashRefundSum) || 0))} − ${rubAudit(Math.abs(Number(row.woSum)))}${Number(row.cashGoodsN) || Number(row.alfaGoodsN) ? ` − ${rubAudit(Math.abs(Number(row.cashGoodsSum) || Number(row.alfaGoodsSum) || 0))}` : ""}`
                       : "—"}
                   </td>
                 </tr>

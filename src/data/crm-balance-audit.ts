@@ -194,7 +194,8 @@ export async function diskAudit(cid: number, branchId: number) {
   const jready = lessonsJournalReady(sync);
   const wo = writeoffCanon(cal as { lessonId?: unknown; status?: unknown; amount?: unknown }[], lessonsDisk, jready);
   // Канон 5: товар в ленте pay есть, в остаток (формула / шапка) не входит.
-  const formulaSite = cashAllOk && wo.ok ? cashLessons - wo.n : Number.NaN;
+  const goodsNet = goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]);
+  const formulaSite = cashAllOk && wo.ok ? cashLessons - wo.n - goodsNet : Number.NaN;
   const without6 = lessonRows.filter((x) => x.t !== 6);
   const withoutRefund = lessonRows.filter((x) => x.t !== 5 && x.t !== 3);
   const dSiteWithout6 = cashAllOk && wo.ok && without6.length ? without6.reduce((s, x) => s + x.sum.n, 0) - wo.n : Number.NaN;
@@ -222,7 +223,7 @@ export async function diskAudit(cid: number, branchId: number) {
     liveCtt: liveCttOf(parseDossierCtt(d?.extras)).length > 0,
     dupLessons: ids.length !== lessonsDisk,
     badStatus: cal.some((l) => Number((l as { status?: number }).status) !== 3 && (Number((l as { amount?: number }).amount) || 0) > 0),
-    goodsNet: goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
+    goodsNet: goodsNet,
     refundGoodsSum: refundGoodsSumOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
     corrLooksGoods: payRows.some((r) => corrLooksGoods(r as { kind?: string; note?: string })),
     study: Number(d?.extras?.is_study),
@@ -281,6 +282,7 @@ async function peekAlfaPaySplit(
         const kind = kindFromAlfaPay(item as Record<string, unknown>);
         let n = payNum((item as { income?: unknown }).income) - payNum((item as { expenditure?: unknown }).expenditure);
         if (kind === "refund") n = n <= 0 ? n : -n;
+        if (kind === "product") n = n <= 0 ? n : -n;
         if (kind === "product") { goodsN += 1; goodsSum += n; }
         else if (kind === "correct") { corrN += 1; corrSum += n; }
         else { paysN += 1; paysSum += n; }

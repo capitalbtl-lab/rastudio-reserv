@@ -202,7 +202,7 @@ export function step5Reasons(p: {
   const holeN = Number(p.holeN) || 0;
   const flags: { k: Step5Reason; on: boolean }[] = [
     { k: "header-stale", on: cashNewer },
-    { k: "product", on: Number.isFinite(cashA) && Number.isFinite(cashL) && Math.abs(cashA - cashL) > 1 },
+    { k: "product", on: Number.isFinite(cashA) && Number.isFinite(cashL) && Math.abs(cashA - cashL) > 1 }, // продажа товара в формуле со знаком минус
     { k: "orphan-type", on: Boolean(p.orphan) },
     { k: "alien-branch", on: Boolean(p.alien) },
     { k: "correct-only", on: Math.abs(dSite) > 1 && Number.isFinite(p.dSiteWithout6) && Math.abs(Number(p.dSiteWithout6)) <= 1 },
