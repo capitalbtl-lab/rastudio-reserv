@@ -2246,7 +2246,11 @@ function AuditFillList({
                 <tr>
                   <td>Клиенты / формула</td>
                   <td>{rubAudit(row.clients)}</td>
-                  <td>—</td>
+                  <td>
+                    {row.seen && row.woSum != null && Number.isFinite(Number(row.woSum))
+                      ? `${rubAudit((Number(row.cashPaysSum) || 0) + (Number(row.cashCorrSum) || 0) + (Number(row.cashRefundSum) || 0))} − ${rubAudit(Math.abs(Number(row.woSum)))}`
+                      : "—"}
+                  </td>
                 </tr>
                 <tr>
                   <td>шапка / итог</td>
