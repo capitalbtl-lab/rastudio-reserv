@@ -1895,6 +1895,10 @@ function PeopleFillList({
                   text={`дубликатов нет · лишних ${pairCount(row.loadDupsN, row.recheckDupsN, row.extraN ?? 0)}`}
                 />
                 <CheckLine
+                  on={Boolean(row.journal) && !short}
+                  text={`списания занятий · ${row.cashWriteoff != null ? rubAudit(-Math.abs(Number(row.cashWriteoff) || 0)) : "нет журнала"}`}
+                />
+                <CheckLine
                   on={Boolean(row.pays)}
                   text={`касса загружена${row.pays ? "" : " · нет А"} · платежей ${row.cashPaysN ?? 0} (${rubAudit(row.cashPaysSum)}) · возвратов ${row.cashRefundN ?? 0} (${rubAudit(row.cashRefundSum)}) · корректировок ${row.cashCorrN ?? 0} (${rubAudit(row.cashCorrSum)}) · товаров ${row.cashGoodsN ?? 0} (${rubAudit(row.cashGoodsSum)})`}
                 />
@@ -1909,6 +1913,10 @@ function PeopleFillList({
                 <CheckLine on={Boolean(row.rechecked) && !dups} text="календарь перепроверен" />
                 <CheckLine on={row.holeN != null || row.extraN != null} text={nums ? nums.line : "набор id ещё не сверяли"} />
                 <CheckLine on={Boolean(row.rechecked) && !dups && !short} text="дубликатов нет" />
+                <CheckLine
+                  on={Boolean(row.journal) && !short}
+                  text={`списания занятий · ${row.cashWriteoff != null ? rubAudit(-Math.abs(Number(row.cashWriteoff) || 0)) : "нет журнала"}`}
+                />
               </>
             )}
             <p className="mt-1 text-muted">{row.lessons ? ruLessons(row.lessons) : "занятий на диске нет"}{row.at ? ` · ${ruAt(row.at)}` : ""}</p>
