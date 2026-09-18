@@ -56,6 +56,8 @@ export type AuditHit = {
   alfaCorrSum?: number;
   alfaGoodsSum?: number;
   alfaSplitOk?: boolean;
+  woSum?: number;
+  woN?: number;
 };
 
 export type AuditReport = {
@@ -133,17 +135,19 @@ function livePayRows(rows: PayLike[]) {
 }
 
 function writeoffCanon(cal: { lessonId?: unknown; status?: unknown; amount?: unknown }[], lessonsDisk: number, jready: boolean) {
-  if (lessonsDisk < 1) return { ok: true, n: 0 };
-  if (!jready) return { ok: false, n: 0 };
+  if (lessonsDisk < 1) return { ok: true, n: 0, k: 0 };
+  if (!jready) return { ok: false, n: 0, k: 0 };
   let n = 0;
+  let k = 0;
   for (const l of cal) {
     if ((Number(l.lessonId) || 0) <= 0) continue;
     if (Number(l.status) !== 3) continue;
     const a = step5Money(l.amount);
     if (!a.ok) continue;
     n += a.n;
+    k += 1;
   }
-  return { ok: true, n };
+  return { ok: true, n, k };
 }
 
 export async function diskAudit(cid: number, branchId: number) {
@@ -208,6 +212,7 @@ export async function diskAudit(cid: number, branchId: number) {
     formulaSite,
     woCal: wo.n,
     woCard: wo.n,
+    woN: wo.k || 0,
     woOk: wo.ok,
     paysComplete: payCustomerFilled(id),
     payPending: payFillPending(id),
@@ -577,6 +582,8 @@ export async function auditOne(cid: number, branchId: number) {
         clients: first.clients,
         alfa: 0,
         cash: first.cash,
+        woSum: first.woCal,
+        woN: first.woN,
         codes: ["snap"],
         repaired: false,
         at,
@@ -595,6 +602,8 @@ export async function auditOne(cid: number, branchId: number) {
         clients: first.clients,
         alfa: 0,
         cash: first.cash,
+        woSum: first.woCal,
+        woN: first.woN,
         codes: ["snap"],
         repaired: false,
         at,
@@ -612,6 +621,8 @@ export async function auditOne(cid: number, branchId: number) {
         clients: first.clients,
         alfa: 0,
         cash: first.cash,
+        woSum: first.woCal,
+        woN: first.woN,
         codes: first.study === 0 ? (["лид"] as AuditCode[]) : (["snap"] as AuditCode[]),
         repaired: false,
         at,
@@ -629,6 +640,8 @@ export async function auditOne(cid: number, branchId: number) {
         clients: first.clients,
         alfa: 0,
         cash: first.cash,
+        woSum: first.woCal,
+        woN: first.woN,
         codes: ["lessons"],
         repaired: false,
         at,
@@ -660,6 +673,8 @@ export async function auditOne(cid: number, branchId: number) {
         clients: first.clients,
         alfa: 0,
         cash: first.cash,
+        woSum: first.woCal,
+        woN: first.woN,
         codes: ["snap"],
         repaired: false,
         at,
@@ -678,6 +693,8 @@ export async function auditOne(cid: number, branchId: number) {
         clients: first.clients,
         alfa: 0,
         cash: first.cash,
+        woSum: first.woCal,
+        woN: first.woN,
         codes: ["нет ответа"],
         repaired: false,
         at,
@@ -695,6 +712,8 @@ export async function auditOne(cid: number, branchId: number) {
         clients: first.clients,
         alfa: 0,
         cash: first.cash,
+        woSum: first.woCal,
+        woN: first.woN,
         codes: ["нет ответа"],
         repaired: false,
         at,
@@ -770,6 +789,8 @@ export async function auditOne(cid: number, branchId: number) {
       clients: Number.isFinite(first.formulaSite) ? first.formulaSite : Number.NaN,
       alfa: shown.ok && shown.headerOk ? shown.alfa : Number.NaN,
       cash: Number.isFinite(first.formulaSite) ? first.formulaSite : Number.NaN,
+      woSum: first.woCal,
+      woN: first.woN,
       cttRest: 0,
       codes: judged.codes,
       repaired: false,

@@ -1990,13 +1990,15 @@ type AuditUiRow = {
   alfaCorrSum?: number;
   alfaGoodsSum?: number;
   alfaSplitOk?: boolean;
+  woSum?: number;
+  woN?: number;
 };
 
 function asAuditRow(
   r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number; cashPaysN?: number;
   cashRefundN?: number; cashCorrN?: number; cashGoodsN?: number; cashPaysSum?: number;
   cashRefundSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
-  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean },
+  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; woSum?: number; woN?: number },
 ): AuditUiRow {
   const codes = h?.codes;
   return {
@@ -2026,6 +2028,8 @@ function asAuditRow(
     alfaCorrSum: h?.alfaCorrSum,
     alfaGoodsSum: h?.alfaGoodsSum,
     alfaSplitOk: h?.alfaSplitOk,
+    woSum: h?.woSum,
+    woN: h?.woN,
     alfaRole: (codes || []).includes("лид") ? "лид" : (codes || []).includes("архив") ? "архив" : r.alfaRole,
     status: r.status,
     study: r.study,
@@ -2214,7 +2218,12 @@ function AuditFillList({
                 <tr>
                   <td>платежи</td>
                   <td>{row.cashPaysN ?? 0} ({rubAudit(row.cashPaysSum)})</td>
-                  <td>{row.alfaSplitOk ? `${row.alfaPaysN ?? 0} (${rubAudit(row.alfaPaysSum)})` : "ещё не снимали"}</td>
+                  <td>{row.alfaSplitOk ? `${row.alfaPaysN ?? 0} ({rubAudit(row.alfaPaysSum)})` : "ещё не снимали"}</td>
+                </tr>
+                <tr>
+                  <td>списания занятий</td>
+                  <td>{row.seen ? `${row.woN ?? "—"} (${row.woSum != null && Number.isFinite(row.woSum) ? rubAudit(-Math.abs(Number(row.woSum))) : "не собрали"})` : "ещё не снимали"}</td>
+                  <td>не из pay</td>
                 </tr>
                 <tr>
                   <td>корректировки</td>
