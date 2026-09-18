@@ -1,8 +1,8 @@
-/** Канон шага 5, редакция 47. Кассу и журнал не качает.
- * Пустая лента = нули: платежей 0, списаний 0, корректировок 0, товара 0.
- * Формула 0 и шапка 0 — Совпало.
-
- * Остаток для сверки с Customer.balance (дока API: «текущий остаток, деньги»):
+/** Канон шага 5, редакция 48. Кассу и журнал не качает.
+ * Пустая лента лида без строк = не сверка. Клиент с А и пустой лентой: 0=0=0.
+ * А = payFill.full шага 4. Нет А — шапку не зовём.
+ *
+ * Остаток для сверки с Customer.balance (дока API: «текущий остаток, деньги», float):
  *   приходы + корректировки (±) + возвраты (вычитаются) − списания status=3 (commission).
  * Товар в ленте pay есть, в остаток клиента не входит
  * (дока ТМЦ: «Платёж „Продажа товара“ не влияет на остаток клиента»).
@@ -99,6 +99,7 @@ export function step5CanSverka(p: {
   const st = Number(p.isStudy);
   if (rem === 1) return false;
   if (!step5RoleDefined(p.isStudy, p.removed)) return false;
+  if (!p.payFilled) return false;
   if (st === 1 && rem === 0) return true;
   if (st === 0 && rem === 0) return (Number(p.livePays) || 0) > 0;
   if ((rem === 2 || st === 2) && p.inArchiveSet) return true;
@@ -110,6 +111,7 @@ export function step5SkipNote(p: {
   isStudy: unknown;
   removed: unknown;
   inArchiveSet: boolean;
+  payFilled?: boolean;
 }) {
   if (Number(p.removed) === 1) return "не разобрали";
   if (step5Role(p.isStudy, p.removed) === "не разобрали") return "нет роли на досье, шапку не зовём";
@@ -119,6 +121,7 @@ export function step5SkipNote(p: {
     return "не в наборе шага 2, не сверяем";
   }
   if (st === 0 && rem === 0 && (Number(p.livePays) || 0) < 1) return "кассы нет, не сверяем";
+  if (p.payFilled === false) return "кассы нет / нет А";
   return "";
 }
 

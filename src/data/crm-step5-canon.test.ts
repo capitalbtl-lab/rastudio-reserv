@@ -60,6 +60,16 @@ describe("шаг 5 канон", () => {
     assert.equal(step5SkipNote({ livePays: 3, isStudy: "", removed: "", inArchiveSet: false }), "нет роли на досье, шапку не зовём");
   });
 
+  it("нет А — шапку не зовём, даже если строки кассы уже есть", () => {
+    const client = { hasDossier: true, payFilled: false, livePays: 6, isStudy: 1, removed: 0, inArchiveSet: false };
+    assert.equal(step5CanSverka(client), false);
+    assert.equal(step5SkipNote({ ...client, payFilled: false }), "кассы нет / нет А");
+    const lead = { hasDossier: true, payFilled: false, livePays: 6, isStudy: 0, removed: 0, inArchiveSet: false };
+    assert.equal(step5CanSverka(lead), false);
+    assert.equal(step5SkipNote({ ...lead, payFilled: false }), "кассы нет / нет А");
+    assert.equal(step5CanSverka({ ...client, payFilled: true }), true);
+  });
+
   it("пауза красной 5 с, синяя справа по окну", () => {
     assert.equal(step5AuditGapMs({ recheck: false }), 5000);
     assert.equal(step5AuditGapMs({ recheck: true, staleHeader: false }), 5000);

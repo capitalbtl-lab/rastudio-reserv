@@ -66,6 +66,7 @@ export type AuditHit = {
   alfaWoSum?: number;
   alfaWoN?: number;
   alfaWoOk?: boolean;
+  headerStamped?: number;
 };
 
 export type AuditReport = {
@@ -247,6 +248,7 @@ export async function diskAudit(cid: number, branchId: number) {
     dSiteWithout6,
     dSiteWithoutRefund,
     journal: journal.length,
+    headerStamped: step5Money(d?.extras?.header).ok ? step5Money(d?.extras?.header).n : Number.NaN,
   };
 }
 
@@ -257,10 +259,10 @@ async function peekAlfaPaySplit(
   cid: number,
 ) {
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
-  const { kindFromAlfaPay, payNum } = await import("./crm-pay-core");
+  const { kindFromAlfaPay, payNum, alfaPayIndexDate } = await import("./crm-pay-core");
   const { uniqueBranches } = await import("./crm-ledger-core");
-  const from = "2015-01-01";
-  const to = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+  const from = alfaPayIndexDate("2015-01-01");
+  const to = alfaPayIndexDate(new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10));
   let paysN = 0, corrN = 0, goodsN = 0;
   let paysSum = 0, corrSum = 0, goodsSum = 0;
   let pages = 0;
@@ -593,7 +595,7 @@ export async function auditOne(cid: number, branchId: number) {
 
   const { pendingExportIds } = await import("./crm-export-queue");
   const outgoing = pendingExportIds(["pay.create", "pay.update", "pay.delete"]).has(id);
-  const pendingPay = outgoing || (first.payPending && (Number(first.livePays) || 0) < 1);
+  const pendingPay = outgoing || first.payPending;
   if (pendingPay) {
     return {
       hit: {
@@ -609,6 +611,7 @@ export async function auditOne(cid: number, branchId: number) {
         repaired: false,
         at,
         extra: "касса ещё пишется",
+        headerStamped: first.headerStamped,
       } satisfies AuditHit,
     };
   }
@@ -628,6 +631,7 @@ export async function auditOne(cid: number, branchId: number) {
         repaired: false,
         at,
         extra: "журнал не закрыт, шапку не зовём",
+        headerStamped: first.headerStamped,
       } satisfies AuditHit,
     };
   }
@@ -645,6 +649,7 @@ export async function auditOne(cid: number, branchId: number) {
     isStudy: first.study,
     removed: first.removed,
     inArchiveSet: first.inArchiveSet,
+    payFilled: first.paysComplete,
   });
   if (!sverka) {
     const noRole = /нет роли|не разобрали/.test(skip);
@@ -661,7 +666,8 @@ export async function auditOne(cid: number, branchId: number) {
         codes: (noRole ? ["нет роли"] : ["нет сверки"]) as AuditCode[],
         repaired: false,
         at,
-        extra: skip || "кассы нет, не сверяем",
+        extra: skip || "кассы нет / нет А",
+        headerStamped: first.headerStamped,
       } satisfies AuditHit,
     };
   }
@@ -771,6 +777,18 @@ export async function auditOne(cid: number, branchId: number) {
             ? "id не найден"
             : skip || "нет ответа Alfa";
   if (judged.c && judged.dCash > 1) extra += "; приход больше шапки на списания, так бывает";
+  if (
+    !judged.c &&
+    shown.ok &&
+    shown.headerOk &&
+    Number.isFinite(first.formulaSite) &&
+    Math.abs(shown.alfa) > 0.005
+  ) {
+    const ratio = Math.abs(Number(first.formulaSite) / shown.alfa);
+    if (Math.abs(ratio - 100) < 0.51 || Math.abs(ratio - 0.01) < 0.0002) {
+      extra += "; формула и шапка отличаются в 100 раз — это не товар";
+    }
+  }
   return {
     hit: {
       cid: id,
@@ -786,6 +804,7 @@ export async function auditOne(cid: number, branchId: number) {
       repaired: false,
       at,
       extra,
+      headerStamped: shown.ok && shown.headerOk ? shown.alfa : first.headerStamped,
       ...(alfaSplit && alfaSplit.ok
         ? {
             alfaPaysN: alfaSplit.alfaPaysN,

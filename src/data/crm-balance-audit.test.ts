@@ -282,7 +282,9 @@ describe("шаг 5 сверка остатка", () => {
     assert.match(src, /payCustomerFilled/);
     assert.match(src, /sameCustomerId/);
     assert.match(src, /id: cid, page: 0/);
-    assert.match(src, /кассы нет, не сверяем/);
+    assert.match(src, /кассы нет \/ нет А/);
+    assert.match(src, /alfaPayIndexDate/);
+    assert.doesNotMatch(src, /payPending && \(Number\(first\.livePays\)/);
     assert.match(src, /диск: \$\{err\}/);
     assert.match(src, /peekAlfaLessonCommission/);
     assert.match(src, /lesson\/index/);
@@ -300,6 +302,9 @@ describe("шаг 5 сверка остатка", () => {
     assert.match(ui, /id: "no-id"/);
     assert.match(ui, /id: "no-role"/);
     assert.match(ui, /id: "no-sverka"/);
+    assert.match(ui, /headerStamped/);
+    assert.match(ui, /Касса не закрыта шагом 4/);
+    assert.doesNotMatch(ui, /if \(who === "лид"\)/);
     assert.doesNotMatch(ui, /Продажа товара вычитает из остатка/);
     assert.doesNotMatch(ui, /платежи − списания − товар/);
   });

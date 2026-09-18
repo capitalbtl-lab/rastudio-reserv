@@ -1219,6 +1219,7 @@ type AuditSegIn = {
   study?: number;
   funnel?: string;
   leadStatus?: number;
+  headerStamped?: number;
 };
 
 function rowMatched(r: AuditSegIn) {
@@ -1265,7 +1266,6 @@ type AuditSeg = { id: string; label: string; rec: string };
 function auditSeg(r: AuditSegIn): AuditSeg {
   const codes = r.codes || [];
   const extra = String(r.extra || "");
-  const who = auditRole(r);
   if (!r.seen) {
     return { id: "wait", label: "Не сверяли", rec: "Сверить всех текущих или на карточке «Перепроверить»." };
   }
@@ -1278,18 +1278,16 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   if (codes.includes("нет роли") || /нет роли на досье/.test(extra) || extra === "не разобрали") {
     return { id: "no-role", label: "Нет роли на досье", rec: "Роль не разобрали, шапку не зовём. Это не «касса меньше шапки»." };
   }
-  if (codes.includes("нет сверки") || /кассы нет, не сверяем|не в наборе шага 2, не сверяем|сверки нет/.test(extra)) {
+  if (codes.includes("нет сверки") || /кассы нет|нет А|не в наборе шага 2, не сверяем|сверки нет/.test(extra)) {
     return {
       id: "no-sverka",
       label: "Сверки нет",
-      rec: /кассы нет/.test(extra) ? "У лида нет живой кассы — шапку не сверяем." : "Не в наборе сверки. Шапку не зовём.",
+      rec: /нет А/.test(extra)
+        ? "Касса не закрыта шагом 4. Шапку не зовём."
+        : /кассы нет/.test(extra)
+          ? "У лида нет живой кассы — шапку не сверяем."
+          : "Не в наборе сверки. Шапку не зовём.",
     };
-  }
-  if (who === "лид") {
-    return { id: "lead", label: "Лид в Альфе", rec: "Пустая лента — нули. Формула 0 и шапка 0 — Совпало. Пульт на шаге 5 лидов не отсекает." };
-  }
-  if (who === "архив") {
-    return { id: "arch", label: "Архив в Альфе", rec: "Карточка в архиве. Как текущего не сверять. Либо вернуть в ученики в Alfa." };
   }
   if (auditFail(codes)) {
     return { id: "fail", label: "Нет ответа Alfa", rec: "Клиент есть, Alfa не ответила. «Перепроверить». Если снова тишина — обрыв или 429, не бан." };
@@ -1374,7 +1372,6 @@ function auditRole(r: AuditSegIn): "лид" | "клиент" | "архив" {
   const extra = String(r.extra || "");
   if (codes.includes("архив") || /Архив в Альфе/.test(extra) || r.alfaRole === "архив" || r.status === "архив" || Number(r.study) === 2) return "архив";
   if (codes.includes("лид") || /Лид в Альфе/.test(extra) || r.alfaRole === "лид" || Number(r.study) === 0 || String(r.funnel || "") === "1") return "лид";
-  if (r.seen && auditFail(codes)) return "лид";
   return "клиент";
 }
 
@@ -2060,13 +2057,14 @@ type AuditUiRow = {
   alfaWoOk?: boolean;
   woSum?: number;
   woN?: number;
+  headerStamped?: number;
 };
 
 function asAuditRow(
   r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number; cashPaysN?: number;
   cashRefundN?: number; cashCorrN?: number; cashGoodsN?: number; cashPaysSum?: number;
   cashRefundSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
-  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; alfaWoSum?: number; alfaWoN?: number; alfaWoOk?: boolean; woSum?: number; woN?: number },
+  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; alfaWoSum?: number; alfaWoN?: number; alfaWoOk?: boolean; woSum?: number; woN?: number; headerStamped?: number },
 ): AuditUiRow {
   const codes = h?.codes;
   return {
@@ -2101,6 +2099,7 @@ function asAuditRow(
     alfaWoOk: h?.alfaWoOk,
     woSum: h?.woSum,
     woN: h?.woN,
+    headerStamped: h?.headerStamped,
     alfaRole: (codes || []).includes("лид") ? "лид" : (codes || []).includes("архив") ? "архив" : r.alfaRole,
     status: r.status,
     study: r.study,
@@ -2313,7 +2312,7 @@ function AuditFillList({
                 </tr>
                 <tr>
                   <td>шапка / итог</td>
-                  <td>{rubAudit(row.cash)}</td>
+                  <td>{Number.isFinite(row.headerStamped as number) ? rubAudit(row.headerStamped) : "ещё не снимали"}</td>
                   <td>{row.seen ? (fail ? "нет ответа" : miss ? miss : Number.isFinite(row.alfaMoney as number) ? rubAudit(row.alfaMoney) : "ещё не снимали") : "ещё не снимали"}</td>
                 </tr>
               </tbody>
