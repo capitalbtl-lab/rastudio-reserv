@@ -2253,7 +2253,7 @@ function AuditFillList({
                 <tr>
                   <td>списания занятий</td>
                   <td>{row.seen ? `${row.woN ?? "—"} (${row.woSum != null && Number.isFinite(row.woSum) ? rubAudit(-Math.abs(Number(row.woSum))) : "не собрали"})` : "ещё не снимали"}</td>
-                  <td>не из pay</td>
+                  <td>{row.seen ? `${row.woN ?? "—"} (${row.woSum != null && Number.isFinite(row.woSum) ? rubAudit(-Math.abs(Number(row.woSum))) : "не собрали"})` : "ещё не снимали"}</td>
                 </tr>
                 <tr>
                   <td>корректировки</td>
