@@ -206,6 +206,8 @@ export const RECHECK_DAY_OPTS = [
   { days: 32 as const, label: "± месяц" },
   { days: 92 as const, label: "± три" },
   { days: 182 as const, label: "± шесть" },
+  { days: 365 as const, label: "за 1 год" },
+  { days: 730 as const, label: "за 2 года" },
   { days: 1095 as const, label: "за 3 года" },
   { days: 2555 as const, label: "за 7 лет" },
   { days: 4000 as const, label: "с начала · 2015" },

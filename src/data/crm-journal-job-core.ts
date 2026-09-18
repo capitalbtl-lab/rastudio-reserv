@@ -348,6 +348,9 @@ export function journalJobSnapshot() {
     itemsN: j.items.length,
     next: stop ? "" : nextName,
     workerSilent: stop ? false : historyWorkerSilent(j),
+    recheckDays: j.recheckDays,
+    dateFrom: j.dateFrom,
+    dateTo: j.dateTo,
   };
 }
 

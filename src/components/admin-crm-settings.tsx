@@ -4497,7 +4497,7 @@ export function AdminCrmSettings() {
                   </button>,
                   HINT.recheckOneGroups,
                   )}
-                  <RecheckDaysSelect value={groupsRecheckDays} disabled={busy || offline} onChange={setGroupsRecheckDays} />
+                  <RecheckDaysSelect value={journal?.job?.running ? clampRecheckDays(journal.job.recheckDays) : groupsRecheckDays} disabled={busy || offline} onChange={setGroupsRecheckDays} />
                   </BtnCluster>
                   {withHint(
                     <button
@@ -4760,7 +4760,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.recheckOnePeople,
                         )}
-                        <RecheckDaysSelect value={peopleRecheckDays} disabled={busy} onChange={setPeopleRecheckDays} />
+                        <RecheckDaysSelect value={journal?.job?.running ? clampRecheckDays(journal.job.recheckDays) : peopleRecheckDays} disabled={busy} onChange={setPeopleRecheckDays} />
                         </BtnCluster>
                         {withHint(
                         <button
@@ -4800,7 +4800,7 @@ export function AdminCrmSettings() {
                         busy={fillLoading?.kind === "students" && Boolean(fillLoading.customerId)}
                         loadingCid={fillLoading?.kind === "students" ? fillLoading.customerId : undefined}
                         years={<YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : peopleFromId} disabled={busy} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setPeopleFromId(id))} archiveOnly={peopleStudy === "2"} small tag="" />}
-                        windowSel={<RecheckDaysSelect value={peopleRecheckDays} disabled={busy} onChange={setPeopleRecheckDays} small />}
+                        windowSel={<RecheckDaysSelect value={journal?.job?.running ? clampRecheckDays(journal.job.recheckDays) : peopleRecheckDays} disabled={busy} onChange={setPeopleRecheckDays} small />}
                         onLoad={(row) => void loadPerson(row, "students", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "students", peopleStudy, true)}
                         onFullHistory={(row) => void loadPerson(row, "students", peopleStudy, false, "2015-01-01")}
@@ -4878,7 +4878,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.recheckOneMoney,
                         )}
-                        <RecheckDaysSelect value={moneyRecheckDays} disabled={busy} onChange={setMoneyRecheckDays} />
+                        <RecheckDaysSelect value={journal?.job?.running ? clampRecheckDays(journal.job.recheckDays) : moneyRecheckDays} disabled={busy} onChange={setMoneyRecheckDays} />
                         </BtnCluster>
                         {withHint(
                         <button
@@ -4901,7 +4901,7 @@ export function AdminCrmSettings() {
                         busy={offline || (fillLoading?.kind === "balance" && Boolean(fillLoading.customerId))}
                         loadingCid={fillLoading?.kind === "balance" ? fillLoading.customerId : undefined}
                         years={<YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : moneyFromId} disabled={busy || peopleStudy === "2"} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setMoneyFromId(id))} archiveOnly={peopleStudy === "2"} hint={HINT.yearsMoney} small />}
-                        windowSel={<RecheckDaysSelect value={moneyRecheckDays} disabled={busy} onChange={setMoneyRecheckDays} small />}
+                        windowSel={<RecheckDaysSelect value={journal?.job?.running ? clampRecheckDays(journal.job.recheckDays) : moneyRecheckDays} disabled={busy} onChange={setMoneyRecheckDays} small />}
                         onLoad={(row) => void loadPerson(row, "balance", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "balance", peopleStudy, true)}
                         onResetHistory={(row) => void resetPersonPay(row)}
@@ -4987,6 +4987,7 @@ export function AdminCrmSettings() {
                           </button>,
                           HINT.auditAll,
                         )}
+                        <RecheckDaysSelect value={journal?.job?.running ? clampRecheckDays(journal.job.recheckDays) : peopleRecheckDays} disabled={busy} onChange={setPeopleRecheckDays} />
                         {withHint(
                           <button
                             type="button"
