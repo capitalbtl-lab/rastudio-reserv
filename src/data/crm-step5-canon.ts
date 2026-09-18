@@ -1,4 +1,7 @@
-/** Канон шага 5, редакция 45. Кассу и журнал не качает.
+/** Канон шага 5, редакция 46. Кассу и журнал не качает.
+ * Пустая лента = нули: платежей 0, списаний 0, корректировок 0, товара 0.
+ * Формула 0 и шапка 0 — Совпало. «Кассы нет — не сверяем» снято.
+
  * Остаток = приходы + корректировки (±) + возвраты (вычитаются) − списания status=3 − товар.
  * Товар — расход, в шапку входит. Старое «товар не в остатке» снято.
  */
@@ -83,8 +86,6 @@ export function step5CanSverka(p: {
   inArchiveSet: boolean;
 }) {
   if (!p.hasDossier) return false;
-  if (!p.payFilled) return false;
-  if ((Number(p.livePays) || 0) < 1) return false;
   const rem = Number(p.removed);
   const st = Number(p.isStudy);
   if (rem === 1) return false;
@@ -100,7 +101,6 @@ export function step5SkipNote(p: {
   removed: unknown;
   inArchiveSet: boolean;
 }) {
-  if ((Number(p.livePays) || 0) < 1) return "кассы нет, не сверяем";
   if (Number(p.removed) === 1) return "не разобрали";
   const st = Number(p.isStudy);
   const rem = Number(p.removed);

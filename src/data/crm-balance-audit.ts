@@ -184,8 +184,8 @@ export async function diskAudit(cid: number, branchId: number) {
   const productRows = fair.filter((x) => isProductType(x.t));
   const cashLessons = lessonRows.reduce((s, x) => s + x.sum.n, 0);
   const cashProduct = productRows.reduce((s, x) => s + x.sum.n, 0);
-  const cashAllOk = fair.length > 0;
-  const cashAll = cashAllOk ? cashLessons + cashProduct : Number.NaN;
+  const cashAllOk = true;
+  const cashAll = cashLessons + cashProduct;
   const cashDays = fair.map((x) => x.day).filter(Boolean).sort();
   const cashDate = cashDays[cashDays.length - 1] || "";
   const ids = cal.map((l) => Number((l as { lessonId?: number }).lessonId) || 0).filter((n) => n > 0);
@@ -590,45 +590,6 @@ export async function auditOne(cid: number, branchId: number) {
         repaired: false,
         at,
         extra: "касса ещё пишется",
-      } satisfies AuditHit,
-    };
-  }
-
-  const cashOnDisk = (Number(first.livePays) || 0) >= 1 || (Number(first.liveFair) || 0) >= 1;
-  if (!first.paysComplete && !cashOnDisk) {
-    return {
-      hit: {
-        cid: id,
-        branchId: branch,
-        name: first.name,
-        clients: first.clients,
-        alfa: 0,
-        cash: first.cash,
-        woSum: first.woCal,
-        woN: first.woN,
-        codes: ["snap"],
-        repaired: false,
-        at,
-        extra: "касса не закрыта шагом 4",
-      } satisfies AuditHit,
-    };
-  }
-
-  if ((Number(first.liveFair) || 0) < 1) {
-    return {
-      hit: {
-        cid: id,
-        branchId: branch,
-        name: first.name,
-        clients: first.clients,
-        alfa: 0,
-        cash: first.cash,
-        woSum: first.woCal,
-        woN: first.woN,
-        codes: first.study === 0 ? (["лид"] as AuditCode[]) : (["snap"] as AuditCode[]),
-        repaired: false,
-        at,
-        extra: "кассы нет, не сверяем",
       } satisfies AuditHit,
     };
   }
