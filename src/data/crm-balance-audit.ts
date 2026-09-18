@@ -330,18 +330,9 @@ async function alfaShow(branch: number, cid: number, study = Number.NaN) {
     let retried = false;
     for (;;) {
       try {
-        const bodies: Array<Record<string, unknown>> = [
-          { id: cid, page: 0, is_study: 2 },
-          { id: cid, page: 0, is_study: 0 },
-          { id: cid, page: 0, is_study: 1 },
-        ];
-        let hit: Record<string, unknown> | undefined;
-        for (const body of bodies) {
-          const json = await request(`/v2api/${bid}/customer/index`, body, t);
-          const items = crmUnwrapIndex(json).items;
-          hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
-          if (hit) break;
-        }
+        const json = await request(`/v2api/${bid}/customer/index`, { id: cid, page: 0, is_study: 2 }, t);
+        const items = crmUnwrapIndex(json).items;
+        const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
         if (hit) {
           found = hit;
           used = bid;
@@ -371,6 +362,45 @@ async function alfaShow(branch: number, cid: number, study = Number.NaN) {
       }
     }
     if (found || authStop || rejectCid || stopped) break;
+  }
+  if (!found && !authStop && !rejectCid && !stopped) {
+    const rest: Array<0 | 1> = Number(study) === 1 ? [1, 0] : [0, 1];
+    outer: for (const st of rest) {
+      for (const bid of branches) {
+        if (step5SessionStopped()) {
+          stopped = true;
+          break outer;
+        }
+        try {
+          const json = await request(`/v2api/${bid}/customer/index`, { id: cid, page: 0, is_study: st }, t);
+          const items = crmUnwrapIndex(json).items;
+          const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
+          if (hit) {
+            found = hit;
+            used = bid;
+            switched = bid !== (Number(branch) || 1);
+            break outer;
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/401|403/.test(msg)) {
+            authStop = true;
+            break outer;
+          }
+          if (/400|422/.test(msg)) {
+            rejectCid = true;
+            break outer;
+          }
+          if (/429/.test(msg)) {
+            const go = await step5WaitOrStop(120000);
+            if (!go) {
+              stopped = true;
+              break outer;
+            }
+          }
+        }
+      }
+    }
   }
   if (!found) {
     return {
