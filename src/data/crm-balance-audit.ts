@@ -293,7 +293,7 @@ async function peekAlfaPaySplit(
   };
 }
 
-async function alfaShow(branch: number, cid: number) {
+async function alfaShow(branch: number, cid: number, study = Number.NaN) {
   const { token, request } = await import("./alfacrm");
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const t = await token();
@@ -302,6 +302,7 @@ async function alfaShow(branch: number, cid: number) {
       ok: false as const,
       alfa: 0,
       headerOk: false,
+      miss: "" as const,
       lessonCount: null as number | null,
       branch: Number(branch) || 1,
       switched: false,
@@ -329,10 +330,16 @@ async function alfaShow(branch: number, cid: number) {
     let retried = false;
     for (;;) {
       try {
-        const json = await request(`/v2api/${bid}/customer/index`, { id: cid, page: 0 }, t);
-        const items = crmUnwrapIndex(json).items;
-        const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
-        if (hit && parseAlfaHeader(hit).ok) {
+        const bodies: Array<Record<string, unknown>> = [{ id: cid, page: 0, is_study: 2 }];
+        if (Number(study) === 0) bodies.push({ id: cid, page: 0, is_study: 0 });
+        let hit: Record<string, unknown> | undefined;
+        for (const body of bodies) {
+          const json = await request(`/v2api/${bid}/customer/index`, body, t);
+          const items = crmUnwrapIndex(json).items;
+          hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
+          if (hit) break;
+        }
+        if (hit) {
           found = hit;
           used = bid;
           switched = bid !== (Number(branch) || 1);
@@ -367,6 +374,7 @@ async function alfaShow(branch: number, cid: number) {
       ok: false as const,
       alfa: 0,
       headerOk: false,
+      miss: "id" as const,
       lessonCount: null as number | null,
       branch: used,
       switched,
@@ -384,6 +392,7 @@ async function alfaShow(branch: number, cid: number) {
     ok: true as const,
     alfa: parsed.header,
     headerOk: parsed.ok,
+    miss: parsed.ok ? ("" as const) : ("balance" as const),
     lessonCount: alfaLessonCountOf(found),
     branch: used,
     switched,
@@ -620,7 +629,7 @@ export async function auditOne(cid: number, branchId: number) {
     };
   }
 
-  const shown = await alfaShow(branch, id);
+  const shown = await alfaShow(branch, id, first.study);
   if (shown.stopped) {
     return {
       hit: {
@@ -705,7 +714,13 @@ export async function auditOne(cid: number, branchId: number) {
     ? `Клиенты ${rub(Number.isFinite(first.formulaSite) ? first.formulaSite : 0)} · Alfa ${rub(shown.alfa)} · касса ${rub(Number.isFinite(first.formulaSite) ? first.formulaSite : first.cash)} · ${judged.codes.join(", ")}`
     : shown.rejectCid
       ? "400/422, шапки нет"
-      : skip || "нет ответа Alfa";
+      : shown.authStop
+        ? "нет ответа Alfa"
+        : shown.miss === "balance"
+          ? "нет balance"
+          : shown.miss === "id"
+            ? "id не найден"
+            : skip || "нет ответа Alfa";
   if (judged.c && judged.dCash > 1) extra += "; приход больше шапки на списания, так бывает";
   return {
     hit: {
