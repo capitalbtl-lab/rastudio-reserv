@@ -132,24 +132,22 @@ export function classifyAudit(p: {
     }
     if (!p.paysComplete) codes.push("snap");
     if (!moneyClose(p.cash, p.alfa)) {
-      if (goodsNet && moneyClose(p.cash - goodsNet, p.alfa)) codes.push("goods");
-      else if (refundGoods && moneyClose(p.cash + refundGoods, p.alfa)) codes.push("refund-goods");
-      else if (p.cash > p.alfa + 1) codes.push("wo");
+      if (goodsNet) codes.push("goods");
+      if (refundGoods) codes.push("refund-goods");
+      if (p.cash > p.alfa + 1) codes.push("wo");
       if (p.cash < p.alfa - 1) codes.push("pays");
       return [...new Set(codes.filter((c) => c !== "ok"))];
     }
     return [...new Set(["ok", ...codes.filter((c) => c !== "pays" && c !== "wo")])];
   }
   if (!p.paysComplete) codes.push("snap");
-  if (goodsNet && moneyClose(p.cash - goodsNet, p.alfa)) codes.push("goods");
-  else if (refundGoods && moneyClose(p.cash + refundGoods, p.alfa)) codes.push("refund-goods");
-  else {
-    if (p.cash > p.alfa + 1) {
-      codes.push("lessons");
-      codes.push("wo");
-    }
-    if (p.cash < p.alfa - 1) codes.push("pays");
+  if (goodsNet) codes.push("goods");
+  if (refundGoods) codes.push("refund-goods");
+  if (p.cash > p.alfa + 1) {
+    codes.push("lessons");
+    codes.push("wo");
   }
+  if (p.cash < p.alfa - 1) codes.push("pays");
   if (p.liveCtt && moneyClose(p.clients, p.cash) && !moneyClose(p.alfa, p.cash)) codes.push("ctt");
   if (
     p.paysComplete &&
