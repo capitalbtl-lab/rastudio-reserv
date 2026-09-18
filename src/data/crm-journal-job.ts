@@ -191,6 +191,7 @@ export type StartJournalJobOpts = {
   study?: "1" | "2";
   recheck?: boolean;
   dateFrom?: string;
+  dateTo?: string;
   recheckDays?: number;
   grain?: Grain;
   school?: string;
@@ -465,7 +466,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   const study = opts.study === "2" ? "2" : "1";
   const skipLeads = Boolean(opts.skipLeads) || /(?:^|&)leads=0(?:&|$)/.test(String(opts.name || ""));
   let recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
-  const freezeIce = recheck && mode !== "roster-recheck";
+  const freezeIce = Boolean(recheck) || Boolean(opts.dateFrom && opts.recheckDays);
   let items = buildItems({ ...opts, kind, recheck, skipLeads });
   let wave: RecheckWave = "";
   let follow: JournalJobItem[] = [];
@@ -527,7 +528,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   }
   const first = items[0];
   const days = clampRecheckDays(opts.recheckDays);
-  const ice = iceWindowOrNow(freezeIce, opts.dateFrom, freezeIce ? undefined : "", days);
+  const ice = iceWindowOrNow(freezeIce, opts.dateFrom, String(opts.dateTo || ""), days);
   const job: JournalJob = {
     ...emptyJournalJob(),
     id: opts.fromPipe && opts.id ? String(opts.id) : `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -668,6 +669,7 @@ function continueAutoPipe(job: JournalJob) {
     id: job.id,
     study: job.study,
     dateFrom: job.dateFrom,
+    dateTo: job.dateTo,
     recheckDays: days,
     pipe: rest.slice(1),
     src: "plan" as const,
