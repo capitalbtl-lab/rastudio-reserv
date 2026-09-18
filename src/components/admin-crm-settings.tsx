@@ -1241,7 +1241,7 @@ const AUDIT_WORD: Record<string, string> = {
   status: "Урок ещё не проведён",
   dup: "Дубли занятий",
   branch: "Другой филиал",
-  goods: "Товар в кассе",
+  goods: "Товар в ленте, не в остатке",
   "refund-goods": "Возврат товара",
   corr: "Нет корректировки",
   "corr-goods": "Корректировка как товар",
@@ -1278,9 +1278,9 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   const header = moneyCloseUi(r.clients, r.alfaMoney);
   const cashHi = (Number(r.cash) || 0) > (Number(r.alfaMoney) || 0) + 1;
   const cashLo = (Number(r.cash) || 0) < (Number(r.alfaMoney) || 0) - 1;
-  const goods = codes.includes("goods") || codes.includes("refund-goods");
+  const goods = codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods");
   if (header && goods) {
-    return { id: "goods", label: "Товар в кассе", rec: "Продажа товара списывается с остатка, как в сверке АльфаСРМ. Шаг 4: перепроверить кассу. Если три цифры сошлись — ничего не чинить." };
+    return { id: "goods", label: "Товар в ленте, не в остатке", rec: "Товар есть в оплатах. В шапку и формулу остатка не входит — как сверка взаиморасчётов Alfa. Не чинить шапку товаром. Если цифры не сошлись — смотреть списания." };
   }
   if (header && cashHi) {
     if (codes.includes("lessons") || codes.includes("wo") || codes.includes("status")) {
@@ -1317,7 +1317,7 @@ const AUDIT_REASON_CHIPS: { id: string; label: string }[] = [
   { id: "ok", label: "Совпало" },
   { id: "cash-hi", label: "Касса больше шапки" },
   { id: "cash-lo", label: "Касса меньше шапки" },
-  { id: "goods", label: "Товар в кассе" },
+  { id: "goods", label: "Товар в ленте, не в остатке" },
   { id: "snap", label: "Касса не дочитана" },
   { id: "show", label: "Показ в Клиентах" },
   { id: "ctt", label: "Спутали с абонементом" },

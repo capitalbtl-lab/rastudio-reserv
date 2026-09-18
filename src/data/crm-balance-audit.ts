@@ -189,6 +189,7 @@ export async function diskAudit(cid: number, branchId: number) {
   const sync = customerSyncOf(id);
   const jready = lessonsJournalReady(sync);
   const wo = writeoffCanon(cal as { lessonId?: unknown; status?: unknown; amount?: unknown }[], lessonsDisk, jready);
+  // Канон 5: товар в ленте pay есть, в остаток (формула / шапка) не входит.
   const formulaSite = cashAllOk && wo.ok ? cashLessons - wo.n : Number.NaN;
   const without6 = lessonRows.filter((x) => x.t !== 6);
   const withoutRefund = lessonRows.filter((x) => x.t !== 5 && x.t !== 3);
@@ -480,9 +481,10 @@ function codesFromCanon(p: {
   });
   const codes: AuditCode[] = [];
   if (r.c) codes.push("ok");
-  if (r.main) codes.push(r.main as AuditCode);
+  const asCode = (x: string): AuditCode => (x === "product" ? "goods" : (x as AuditCode));
+  if (r.main) codes.push(asCode(r.main));
   for (const t of r.tail) {
-    if (t && t !== r.main) codes.push(t as AuditCode);
+    if (t && t !== r.main) codes.push(asCode(t));
   }
   return { codes, c: r.c, main: r.main, dCash: Number(p.cashLessons) - Number(p.header) };
 }

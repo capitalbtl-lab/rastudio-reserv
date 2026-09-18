@@ -202,7 +202,7 @@ export function step5Reasons(p: {
   const holeN = Number(p.holeN) || 0;
   const flags: { k: Step5Reason; on: boolean }[] = [
     { k: "header-stale", on: cashNewer },
-    { k: "product", on: Math.abs(dAll) <= 1 && Math.abs(dSite) > 1 },
+    { k: "product", on: Number.isFinite(cashA) && Number.isFinite(cashL) && Math.abs(cashA - cashL) > 1 },
     { k: "orphan-type", on: Boolean(p.orphan) },
     { k: "alien-branch", on: Boolean(p.alien) },
     { k: "correct-only", on: Math.abs(dSite) > 1 && Number.isFinite(p.dSiteWithout6) && Math.abs(Number(p.dSiteWithout6)) <= 1 },
@@ -218,7 +218,9 @@ export function step5Reasons(p: {
     const i = on.indexOf("mismatch");
     if (i >= 0) on.splice(i, 1);
   }
-  return { main: on[0] || "", tail: on.slice(1), c };
+  const goods = on.includes("product");
+  const rest = on.filter((k) => k !== "product");
+  return { main: rest[0] || "", tail: [...(goods ? (["product"] as Step5Reason[]) : []), ...rest.slice(1)], c };
 }
 
 export function step5ChipMoreLess(main: Step5Reason, dSite: number) {
