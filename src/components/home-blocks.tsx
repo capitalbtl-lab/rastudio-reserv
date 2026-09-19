@@ -358,7 +358,7 @@ function HomeSlotFrame({
           {style?.hidden ? <span className="pr-2 opacity-80">скрыт</span> : null}
         </div>
       </div>
-      {children}
+      <div data-ve-body={id}>{children}</div>
       {selected ? (
       <button
         type="button"
@@ -369,14 +369,16 @@ function HomeSlotFrame({
           e.stopPropagation();
           const el = e.currentTarget;
           el.setPointerCapture(e.pointerId);
+          const body = el.parentElement?.querySelector("[data-ve-body]") as HTMLElement | null;
+          const natural = Math.round(body?.getBoundingClientRect().height || 160);
+          const startExtra = Math.max(0, (style?.h || 0) - natural);
           const startY = e.clientY;
-          const box = (el.parentElement as HTMLElement | null)?.getBoundingClientRect();
-          const start = style?.h || Math.round(box?.height || 160);
           const base = ctx?.doc;
           if (!base || !ctx) return;
           let last = base;
           const move = (ev: PointerEvent) => {
-            last = patchHomeStyle(base, id, { h: start + (ev.clientY - startY) });
+            const extra = Math.max(0, startExtra + (ev.clientY - startY));
+            last = patchHomeStyle(base, id, { h: extra ? natural + extra : 0 });
             ctx.setDoc(last, false);
           };
           const up = () => {

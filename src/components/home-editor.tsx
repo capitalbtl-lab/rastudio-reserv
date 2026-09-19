@@ -800,30 +800,33 @@ function HeightField({
   setDoc: (next: HomeLayoutDoc, persist?: boolean) => void;
   muted: string;
 }) {
-  const [live, setLive] = useState(0);
+  const [natural, setNatural] = useState(0);
   useEffect(() => {
-    const el = document.querySelector(`[data-ve-frame="${CSS.escape(id)}"]`) as HTMLElement | null;
+    const el = document.querySelector(`[data-ve-body="${CSS.escape(id)}"]`) as HTMLElement | null;
     if (!el) return;
-    const read = () => setLive(Math.round(el.getBoundingClientRect().height));
+    const read = () => setNatural(Math.round(el.getBoundingClientRect().height));
     read();
     const ro = new ResizeObserver(read);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [id, style.h, doc.order]);
-  const value = style.h || live || 80;
-  const max = Math.max(900, value);
+  }, [id, doc.order, doc.texts, doc.media]);
+  const extra = Math.max(0, (style.h || 0) - natural);
+  const shown = natural + extra;
   return (
     <>
       <p className={cn("mt-5 text-[0.68rem] font-semibold uppercase tracking-[0.14em]", muted)}>Высота секции</p>
       <input
         type="range"
-        min={80}
-        max={max}
-        value={value}
+        min={0}
+        max={600}
+        value={extra}
         className="mt-2 w-full"
-        onChange={(e) => setDoc(patchHomeStyle(doc, id, { h: Number(e.target.value) }))}
+        onChange={(e) => {
+          const add = Number(e.target.value);
+          setDoc(patchHomeStyle(doc, id, { h: add ? natural + add : 0 }));
+        }}
       />
-      <p className={cn("text-right text-[0.7rem]", muted)}>{value} px</p>
+      <p className={cn("text-right text-[0.7rem]", muted)}>{shown ? `${shown} px` : "…"}</p>
     </>
   );
 }

@@ -147,7 +147,7 @@ describe("библиотека и документ страницы", () => {
     assert.match(editor, /courseId/);
     assert.match(editor, /HeightField/);
     const blocks = readFileSync(new URL("../components/home-blocks.tsx", import.meta.url), "utf8");
-    assert.match(blocks, /data-ve-frame/);
+    assert.match(blocks, /data-ve-body/);
     assert.match(editor, /кегль/);
     const css = readFileSync(new URL("../components/home-editor.css", import.meta.url), "utf8");
     assert.match(css, /ve-textbar/);
