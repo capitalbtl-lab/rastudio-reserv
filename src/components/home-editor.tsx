@@ -85,23 +85,17 @@ export function HomeEditorProvider({
     };
   }, [editing, device]);
 
-  const persist = useCallback((next: HomeLayoutDoc, now = false) => {
+  const persist = useCallback((next: HomeLayoutDoc) => {
     const token = debugToken();
     if (!token) return;
     window.clearTimeout(timer.current);
-    const write = () => {
-      setDirty("сохраняем…");
+    setDirty("сохраняем…");
+    timer.current = window.setTimeout(() => {
       void saveHomeLayoutFn({ data: { token, layout: next } }).then((res) => {
-        setDirty(res.ok ? "на сайте" : res.error || "ошибка");
+        setDirty(res.ok ? "сохранено" : res.error || "ошибка");
         debugEmit("layout", { ok: res.ok, error: res.ok ? "" : res.error });
       });
-    };
-    if (now) {
-      write();
-      return;
-    }
-    setDirty("есть правки");
-    timer.current = window.setTimeout(write, 280);
+    }, 280);
   }, []);
 
   const setDoc = useCallback(
@@ -133,10 +127,6 @@ export function HomeEditorProvider({
     const next = hist.current[histAt.current];
     setDocState(next);
     persist(next);
-  }, [persist]);
-
-  const publish = useCallback(() => {
-    persist(hist.current[histAt.current] || emptyHomeLayout(), true);
   }, [persist]);
 
   useEffect(() => {
@@ -185,7 +175,6 @@ export function HomeEditorProvider({
     canUndo: histAt.current > 0,
     canRedo: histAt.current < hist.current.length - 1,
     dirty,
-    publish,
   };
 
   return <HomeEditorCtx.Provider value={value}>{children}</HomeEditorCtx.Provider>;
@@ -196,7 +185,7 @@ export function HomeEditorChrome() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetTab, setSheetTab] = useState<"layers" | "block" | "studio">("layers");
   if (!ctx?.editing) return null;
-  const { doc, selected, select, setDoc, device, setDevice, undo, redo, canUndo, canRedo, dirty, publish } = ctx;
+  const { doc, selected, select, setDoc, device, setDevice, undo, redo, canUndo, canRedo, dirty } = ctx;
   const style = selected ? doc.styles[selected] || {} : {};
 
   function openSheet(tab: "layers" | "block" | "studio") {
@@ -206,7 +195,7 @@ export function HomeEditorChrome() {
 
   return (
     <>
-      <div className="ve-ui relative z-40">
+      <div className="ve-ui sticky top-[3.75rem] z-40 sm:top-[4.75rem] md:top-[5.25rem]">
         <div className="flex h-12 items-center gap-1.5 overflow-x-auto bg-header px-2 text-header-fg shadow-[0_12px_28px_-16px_rgba(0,0,0,.5)] sm:gap-2 sm:px-3">
           <p className="mr-1 hidden shrink-0 text-sm font-semibold lg:block">Редактор главной</p>
           <div className="flex shrink-0 rounded-full bg-white/10 p-0.5">
@@ -236,13 +225,6 @@ export function HomeEditorChrome() {
           </button>
           <span className="ml-auto hidden shrink-0 text-[0.72rem] text-header-fg/55 sm:inline">{dirty}</span>
           <span className="ml-auto sm:hidden" />
-          <button
-            type="button"
-            className="h-8 shrink-0 rounded-full bg-white px-3 text-[0.72rem] font-semibold text-primary"
-            onClick={() => publish()}
-          >
-            {dirty === "на сайте" ? "На сайте" : "Готово"}
-          </button>
           <button
             type="button"
             className="h-8 shrink-0 rounded-full bg-white/10 px-3 text-[0.72rem] font-semibold hover:bg-white/15 lg:hidden"
@@ -283,7 +265,7 @@ export function HomeEditorChrome() {
           />
         </div>
         <p className="mt-6 text-[0.72rem] leading-relaxed text-header-fg/40">
-          Изменения пишутся в JSON главной. Готово — сразу на сайте, без ожидания.
+          Изменения сразу на сайте, как публикация в Тильде. Ctrl+Z — шаг назад.
         </p>
       </aside>
 

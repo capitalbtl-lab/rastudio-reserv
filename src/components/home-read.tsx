@@ -19,7 +19,6 @@ export type HomeEditorCtxValue = {
   canUndo: boolean;
   canRedo: boolean;
   dirty: string;
-  publish: () => void;
 };
 
 export const HomeEditorCtx = createContext<HomeEditorCtxValue | null>(null);
@@ -54,7 +53,6 @@ export function HomeReadProvider({
       canUndo: false,
       canRedo: false,
       dirty: "готово",
-      publish: noop,
     }),
     [doc],
   );
