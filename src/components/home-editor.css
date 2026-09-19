@@ -215,7 +215,9 @@ html.home-editing [data-ve-frame] {
 
 .ve-nav-course::before,
 .ve-fly .pl-8 > button::before,
-.ve-topbar .pl-8 > button::before {
+.ve-fly .pl-8 > a::before,
+.ve-topbar .pl-8 > button::before,
+.ve-topbar .pl-8 > a::before {
   content: "";
   flex-shrink: 0;
   width: 0.35rem;
@@ -252,7 +254,9 @@ html.home-editing [data-ve-frame] {
 }
 
 .ve-fly .pl-8 > button,
-.ve-topbar .pl-8 > button {
+.ve-fly .pl-8 > a,
+.ve-topbar .pl-8 > button,
+.ve-topbar .pl-8 > a {
   display: flex;
   align-items: flex-start;
   min-height: 0;
@@ -266,12 +270,16 @@ html.home-editing [data-ve-frame] {
 }
 
 .ve-fly .pl-8 > button:hover,
-.ve-topbar .pl-8 > button:hover {
+.ve-fly .pl-8 > a:hover,
+.ve-topbar .pl-8 > button:hover,
+.ve-topbar .pl-8 > a:hover {
   background: rgb(15 23 42 / 0.05);
 }
 
 .ve-fly .pl-8 > button.bg-primary,
-.ve-topbar .pl-8 > button.bg-primary {
+.ve-fly .pl-8 > a.bg-primary,
+.ve-topbar .pl-8 > button.bg-primary,
+.ve-topbar .pl-8 > a.bg-primary {
   background: var(--primary, #2563eb);
   color: #fff;
 }

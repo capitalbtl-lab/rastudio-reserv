@@ -100,7 +100,8 @@ describe("макет главной", () => {
     assert.match(editor, /Панель/);
     assert.match(editor, /Опубликовать/);
     assert.match(editor, /Предпросмотр/);
-    assert.match(editor, /Сохранить/);
+    assert.match(editor, /href=\{editUrl\(p\.path\)\}/);
+    assert.match(editor, /if \(p\.kind === "school"\) setOpen/);
     assert.doesNotMatch(editor, /max-w-\[390px\]/);
     const read = readFileSync(new URL("../components/home-read.tsx", import.meta.url), "utf8");
     assert.match(read, /contentEditable/);

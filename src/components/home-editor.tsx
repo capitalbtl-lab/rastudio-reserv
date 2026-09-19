@@ -80,7 +80,9 @@ function currentPath() {
 }
 
 function editUrl(path: string) {
-  return path === "/" ? "/?edit=1" : `${path}?edit=1`;
+  const raw = String(path || "/").trim() || "/";
+  const p = (raw.startsWith("/") ? raw : `/${raw}`).replace(/\/+$/, "") || "/";
+  return p === "/" ? "/?edit=1" : `${p}?edit=1`;
 }
 
 function revealBlock(id: string) {
@@ -560,13 +562,18 @@ function PagesTree({ pages, path, goPage }: { pages: EditorPageItem[]; path: str
     if (hit) setOpen((m) => ({ ...m, [hit.path]: true }));
   }, [path, tree]);
   const row = (p: EditorPageItem, cls?: string) => (
-    <button
-      type="button"
+    <a
+      href={editUrl(p.path)}
       className={cn("flex min-h-9 w-full items-center rounded-xl px-2 text-left text-[0.8rem] font-medium", p.path === path ? "bg-primary text-primary-foreground" : "hover:bg-black/5", cls)}
-      onClick={() => goPage(p.path)}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        if (p.kind === "school") setOpen((m) => ({ ...m, [p.path]: true }));
+        if (p.path !== path) goPage(p.path);
+      }}
     >
       {p.title}
-    </button>
+    </a>
   );
   const cap = (label: string) => <p className="px-2 pb-0.5 pt-2 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-black/40">{label}</p>;
   return (
