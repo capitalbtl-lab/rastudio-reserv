@@ -1,9 +1,16 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { checkPassword } from "./admin-settings.ts";
 
-type EditorAuth = { salt: string; loginHash: string; passwordHash?: string; updatedAt: string };
+type EditorAuth = { seed: number; salt: string; loginHash: string; passwordHash: string; updatedAt: string };
+
+const BOOT: EditorAuth = {
+  seed: 1,
+  salt: "9e559d1c595ebb35b3cb779d27f288e8",
+  loginHash: "609fbcb4608a5c665926afc13c9e1ab3ce8caca4d6c12763412d31e8d7e7781f",
+  passwordHash: "92b4aa8225b841041b53eed5d2a331c0e6d42e0f7348c674e72b12b61228174e",
+  updatedAt: "2026-09-19T12:43:00.000Z",
+};
 
 function fileOf() {
   return join(process.cwd(), "storage", "editor-auth.json");
@@ -55,26 +62,25 @@ export function loadEditorAuth(): EditorAuth {
   } catch {
     raw = {};
   }
-  const salt = raw.salt || randomBytes(16).toString("hex");
-  const loginHash = raw.loginHash || hash(defaultEditorLogin(), salt);
-  const envPass = readDotEnv("EDITOR_PASSWORD");
-  const next: EditorAuth = {
-    salt,
-    loginHash,
-    passwordHash: raw.passwordHash || (envPass ? hash(envPass, salt) : undefined),
-    updatedAt: raw.updatedAt || new Date().toISOString(),
-  };
-  if (!raw.salt || !raw.loginHash) {
+  if (raw.seed !== BOOT.seed || !raw.passwordHash || !raw.loginHash || !raw.salt) {
     mkdirSync(join(process.cwd(), "storage"), { recursive: true });
-    writeFileSync(fileOf(), JSON.stringify(next, null, 2), "utf8");
+    writeFileSync(fileOf(), JSON.stringify(BOOT, null, 2), "utf8");
+    return BOOT;
   }
-  return next;
+  return {
+    seed: raw.seed,
+    salt: raw.salt,
+    loginHash: raw.loginHash,
+    passwordHash: raw.passwordHash,
+    updatedAt: raw.updatedAt || BOOT.updatedAt,
+  };
 }
 
 export function checkEditorLogin(login: string, password: string) {
   const auth = loadEditorAuth();
   if (!normLogin(login) || !String(password || "")) return false;
   if (!equal(hash(normLogin(login), auth.salt), auth.loginHash)) return false;
-  if (auth.passwordHash) return equal(hash(String(password), auth.salt), auth.passwordHash);
-  return checkPassword(password);
+  const envPass = readDotEnv("EDITOR_PASSWORD");
+  if (envPass) return equal(hash(String(password), auth.salt), hash(envPass, auth.salt));
+  return equal(hash(String(password), auth.salt), auth.passwordHash);
 }
