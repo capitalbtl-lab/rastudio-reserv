@@ -4,7 +4,7 @@ import { matchTariffs, tariffFitsSlot } from "./crm-tariffs";
 import { guessTariffLinks } from "./tariff-map";
 import { UNMAPPED_SCHOOL } from "./group-status";
 import { tariffRowLive, tariffRowCustomerId, tariffTodayIso, isGenericTariffName } from "./crm-tariff-row";
-import { cgiRecordLive } from "./crm-membership";
+import { uniqueBranches } from "./crm-ledger-core";
 
 export { cgiCustomerId, cgiRecordLive } from "./crm-membership";
 export { tariffDateToIso, tariffRowLive, tariffRowHasTemplate, tariffRowCustomerId, cttSelectLabel, isGenericTariffName } from "./crm-tariff-row";
@@ -752,7 +752,6 @@ export async function pullCustomerTariffs(branchId: number, customerId: number, 
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const { loadTariffs } = await import("./crm-tariffs");
   const { loadSubjects } = await import("./crm-subjects");
-  const { uniqueBranches } = await import("./crm-ledger-core");
   const t = await token();
   const catalog = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price, subjectIds: x.subjectIds }));
   const subjects = loadSubjects().map((s) => ({ id: s.id, name: s.name }));
@@ -797,7 +796,6 @@ export async function pullCustomerAccount(branchId: number, customerId: number) 
   const cid = Number(customerId) || 0;
   if (!cid) return null;
   const { request, token } = await import("./alfacrm");
-  const { uniqueBranches } = await import("./crm-ledger-core");
   const { applyCrmCustomer, upsertDossier } = await import("./dossiers");
   const t = await token();
   let best = { paid_count: 0, paid: 0, paid_till: "", balance: 0 };

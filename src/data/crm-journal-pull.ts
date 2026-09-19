@@ -13,7 +13,7 @@ import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteof
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra, lessonsStampShort, lessonsStampExtra, stampLessonSetGap, waitLockStudentAlfa, unlockStudentAlfa, studentCensusRange, nextLessonWindowDays } from "./crm-customer-sync";
 import { payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, paysOf } from "./crm-pay";
 import { balanceOf } from "./crm-pay-core";
-import { writeoffSumOf } from "./crm-ledger-core";
+import { writeoffSumOf, ALFA_BRANCH_IDS } from "./crm-ledger-core";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, chunkOutsideLessons, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, parseArchiveUiFilters, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems, historyWorkerBeat } from "./crm-journal-job-core";
@@ -2049,7 +2049,6 @@ export async function journalPull(opts: {
   if (kind === "archives") {
     const { token, request } = await import("./alfacrm");
     const { crmUnwrapIndex } = await import("./crm-leads-stages");
-    const { ALFA_BRANCH_IDS } = await import("./crm-ledger-core");
     const { CRM_BRANCH } = await import("./ids");
     const t = await token().catch(() => "");
     if (!t) {

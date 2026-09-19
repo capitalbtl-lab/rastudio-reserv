@@ -35,7 +35,7 @@ import { beatsOf, lessonRestLabel, pupilNameOk, lessonRosterThin } from "./crm-s
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar, upsertCustomerCalendar, collectCustomerJournal, fanOutLessonWriteoffs } from "./group-cards";
 import { stampJournal, clientLessonFromJournal } from "./crm-journal-core";
-import { packLessonPupils, storedWriteoff } from "./crm-ledger-core";
+import { packLessonPupils, storedWriteoff, writeoffSumOf } from "./crm-ledger-core";
 import { wantAlfaPull, loadAlfaLink, saveAlfaLink, alfaLinkOf } from "./crm-alfa-link";
 import { scheduleVoiceTurn } from "./schedule-voice";
 import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, saveSiteTree, slotTreeKey } from "./site-tree";
@@ -1624,7 +1624,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
       await Promise.all([inboundCustomerPays(request, t, branch, customerId), inboundCustomerComms(request, t, branch, customerId)]);
       const rows = (customer.tariffs || []).filter((t) => !t.archived && Number(t.id) > 0);
       const cttRest = rows.reduce((n, t) => n + (Number(t.rest) || 0), 0);
-      const { writeoffSumOf } = await import("./crm-ledger-core");
       const { loadCustomerCalendar } = await import("./group-cards");
       customer.balance = customerBalance(
         customerId,

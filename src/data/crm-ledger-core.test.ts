@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   ledgerMoney,
   lessonWriteoffAmount,
@@ -136,5 +137,21 @@ describe("журнал оплат и списаний", () => {
     const other = { lessonId: 51, date: "02.09.2026", from: "10:00", status: 3, amount: 200 };
     assert.equal(writeoffSumOf([a, twinId, shadow, other]), 550);
     assert.equal(writeoffSumOf([a, twinId, shadow, other], 7), 550);
+  });
+
+  it("касса и журнал не ищут модуль кассы живым import — иначе синяя падает", () => {
+    const files = [
+      new URL("./pupil-tariffs.ts", import.meta.url),
+      new URL("./crm-journal-pull.ts", import.meta.url),
+      new URL("./crm-balance-audit.ts", import.meta.url),
+      new URL("./admin-schedule.ts", import.meta.url),
+    ];
+    for (const f of files) {
+      const src = readFileSync(f, "utf8");
+      assert.doesNotMatch(src, /await import\(\s*["']\.\/crm-ledger-core["']\s*\)/);
+    }
+    const hook = readFileSync(new URL("../../scripts/ts-ext-hook.mjs", import.meta.url), "utf8");
+    assert.match(hook, /noJs\}\.ts/);
+    assert.doesNotMatch(hook, /\.js\|mjs\|cjs\|json\)\$\/i\.test\(specifier\)/);
   });
 });
