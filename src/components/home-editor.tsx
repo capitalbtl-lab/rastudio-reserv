@@ -696,16 +696,7 @@ function InspectorFields({
         />
       </label>
       <CourseField id={selected} doc={doc} setDoc={setDoc} />
-      <p className={cn("mt-5 text-[0.68rem] font-semibold uppercase tracking-[0.14em]", muted)}>Высота секции</p>
-      <input
-        type="range"
-        min={0}
-        max={900}
-        value={style.h || 0}
-        className="mt-2 w-full"
-        onChange={(e) => setDoc(patchHomeStyle(doc, selected, { h: Number(e.target.value) }))}
-      />
-      <p className={cn("text-right text-[0.7rem]", muted)}>{style.h ? `${style.h} px` : "авто"}</p>
+      <HeightField id={selected} doc={doc} style={style} setDoc={setDoc} muted={muted} />
       <p className={cn("mt-4 text-[0.68rem] font-semibold uppercase tracking-[0.14em]", muted)}>Выравнивание текста</p>
       <div className="mt-2 flex gap-1">
         {(
@@ -794,6 +785,47 @@ function InspectorFields({
 
 function slotTypeId(doc: HomeLayoutDoc, id: string) {
   return doc.customs.find((c) => c.id === id)?.typeId || id;
+}
+
+function HeightField({
+  id,
+  doc,
+  style,
+  setDoc,
+  muted,
+}: {
+  id: string;
+  doc: HomeLayoutDoc;
+  style: HomeBlockStyle;
+  setDoc: (next: HomeLayoutDoc, persist?: boolean) => void;
+  muted: string;
+}) {
+  const [live, setLive] = useState(0);
+  useEffect(() => {
+    const el = document.querySelector(`[data-ve-frame="${CSS.escape(id)}"]`) as HTMLElement | null;
+    if (!el) return;
+    const read = () => setLive(Math.round(el.getBoundingClientRect().height));
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [id, style.h, doc.order]);
+  const value = style.h || live || 80;
+  const max = Math.max(900, value);
+  return (
+    <>
+      <p className={cn("mt-5 text-[0.68rem] font-semibold uppercase tracking-[0.14em]", muted)}>Высота секции</p>
+      <input
+        type="range"
+        min={80}
+        max={max}
+        value={value}
+        className="mt-2 w-full"
+        onChange={(e) => setDoc(patchHomeStyle(doc, id, { h: Number(e.target.value) }))}
+      />
+      <p className={cn("text-right text-[0.7rem]", muted)}>{value} px</p>
+    </>
+  );
 }
 
 function CourseField({

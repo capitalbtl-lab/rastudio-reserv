@@ -298,6 +298,7 @@ function HomeSlotFrame({
         drag === id && "opacity-40",
         style?.hidden && "opacity-50",
       )}
+      data-ve-frame={id}
       style={{
         paddingTop: style?.padTop || undefined,
         paddingBottom: style?.padBottom || undefined,
