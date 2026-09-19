@@ -4,7 +4,7 @@ import { Children, isValidElement, useEffect, useState, type ComponentType, type
 import { GripVertical } from "lucide-react";
 import { EditText, useHomeEditor } from "@/components/home-read";
 import { HomeEditorGate } from "@/components/home-editor-gate";
-import { homeBlockLabel, placeHomeBlock, patchHomeStyle, setHomeMedia, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
+import { homeBlockLabel, placeHomeBlock, patchHomeStyle, setHomeMedia, visibleHomeOrder, MAX_SECTION_H, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
 import { SiteVideo } from "@/components/site-video";
 import { SeoImage } from "@/components/seo-image";
 import { mediaAlt } from "@/data/media-alts-core";
@@ -377,7 +377,7 @@ function HomeSlotFrame({
           if (!base || !ctx) return;
           let last = base;
           const move = (ev: PointerEvent) => {
-            const extra = Math.max(0, startExtra + (ev.clientY - startY));
+            const extra = Math.max(0, Math.min(MAX_SECTION_H - natural, startExtra + (ev.clientY - startY)));
             last = patchHomeStyle(base, id, { h: extra ? natural + extra : 0 });
             ctx.setDoc(last, false);
           };

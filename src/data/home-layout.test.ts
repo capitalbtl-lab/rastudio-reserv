@@ -10,6 +10,8 @@ import {
   placeHomeBlock,
   setHomeText,
   visibleHomeOrder,
+  clampH,
+  MAX_SECTION_H,
 } from "./home-layout-core.ts";
 
 describe("макет главной", () => {
@@ -72,6 +74,8 @@ describe("макет главной", () => {
     assert.equal(emptyTitle.customs[0]?.id, "inst_ab12cd");
     assert.equal(emptyTitle.styles.inst_ab12cd?.bold, true);
     assert.equal(emptyTitle.styles.inst_ab12cd?.fontSize, 48);
+    assert.equal(clampH(2000), MAX_SECTION_H);
+    assert.equal(MAX_SECTION_H, 1200);
   });
 
   it("главная оборачивает каждый блок и правит текст", () => {

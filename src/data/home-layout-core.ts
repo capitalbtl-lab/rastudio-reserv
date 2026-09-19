@@ -86,10 +86,12 @@ export function clampPad(n: unknown) {
   return Math.max(0, Math.min(160, Math.round(x)));
 }
 
+export const MAX_SECTION_H = 1200;
+
 export function clampH(n: unknown) {
   const x = Number(n);
   if (!Number.isFinite(x)) return 0;
-  return Math.max(0, Math.min(900, Math.round(x)));
+  return Math.max(0, Math.min(MAX_SECTION_H, Math.round(x)));
 }
 
 export function clampFont(n: unknown) {

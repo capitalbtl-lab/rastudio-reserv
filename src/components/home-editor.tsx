@@ -34,6 +34,7 @@ import {
   placeHomeBlock,
   setHomeText,
   setHomeMedia,
+  MAX_SECTION_H,
   type HomeBg,
   type HomeBlockStyle,
   type HomeBlockId,
@@ -811,6 +812,7 @@ function HeightField({
     return () => ro.disconnect();
   }, [id, doc.order, doc.texts, doc.media]);
   const extra = Math.max(0, (style.h || 0) - natural);
+  const extraMax = Math.max(1, MAX_SECTION_H - natural);
   const shown = natural + extra;
   return (
     <>
@@ -818,15 +820,15 @@ function HeightField({
       <input
         type="range"
         min={0}
-        max={600}
-        value={extra}
+        max={extraMax}
+        value={Math.min(extra, extraMax)}
         className="mt-2 w-full"
         onChange={(e) => {
           const add = Number(e.target.value);
           setDoc(patchHomeStyle(doc, id, { h: add ? natural + add : 0 }));
         }}
       />
-      <p className={cn("text-right text-[0.7rem]", muted)}>{shown ? `${shown} px` : "…"}</p>
+      <p className={cn("text-right text-[0.7rem]", muted)}>{shown ? `${shown} px` : "…"} / {MAX_SECTION_H}</p>
     </>
   );
 }
