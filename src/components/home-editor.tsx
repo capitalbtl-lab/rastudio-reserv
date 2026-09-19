@@ -591,13 +591,20 @@ export function HomeEditorChrome() {
   useEffect(() => {
     if (!ctx?.editing) return;
     const onClick = (e: MouseEvent) => {
-      const node = (e.target as HTMLElement | null)?.closest("[data-ve-frame]");
+      if (e.button !== 0) return;
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      if (t.closest(".ve-ui")) return;
+      ctx.setRail(null);
+      setPageOpen(false);
+      setSheetOpen(false);
+      const node = t.closest("[data-ve-frame]");
       const id = node?.getAttribute("data-ve-frame");
       if (id) ctx.select(id);
     };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  }, [ctx?.editing, ctx?.select]);
+  }, [ctx?.editing, ctx?.select, ctx?.setRail]);
   if (!ctx?.editing) return null;
   const { doc, selected, select, setDoc, device, setDevice, undo, redo, canUndo, canRedo, dirty, rail, setRail } = ctx;
   const style = selected ? doc.styles[selected] || {} : {};

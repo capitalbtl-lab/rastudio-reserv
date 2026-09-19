@@ -209,7 +209,7 @@ describe("библиотека и документ страницы", () => {
     assert.match(finder, /data-ve-frame="schedule"/);
     const schedule = readFileSync(new URL("../routes/schedule.tsx", import.meta.url), "utf8");
     assert.match(schedule, /data-ve-frame="course-story"/);
-    assert.match(editor, /function VeStubs/);
+    assert.match(editor, /setRail\(null\)/);
     assert.match(editor, /data-ve-stub/);
     assert.doesNotMatch(editor, /aliases/);
     assert.match(editor, /function VeSync/);
