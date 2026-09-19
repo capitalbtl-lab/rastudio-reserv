@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import { useHomeEditor } from "@/components/home-read";
 import { extrasFromHome, type PageExtra } from "@/data/page-layout-core";
+import { paintVeFrames, type VeStyle } from "@/lib/ve-paint";
 import { cn } from "@/lib/utils";
 
 function ExtraBlock({ block }: { block: PageExtra }) {
@@ -86,6 +87,7 @@ function ExtraBlock({ block }: { block: PageExtra }) {
 export function PageExtras() {
   const ctx = useHomeEditor();
   const [remote, setRemote] = useState<PageExtra[]>([]);
+  const [styles, setStyles] = useState<Record<string, VeStyle>>({});
   useEffect(() => {
     if (ctx?.editing) return;
     const path = typeof location !== "undefined" ? location.pathname.replace(/\/+$/, "") || "/" : "/";
@@ -93,7 +95,9 @@ export function PageExtras() {
     let gone = false;
     void import("@/data/page-extras-fn").then(({ publicPageExtrasFn }) =>
       publicPageExtrasFn({ data: { path } }).then((res) => {
-        if (!gone && res.ok && "extras" in res) setRemote(res.extras);
+        if (gone || !res.ok) return;
+        if ("extras" in res) setRemote(res.extras);
+        if ("styles" in res) setStyles(res.styles || {});
       }),
     );
     return () => {
@@ -101,6 +105,10 @@ export function PageExtras() {
     };
   }, [ctx?.editing, ctx?.dirty]);
   const extras = useMemo(() => (ctx?.editing ? extrasFromHome(ctx.doc) : remote), [ctx?.editing, ctx?.doc, remote]);
+  useLayoutEffect(() => {
+    if (ctx?.editing) return;
+    paintVeFrames(styles, "live");
+  }, [styles, extras, ctx?.editing]);
   if (!extras.length) return null;
   return (
     <div className="ve-extras w-full max-w-full overflow-x-clip">

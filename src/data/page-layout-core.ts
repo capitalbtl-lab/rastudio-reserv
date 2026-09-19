@@ -486,6 +486,18 @@ export function extrasOf(layout: LayoutDoc): PageExtra[] {
   return out;
 }
 
+export function stylesOf(layout: LayoutDoc): Record<string, BlockInstance["style"]> {
+  const out: Record<string, BlockInstance["style"]> = {};
+  for (const id of layout.order) {
+    const st = layout.blocks[id]?.style;
+    if (!st) continue;
+    if (st.hidden || st.padTop || st.padBottom || st.bg || st.h || st.align || st.fontSize || st.bold || st.italic || st.underline) {
+      out[id] = { ...st };
+    }
+  }
+  return out;
+}
+
 export function extrasFromHome(home: HomeLayoutDoc): PageExtra[] {
   return extrasOf(homeToLayout(home));
 }

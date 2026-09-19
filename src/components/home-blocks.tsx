@@ -362,6 +362,7 @@ function HomeSlotFrame({
       {selected ? (
       <button
         type="button"
+        data-ve-h="slot"
         aria-label="Высота секции"
         className="absolute inset-x-[10%] bottom-0 z-30 flex h-4 cursor-ns-resize items-center justify-center"
         onPointerDown={(e) => {

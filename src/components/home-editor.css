@@ -169,7 +169,13 @@ html.home-editing[data-home-device="phone"] [class*="lg:min-h"] {
 }
 
 html.home-editing [data-ve-frame] {
+  position: relative;
   scroll-margin-top: 11rem;
+}
+
+html.home-editing [data-ve-frame].ve-frame-on {
+  outline: 2px solid var(--primary, #2563eb);
+  outline-offset: -2px;
 }
 
 .ve-nav-school {

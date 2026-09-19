@@ -190,7 +190,7 @@ function PageExtrasLazy() {
     }
     void import("@/data/page-extras-fn").then(({ publicPageExtrasFn }) =>
       publicPageExtrasFn({ data: { path } }).then((res) => {
-        if (res.ok && "extras" in res && res.extras.length) load();
+        if (res.ok && "extras" in res && (res.extras.length || (res.styles && Object.keys(res.styles).length))) load();
       }),
     );
     return () => {

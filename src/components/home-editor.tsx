@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   AlignCenter,
   AlignLeft,
@@ -26,6 +27,8 @@ import {
 import { debugEmit } from "@/data/debug-client";
 import { loadPageDocFn, placeBlockFn, publishPageFn, savePageDraftFn } from "@/data/page-layout-fn";
 import { BLOCK_LIBRARY, isAtomType, libraryType } from "@/data/block-library-core";
+import { paintVeFrames } from "@/lib/ve-paint";
+import { mediaFromDrop } from "@/lib/media-drag";
 import {
   emptyHomeLayout,
   homeBlockLabel,
@@ -125,6 +128,102 @@ function revealBlock(id: string) {
     if (go()) return;
     window.setTimeout(go, 60);
   });
+}
+
+function VeHeightHandle({ id }: { id: string }) {
+  const ctx = useHomeEditor();
+  const style = ctx?.doc.styles[id];
+  if (!ctx) return null;
+  return (
+    <button
+      type="button"
+      data-ve-h="sync"
+      aria-label="Высота секции"
+      className="absolute inset-x-[10%] bottom-0 z-30 flex h-4 cursor-ns-resize items-center justify-center"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = e.currentTarget;
+        el.setPointerCapture(e.pointerId);
+        const host = el.parentElement;
+        const body = (host?.querySelector("[data-ve-body]") as HTMLElement | null) || host;
+        const natural = Math.round(body?.getBoundingClientRect().height || 160);
+        const startExtra = Math.max(0, (style?.h || 0) - natural);
+        const startY = e.clientY;
+        const base = ctx.doc;
+        let last = base;
+        const move = (ev: PointerEvent) => {
+          const extra = Math.max(0, Math.min(MAX_SECTION_H - natural, startExtra + (ev.clientY - startY)));
+          last = patchHomeStyle(base, id, { h: extra ? natural + extra : 0 });
+          ctx.setDoc(last, false);
+        };
+        const up = () => {
+          el.removeEventListener("pointermove", move);
+          el.removeEventListener("pointerup", up);
+          ctx.setDoc(last, true);
+        };
+        el.addEventListener("pointermove", move);
+        el.addEventListener("pointerup", up);
+      }}
+    >
+      <span className="h-1.5 w-14 rounded-full bg-primary" />
+    </button>
+  );
+}
+
+function VeSync() {
+  const ctx = useHomeEditor();
+  useLayoutEffect(() => {
+    if (!ctx?.editing) return;
+    const run = () => {
+      paintVeFrames(ctx.doc.styles, "edit");
+      document.querySelectorAll("[data-ve-frame]").forEach((el) => {
+        el.classList.toggle("ve-frame-on", el.getAttribute("data-ve-frame") === ctx.selected);
+      });
+    };
+    run();
+    const root = document.getElementById("content") || document.body;
+    const mo = new MutationObserver(run);
+    mo.observe(root, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, [ctx, ctx?.editing, ctx?.doc, ctx?.selected]);
+
+  useEffect(() => {
+    if (!ctx?.editing) return;
+    const over = (e: DragEvent) => {
+      if ((e.target as HTMLElement | null)?.closest("[data-ve-frame]")) e.preventDefault();
+    };
+    const drop = (e: DragEvent) => {
+      const frame = (e.target as HTMLElement | null)?.closest("[data-ve-frame]");
+      const id = frame?.getAttribute("data-ve-frame");
+      if (!id) return;
+      const media = mediaFromDrop(e);
+      const from = e.dataTransfer?.getData("text/home-block") || "";
+      if (media) {
+        e.preventDefault();
+        ctx.select(id);
+        ctx.setDoc(setHomeMedia(ctx.doc, id, media));
+        return;
+      }
+      if (from && from !== id) {
+        e.preventDefault();
+        ctx.setDoc({ ...ctx.doc, order: placeHomeBlock(ctx.doc.order, from, id) });
+      }
+    };
+    document.addEventListener("dragover", over);
+    document.addEventListener("drop", drop);
+    return () => {
+      document.removeEventListener("dragover", over);
+      document.removeEventListener("drop", drop);
+    };
+  }, [ctx]);
+
+  const host =
+    ctx?.selected && typeof document !== "undefined"
+      ? (document.querySelector(`[data-ve-frame="${CSS.escape(ctx.selected)}"]`) as HTMLElement | null)
+      : null;
+  if (!host || host.querySelector('[data-ve-h="slot"]')) return null;
+  return createPortal(<VeHeightHandle id={ctx!.selected!} />, host);
 }
 
 function previewUrl(path: string) {
@@ -383,6 +482,7 @@ export function HomeEditorChrome() {
 
   return (
     <>
+      <VeSync />
       <div className="ve-ui ve-chrome">
         <div className="ve-topbar">
           <PagePicker open={pageOpen} setOpen={setPageOpen} title={pageTitle} path={ctx.path} pages={ctx.pages} goPage={ctx.goPage} />

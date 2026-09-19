@@ -15,6 +15,7 @@ import {
   phoneIssues,
   seedLayout,
   editorMenuTree,
+  stylesOf,
 } from "./page-layout-core.ts";
 import { defaultHomeOrder, normalizeHomeLayout } from "./home-layout-core.ts";
 
@@ -28,6 +29,17 @@ describe("библиотека и документ страницы", () => {
     assert.ok(kindOrder("home").includes("hero"));
     assert.ok(kindOrder("school").includes("course-hero"));
     assert.ok(kindOrder("course").includes("course-hero"));
+  });
+
+  it("стили конструктора читаются с любой страницы, не только с главной", () => {
+    const layout = seedLayout("school");
+    layout.blocks["convert-band"].style = { h: 420, hidden: true };
+    const st = stylesOf(layout);
+    assert.equal(st["convert-band"]?.h, 420);
+    assert.equal(st["convert-band"]?.hidden, true);
+    const paint = readFileSync(new URL("../lib/ve-paint.ts", import.meta.url), "utf8");
+    assert.match(paint, /paintVeFrames/);
+    assert.match(paint, /\[data-ve-frame\]/);
   });
 
   it("главная мигрирует в PageDoc и обратно без потери слотов", () => {
@@ -180,10 +192,12 @@ describe("библиотека и документ страницы", () => {
     const convert = readFileSync(new URL("../components/convert.tsx", import.meta.url), "utf8");
     assert.match(convert, /data-ve-frame="convert-band"/);
     assert.match(editor, /aliases/);
+    assert.match(editor, /function VeSync/);
+    assert.match(editor, /paintVeFrames/);
     const extras = readFileSync(new URL("../components/page-extras.tsx", import.meta.url), "utf8");
     assert.match(extras, /md:grid-cols-2/);
     assert.match(extras, /overflow-x-clip/);
-    assert.match(extras, /data-ve-frame=\{block\.id\}/);
+    assert.match(extras, /paintVeFrames/);
     assert.doesNotMatch(extras, /page-layout-fn/);
     const fn = readFileSync(new URL("./page-layout-fn.ts", import.meta.url), "utf8");
     assert.match(fn, /savePageDraft\(path, homeToLayout/);
