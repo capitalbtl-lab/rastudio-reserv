@@ -298,6 +298,8 @@ export function homeToLayout(home: HomeLayoutDoc): LayoutDoc {
     const custom = home.customs.find((c) => c.id === id);
     const typeId = custom ? custom.typeId || "custom" : id;
     const style = home.styles[id] || {};
+    const src = home.media[id] || custom?.image || "";
+    const vid = /\.(mp4|webm|mov)(\?|$)/i.test(src);
     blocks[id] = {
       id,
       typeId,
@@ -305,7 +307,8 @@ export function homeToLayout(home: HomeLayoutDoc): LayoutDoc {
         kicker: home.texts[`${id}.kicker`] || custom?.kicker || undefined,
         title: home.texts[`${id}.title`] || custom?.title || undefined,
         text: home.texts[`${id}.text`] || custom?.text || undefined,
-        image: home.media[id] || custom?.image || undefined,
+        image: src || undefined,
+        video: vid ? src : undefined,
         ctaLabel: custom?.ctaLabel,
         ctaHref: custom?.ctaHref,
         courseId: home.texts[`${id}.courseId`] || custom?.courseId || undefined,
@@ -447,7 +450,7 @@ export function applyHomeToPage(page: PageDoc, home: HomeLayoutDoc): PageDoc {
 
 export function addInstance(layout: LayoutDoc, typeId: string, before?: string | null, content: BlockInstance["content"] = {}): LayoutDoc {
   const type = libraryType(typeId) || libraryType("custom");
-  const id = isHomeType(typeId) && !layout.blocks[typeId] ? typeId : isCustomBlockId(typeId) ? typeId : newInstanceId();
+  const id = isCustomBlockId(typeId) ? typeId : newInstanceId();
   const inst = seedInstance(id, type?.typeId || typeId, content);
   if (!inst.content.title && type) inst.content.title = type.label;
   const blocks = { ...layout.blocks, [id]: inst };
@@ -498,6 +501,7 @@ export type PageExtra = {
   ctaLabel?: string;
   ctaHref?: string;
   courseId?: string;
+  images?: string[];
   bg?: HomeBg;
   align?: BlockInstance["style"]["align"];
   h?: number;
@@ -526,6 +530,7 @@ export function extrasOf(layout: LayoutDoc): PageExtra[] {
       ctaLabel: b.content.ctaLabel,
       ctaHref: b.content.ctaHref,
       courseId: b.content.courseId,
+      images: b.content.images,
       bg: b.style.bg,
       align: b.style.align,
       h: b.style.h,

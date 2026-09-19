@@ -134,12 +134,14 @@ export function StudioPanel({
   onLayout,
   onPickMedia,
   view,
+  embedded,
 }: {
   admin?: boolean;
   slot?: string | null;
   onLayout?: (layout: HomeLayoutDoc) => void;
   onPickMedia?: (src: string) => void;
   view?: "media" | "ai" | "agent";
+  embedded?: boolean;
 }) {
   const s = useSiteStudio(admin);
   const [tab, setTab] = useState<"media" | "ai" | "agent">(view || "media");
@@ -204,7 +206,7 @@ export function StudioPanel({
 
   return (
     <div className="space-y-3 text-sm">
-      {view ? (
+      {view && !embedded ? (
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">
           {view === "media" ? "Медиа" : view === "ai" ? "Блоки" : "Агент"}
         </p>

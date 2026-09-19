@@ -145,13 +145,11 @@ export function isLockedType(typeId: string) {
   return Boolean(libraryType(typeId)?.locked);
 }
 
-/** Блок из библиотеки, которого нет в JSX витрины — рисуется из JSON страницы. */
+/** Блок из библиотеки, которого нет в JSX витрины — рисуется из JSON страницы. Копия (inst_/c_) любого типа — extra. */
 export function isCanvasExtra(typeId: string, id = "") {
+  if (/^inst_/i.test(id) || /^c_/i.test(id)) return true;
   if (isLockedType(typeId)) return false;
   if (isAtomType(typeId)) return true;
-  if (/^inst_/i.test(id) || /^c_/i.test(id)) {
-    return !(PAGE_TYPE_IDS as readonly string[]).includes(typeId) && !(HOME_TYPE_IDS as readonly string[]).includes(typeId);
-  }
   return false;
 }
 

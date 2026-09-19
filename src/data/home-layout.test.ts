@@ -141,7 +141,7 @@ describe("макет главной", () => {
     assert.match(css, /html\.home-editing \.debug-dock/);
     assert.match(css, /display: none !important/);
     const studio = readFileSync(new URL("../components/home-studio.tsx", import.meta.url), "utf8");
-    assert.match(studio, /view \?/);
+    assert.match(studio, /view && !embedded/);
     assert.match(studio, /view === "ai"/);
     assert.match(studio, /Придумать новый блок/);
     assert.match(studio, /DeepSeek: править текст/);

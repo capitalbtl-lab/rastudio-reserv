@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { BLOCK_LIBRARY, HOME_TYPE_IDS, PAGE_TYPE_IDS, kindOrder, libraryType } from "./block-library-core.ts";
+import { BLOCK_LIBRARY, HOME_TYPE_IDS, PAGE_TYPE_IDS, kindOrder, libraryType, isCanvasExtra } from "./block-library-core.ts";
 import {
   addInstance,
   applyHomeToPage,
@@ -107,6 +107,10 @@ describe("библиотека и документ страницы", () => {
     assert.notEqual(homeExtras[0].id, extras[0].id);
     const school = seedLayout("school");
     assert.equal(extrasOf(school).length, 0);
+    const gallery = addInstance(art.draft, "gallery", null, { title: "Галерея школы", image: "/media/schools/art/a.jpg" });
+    const gid = Object.values(gallery.blocks).find((b) => b.typeId === "gallery" && /^inst_/.test(b.id))!;
+    assert.equal(isCanvasExtra(gid.typeId, gid.id), true);
+    assert.equal(extrasOf(gallery).some((e) => e.id === gid.id && e.image === "/media/schools/art/a.jpg"), true);
     const styled = addInstance(art.draft, "two-col", null, { title: "Жирный" });
     const sid = Object.values(styled.blocks).find((b) => b.typeId === "two-col")!.id;
     styled.blocks[sid].style.bold = true;
@@ -209,7 +213,10 @@ describe("библиотека и документ страницы", () => {
     assert.match(finder, /data-ve-frame="schedule"/);
     const schedule = readFileSync(new URL("../routes/schedule.tsx", import.meta.url), "utf8");
     assert.match(schedule, /data-ve-frame="course-story"/);
-    assert.match(editor, /setRail\(null\)/);
+    assert.match(editor, /Генератор блоков/);
+    assert.match(editor, /Как в шаблоне/);
+    assert.match(editor, /На эту страницу/);
+    assert.match(editor, /function BlocksRail/);
     assert.match(editor, /data-ve-stub/);
     assert.doesNotMatch(editor, /aliases/);
     assert.match(editor, /function VeSync/);
@@ -219,7 +226,8 @@ describe("библиотека и документ страницы", () => {
     assert.match(editor, /chooseScope/);
     assert.match(editor, /applyTypePatchFn/);
     const extras = readFileSync(new URL("../components/page-extras.tsx", import.meta.url), "utf8");
-    assert.match(extras, /md:grid-cols-2/);
+    assert.match(extras, /block.typeId === "gallery"/);
+    assert.match(extras, /createPortal/);
     assert.match(extras, /overflow-x-clip/);
     assert.match(extras, /paintVeFrames/);
     assert.doesNotMatch(extras, /page-layout-fn/);
@@ -227,7 +235,8 @@ describe("библиотека и документ страницы", () => {
     assert.match(fn, /savePageDraft\(path, homeToLayout/);
     assert.match(fn, /publishPage\(path\)/);
     assert.match(fn, /listEditorPagesFn/);
-    assert.match(fn, /applyTypePatchFn/);
+    assert.match(fn, /seed === "template"/);
+    assert.match(fn, /findPrototype/);
     assert.match(fn, /applyTypeFrom/);
     assert.doesNotMatch(fn, /publicPageExtrasFn/);
     const pub = readFileSync(new URL("./page-extras-fn.ts", import.meta.url), "utf8");

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { tokenOk } from "./admin-auth";
 import { addInstance, copyInstanceTo, homeToLayout, layoutToHome, phoneIssues } from "./page-layout-core.ts";
-import { listEditorPages, loadPageDoc, publishPage, savePageDraft, unpublishPage, applyTypeFrom } from "./page-layout.ts";
+import { listEditorPages, loadPageDoc, publishPage, savePageDraft, unpublishPage, applyTypeFrom, findPrototype } from "./page-layout.ts";
 import { normalizeHomeLayout } from "./home-layout-core.ts";
 
 function guard(token?: string) {
@@ -75,7 +75,7 @@ export const revertPublishFn = createServerFn({ method: "POST" })
   });
 
 export const placeBlockFn = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { token?: string; path?: string; typeId?: string; fromPath?: string; fromId?: string; before?: string })
+  .validator((data: unknown) => data as { token?: string; path?: string; typeId?: string; fromPath?: string; fromId?: string; before?: string; seed?: "empty" | "template" })
   .handler(async ({ data }) => {
     if (!guard(data.token)) return { ok: false as const, error: "Нужен вход в редактор." };
     const path = String(data.path || "/");
@@ -88,7 +88,12 @@ export const placeBlockFn = createServerFn({ method: "POST" })
       draft = copyInstanceTo(draft, inst, data.before);
     } else {
       const typeId = String(data.typeId || "custom");
-      draft = addInstance(draft, typeId, data.before);
+      if (data.seed === "template") {
+        const proto = findPrototype(typeId);
+        draft = proto ? copyInstanceTo(draft, proto, data.before) : addInstance(draft, typeId, data.before);
+      } else {
+        draft = addInstance(draft, typeId, data.before);
+      }
     }
     const saved = savePageDraft(path, draft);
     return { ok: true as const, layout: layoutToHome(saved.draft) };

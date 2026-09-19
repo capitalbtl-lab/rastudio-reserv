@@ -154,6 +154,24 @@ export function layoutsDiffer(doc: PageDoc) {
   return !layoutsEqual(doc.draft, doc.published);
 }
 
+export function findPrototype(typeId: string) {
+  const pages = listEditorPages();
+  const homeFirst = ["/", ...pages.map((p) => p.path).filter((p) => p !== "/")];
+  for (const path of homeFirst) {
+    const doc = loadPageDoc(path);
+    const exact = doc.draft.blocks[typeId];
+    if (exact?.typeId === typeId) return exact;
+  }
+  for (const path of homeFirst) {
+    const doc = loadPageDoc(path);
+    for (const id of doc.draft.order) {
+      const b = doc.draft.blocks[id];
+      if (b?.typeId === typeId) return b;
+    }
+  }
+  return null;
+}
+
 export function applyTypeFrom(path: string, blockId: string): { pages: number; blocks: number; typeId: string } {
   const src = loadPageDoc(path);
   const from = src.draft.blocks[blockId];

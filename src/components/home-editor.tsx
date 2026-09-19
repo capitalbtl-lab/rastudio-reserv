@@ -704,10 +704,20 @@ export function HomeEditorChrome() {
                 </>
               ) : null}
               {rail === "pages" ? <PagesList pages={ctx.pages} path={ctx.path} goPage={ctx.goPage} /> : null}
-              {rail === "media" || rail === "ai" || rail === "agent" ? (
+              {rail === "media" || rail === "agent" ? (
                 <StudioPanel
                   view={rail}
                   slot={selected}
+                  onLayout={(layout) => setDoc(layout)}
+                  onPickMedia={(src) => {
+                    if (selected) setDoc(setHomeMedia(doc, selected, src));
+                  }}
+                />
+              ) : null}
+              {rail === "ai" ? (
+                <BlocksRail
+                  path={ctx.path}
+                  selected={selected}
                   onLayout={(layout) => setDoc(layout)}
                   onPickMedia={(src) => {
                     if (selected) setDoc(setHomeMedia(doc, selected, src));
@@ -917,6 +927,90 @@ function PagesTree({ pages, path, goPage }: { pages: EditorPageItem[]; path: str
       {tree.rest.map((p) => (
         <div key={p.path}>{row(p)}</div>
       ))}
+    </div>
+  );
+}
+
+}
+
+function BlocksRail({
+  path,
+  selected,
+  onLayout,
+  onPickMedia,
+}: {
+  path: string;
+  selected: string | null;
+  onLayout: (layout: HomeLayoutDoc) => void;
+  onPickMedia?: (src: string) => void;
+}) {
+  const ctx = useHomeEditor();
+  const [tab, setTab] = useState<"lib" | "gen">("lib");
+  const [msg, setMsg] = useState("");
+  async function add(typeId: string, seed: "empty" | "template") {
+    const token = debugToken();
+    if (!token) return;
+    const res = await placeBlockFn({ data: { token, path, typeId, seed } });
+    if (res.ok && "layout" in res) {
+      onLayout(res.layout);
+      const last = [...res.layout.order].reverse().find((id) => /^inst_/i.test(id) || /^c_/i.test(id));
+      if (last && ctx) {
+        ctx.select(last);
+        revealBlock(last);
+      }
+      const name = BLOCK_LIBRARY.find((b) => b.typeId === typeId)?.label || typeId;
+      setMsg(seed === "template" ? `«${name}» как в шаблоне` : `«${name}» на эту страницу`);
+    } else setMsg(res.ok ? "" : res.error);
+  }
+  const groups = useMemo(() => {
+    const map = new Map<string, typeof BLOCK_LIBRARY>();
+    for (const b of BLOCK_LIBRARY) {
+      const list = map.get(b.category) || [];
+      list.push(b);
+      map.set(b.category, list);
+    }
+    return [...map.entries()];
+  }, []);
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-1 rounded-full bg-black/5 p-0.5">
+        <button type="button" className={cn("h-8 rounded-full text-[0.72rem] font-semibold", tab === "lib" ? "bg-primary text-primary-foreground" : "text-black/55")} onClick={() => setTab("lib")}>
+          Блоки
+        </button>
+        <button type="button" className={cn("h-8 rounded-full text-[0.72rem] font-semibold", tab === "gen" ? "bg-primary text-primary-foreground" : "text-black/55")} onClick={() => setTab("gen")}>
+          Генератор блоков
+        </button>
+      </div>
+      {tab === "lib" ? (
+        <div className="mt-3 space-y-4">
+          <p className="text-[0.72rem] leading-relaxed text-black/50">Типовые блоки сайта. «На эту страницу» — пустой экземпляр. «Как в шаблоне» — тексты и медиа оригинала. Потом правите только здесь.</p>
+          {groups.map(([cat, list]) => (
+            <div key={cat}>
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">{cat}</p>
+              <ul className="mt-1.5 space-y-1">
+                {list.map((b) => (
+                  <li key={b.typeId} className="rounded-xl px-1 py-1 hover:bg-black/[0.03]">
+                    <p className="px-1 text-[0.8rem] font-medium">{b.label}</p>
+                    <div className="mt-1 grid grid-cols-2 gap-1">
+                      <button type="button" className="min-h-8 rounded-lg bg-black/5 px-2 text-[0.68rem] font-semibold hover:bg-black/10" onClick={() => void add(b.typeId, "empty")}>
+                        На эту страницу
+                      </button>
+                      <button type="button" className="min-h-8 rounded-lg bg-black/5 px-2 text-[0.68rem] font-semibold hover:bg-black/10" onClick={() => void add(b.typeId, "template")}>
+                        Как в шаблоне
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          {msg ? <p className="text-[0.72rem] text-primary">{msg}</p> : null}
+        </div>
+      ) : (
+        <div className="mt-3">
+          <StudioPanel embedded view="ai" slot={selected} onLayout={onLayout} onPickMedia={onPickMedia} />
+        </div>
+      )}
     </div>
   );
 }
