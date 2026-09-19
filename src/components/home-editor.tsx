@@ -47,6 +47,7 @@ import {
   type HomeLayoutDoc,
 } from "@/data/home-layout-core";
 import { StudioPanel } from "@/components/home-studio";
+import { BlockPreview } from "@/components/block-preview";
 import { HomeEditorCtx, useHomeEditor, type HomeEditorCtxValue } from "@/components/home-read";
 import { changedBlockIds, typeIdOf } from "@/data/page-layout-core";
 import { editorMenuTree, type EditorPageItem } from "@/data/page-layout-core";
@@ -985,11 +986,12 @@ function BlocksRail({
           {groups.map(([cat, list]) => (
             <div key={cat}>
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">{cat}</p>
-              <ul className="mt-1.5 space-y-1">
+              <ul className="mt-1.5 space-y-2.5">
                 {list.map((b) => (
                   <li key={b.typeId} className="rounded-xl px-1 py-1 hover:bg-black/[0.03]">
                     <p className="px-1 text-[0.8rem] font-medium">{b.label}</p>
-                    <div className="mt-0.5 grid grid-cols-2 gap-1">
+                    <BlockPreview typeId={b.typeId} />
+                    <div className="mt-1 grid grid-cols-2 gap-1">
                       <button type="button" className="h-4 rounded-md bg-black/15 px-2 text-[0.62rem] font-semibold leading-none hover:bg-black/25" onClick={() => void add(b.typeId, "empty")}>
                         Новый блок
                       </button>
