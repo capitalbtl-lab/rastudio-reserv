@@ -18,7 +18,6 @@ describe("медиа и агенты страниц", () => {
 
   it("путь агента не пускает кабинет и позволяет курс", () => {
     assert.equal(safeSitePath("/admin"), "");
-    assert.equal(safeSitePath("/edit"), "");
     assert.equal(safeSitePath("/api/x"), "");
     assert.equal(safeSitePath("../etc"), "");
     assert.equal(safeSitePath("/robototehnika-v-kolomne"), "/robototehnika-v-kolomne");
