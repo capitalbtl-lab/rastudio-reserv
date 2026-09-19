@@ -1,7 +1,6 @@
 /** Шаг 5: сверка остатка с шапкой. А = payFill.full шага 4. Кассу не качает.
  * Не stampDossierAlfaBalance (extras.balance) и не stampCustomerSync — только extras.header.
- * diskAlfaRole не зовём. Лид в Альфе: шапки клиента нет — снято: лид с кассой в сверке.
- * Лид без живой кассы: кассы нет, не сверяем.
+ * diskAlfaRole не зовём. Пустая лента при А — нули, шапку зовём. Нет А — не сверяем.
  */
 
 import { uniqueBranches, lessonWriteoffAmount } from "./crm-ledger-core";

@@ -74,14 +74,16 @@ describe("шаг 5 канон", () => {
     assert.equal(step5CanSverka({ ...p, inArchiveSet: true }), true);
   });
 
-  it("лид без кассы не сверка, лид с кассой сверка, лид архива с кассой сверка", () => {
+  it("лид с А и пустой лентой — сверка 0=0=0, без А шапку не зовём", () => {
     const base = { hasDossier: true, payFilled: true, isStudy: 0, removed: 0, inArchiveSet: false };
-    assert.equal(step5CanSverka({ ...base, livePays: 0 }), false);
+    assert.equal(step5CanSverka({ ...base, livePays: 0 }), true);
     assert.equal(step5CanSverka({ ...base, livePays: 2 }), true);
     assert.equal(step5CanSverka({ ...base, livePays: 2, removed: 2 }), false);
     assert.equal(step5CanSverka({ ...base, livePays: 2, removed: 2, inArchiveSet: true }), true);
     assert.equal(step5SkipNote({ livePays: 2, isStudy: 0, removed: 2, inArchiveSet: false }), "не в наборе шага 2, не сверяем");
-    assert.equal(step5SkipNote({ livePays: 0, isStudy: 0, removed: 0, inArchiveSet: false }), "кассы нет, не сверяем");
+    assert.equal(step5SkipNote({ livePays: 0, isStudy: 0, removed: 0, inArchiveSet: false, payFilled: true }), "");
+    assert.equal(step5SkipNote({ livePays: 0, isStudy: 0, removed: 0, inArchiveSet: false, payFilled: false }), "кассы нет / нет А");
+    assert.equal(step5CanSverka({ ...base, livePays: 0, payFilled: false }), false);
   });
 
   it("клиент архива вне набора шага 2 не сверка", () => {
