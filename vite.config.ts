@@ -176,6 +176,9 @@ export default defineConfig(({ command, isPreview }) => ({
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
             output: { dir: process.env.NITRO_OUTPUT || ".output" },
+            // Vite 8.2 / Rolldown: split SSR re-exports undeclared ssr_exports → 500.
+            // https://github.com/TanStack/router/issues/8031
+            inlineDynamicImports: true,
           }),
         ]
       : []),
