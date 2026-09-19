@@ -28,7 +28,7 @@ export type HomeEditorCtxValue = {
   preview: () => void;
   canPublish: boolean;
   phoneIssues: string[];
-  rail: "elements" | "sections" | "pages" | "media" | null;
+  rail: "elements" | "sections" | "pages" | "media" | "ai" | "agent" | null;
   setRail: (r: HomeEditorCtxValue["rail"]) => void;
 };
 

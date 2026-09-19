@@ -91,6 +91,9 @@ describe("макет главной", () => {
     const editor = readFileSync(new URL("../components/home-editor.tsx", import.meta.url), "utf8");
     assert.match(editor, /Инспектор/);
     assert.match(editor, /StudioPanel/);
+    assert.match(editor, /\["pages", Files, "Разделы"\]/);
+    assert.match(editor, /\["ai", Sparkles, "Блоки"\]/);
+    assert.match(editor, /\["agent", Bot, "Агент"\]/);
     assert.match(editor, /home-editing/);
     assert.match(editor, /edit=1/);
     assert.match(editor, /\["layers", "Слои"\]/);
@@ -137,6 +140,8 @@ describe("макет главной", () => {
     assert.match(css, /html\.home-editing \.debug-dock/);
     assert.match(css, /display: none !important/);
     const studio = readFileSync(new URL("../components/home-studio.tsx", import.meta.url), "utf8");
+    assert.match(studio, /view \?/);
+    assert.match(studio, /view === "ai"/);
     assert.match(studio, /Придумать новый блок/);
     assert.match(studio, /DeepSeek: править текст/);
     assert.match(studio, /Сохранить агента страницы/);

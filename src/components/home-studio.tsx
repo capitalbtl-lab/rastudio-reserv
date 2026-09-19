@@ -133,20 +133,26 @@ export function StudioPanel({
   slot,
   onLayout,
   onPickMedia,
+  view,
 }: {
   admin?: boolean;
   slot?: string | null;
   onLayout?: (layout: HomeLayoutDoc) => void;
   onPickMedia?: (src: string) => void;
+  view?: "media" | "ai" | "agent";
 }) {
   const s = useSiteStudio(admin);
-  const [tab, setTab] = useState<"media" | "ai" | "agent">("media");
+  const [tab, setTab] = useState<"media" | "ai" | "agent">(view || "media");
   const [q, setQ] = useState("");
   const [folder, setFolder] = useState("");
   const [picked, setPicked] = useState("");
   const [rewrite, setRewrite] = useState("");
   const [pending, setPending] = useState<{ src: string; caption: string } | null>(null);
   const [agent, setAgent] = useState<PageAgent>(() => emptyPageAgent(currentPath()));
+
+  useEffect(() => {
+    if (view) setTab(view);
+  }, [view]);
 
   useEffect(() => {
     const path = currentPath();
@@ -198,24 +204,30 @@ export function StudioPanel({
 
   return (
     <div className="space-y-3 text-sm">
-      <div className="grid grid-cols-3 gap-1 rounded-full bg-surface-2 p-0.5">
-        {(
-          [
-            ["media", "Медиа"],
-            ["ai", "Блоки ИИ"],
-            ["agent", "Агент"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={cn("h-8 rounded-full text-[0.72rem] font-semibold", tab === id ? "bg-primary text-primary-foreground" : "hover:bg-black/5")}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {view ? (
+        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">
+          {view === "media" ? "Медиа" : view === "ai" ? "Блоки" : "Агент"}
+        </p>
+      ) : (
+        <div className="grid grid-cols-3 gap-1 rounded-full bg-surface-2 p-0.5">
+          {(
+            [
+              ["media", "Медиа"],
+              ["ai", "Блоки ИИ"],
+              ["agent", "Агент"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={cn("h-8 rounded-full text-[0.72rem] font-semibold", tab === id ? "bg-primary text-primary-foreground" : "hover:bg-black/5")}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {tab === "media" ? (
         <>

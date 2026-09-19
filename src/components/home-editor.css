@@ -23,7 +23,8 @@
   left: 0;
   bottom: 0;
   z-index: 68;
-  width: 3.5rem;
+  width: 4.25rem;
+  overflow: auto;
   background: #fff;
   border-right: 1px solid rgb(15 23 42 / 0.08);
 }
@@ -32,7 +33,7 @@
   position: fixed;
   top: 5.25rem;
   bottom: 0;
-  left: 3.5rem;
+  left: 4.25rem;
   z-index: 64;
   width: 20rem;
   overflow: auto;
@@ -54,13 +55,20 @@
 }
 
 .ve-icon {
-  display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
-  place-items: center;
-  margin: 0.2rem auto;
-  border-radius: 0.7rem;
+  display: flex;
+  width: 100%;
+  min-height: 3.35rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.35rem 0.15rem;
+  border-radius: 0;
   color: #445;
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
 }
 
 .ve-icon:hover,
@@ -99,10 +107,10 @@ html.home-editing header {
 
 @media (min-width: 768px) {
   html.home-editing header {
-    left: 3.5rem;
+    left: 4.25rem;
   }
   html.home-editing main {
-    padding-left: 3.5rem;
+    padding-left: 4.25rem;
   }
 }
 

@@ -6,6 +6,7 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  Bot,
   ChevronDown,
   Eye,
   EyeOff,
@@ -17,6 +18,7 @@ import {
   Plus,
   Redo2,
   Smartphone,
+  Sparkles,
   Tablet,
   Underline,
   Undo2,
@@ -384,18 +386,21 @@ export function HomeEditorChrome() {
         <TextToolbar />
 
         <aside className="ve-rail hidden md:block">
-          <button type="button" className={cn("ve-icon", rail === "elements" && "is-on")} title="Добавить элементы" onClick={() => toggleRail("elements")}>
-            <Plus className="size-4" />
-          </button>
-          <button type="button" className={cn("ve-icon", rail === "sections" && "is-on")} title="Слои и секции" onClick={() => toggleRail("sections")}>
-            <LayoutTemplate className="size-4" />
-          </button>
-          <button type="button" className={cn("ve-icon", rail === "pages" && "is-on")} title="Страницы и меню" onClick={() => toggleRail("pages")}>
-            <Files className="size-4" />
-          </button>
-          <button type="button" className={cn("ve-icon", rail === "media" && "is-on")} title="Медиа" onClick={() => toggleRail("media")}>
-            <ImageIcon className="size-4" />
-          </button>
+          {(
+            [
+              ["elements", Plus, "Элементы"],
+              ["sections", LayoutTemplate, "Слои"],
+              ["pages", Files, "Разделы"],
+              ["media", ImageIcon, "Медиа"],
+              ["ai", Sparkles, "Блоки"],
+              ["agent", Bot, "Агент"],
+            ] as const
+          ).map(([id, Icon, label]) => (
+            <button key={id} type="button" className={cn("ve-icon", rail === id && "is-on")} title={label} onClick={() => toggleRail(id)}>
+              <Icon className="size-4" />
+              <span>{label}</span>
+            </button>
+          ))}
         </aside>
 
         {rail ? (
@@ -409,8 +414,9 @@ export function HomeEditorChrome() {
                 </>
               ) : null}
               {rail === "pages" ? <PagesList pages={ctx.pages} path={ctx.path} goPage={ctx.goPage} /> : null}
-              {rail === "media" ? (
+              {rail === "media" || rail === "ai" || rail === "agent" ? (
                 <StudioPanel
+                  view={rail}
                   slot={selected}
                   onLayout={(layout) => setDoc(layout)}
                   onPickMedia={(src) => {
@@ -538,7 +544,7 @@ function PagePicker({
 function PagesList({ pages, path, goPage }: { pages: EditorPageItem[]; path: string; goPage: (p: string) => void }) {
   return (
     <div>
-      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">Страницы и меню</p>
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">Разделы</p>
       <div className="mt-2">
         <PagesTree pages={pages} path={path} goPage={goPage} />
       </div>
