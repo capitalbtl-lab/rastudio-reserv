@@ -931,8 +931,6 @@ function PagesTree({ pages, path, goPage }: { pages: EditorPageItem[]; path: str
   );
 }
 
-}
-
 function BlocksRail({
   path,
   selected,
