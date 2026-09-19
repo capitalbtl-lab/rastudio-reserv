@@ -1249,7 +1249,7 @@ async function pullOneGroup(
 export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32, dateTo = "") {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, inboundRefreshSeatedLessons, studentProtectLessonIds, studentCardBranches } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, inboundRefreshSeatedLessons, studentProtectLessonIds, studentIndexBranches } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const reset0 = String(customerSyncOf(cid).lessonsResetAt || "");
@@ -1300,6 +1300,14 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           : {}),
     });
     return { short, extra, closed };
+  };
+  const refreshStaleOf = async (ids: Iterable<number>) => {
+    const stale = windowStaleLessonIds(ids, loadCustomerCalendar(cid) || []);
+    if (!stale.length) return false;
+    const ref = await inboundRefreshSeatedLessons(branchId, cid, stale, { take: 50, resetAt: reset0 }).catch(() => ({ skipped: undefined as string | undefined }));
+    if (abortedByReset() || (ref as { skipped?: string }).skipped === "reset") return true;
+    disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
+    return false;
   };
   let lessons = 0;
   let seated = 0;
@@ -1354,6 +1362,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     if (first.ok && !weak && setsClosed) {
       const hit = mark(disk, alfa0, true, censusOk);
       if (hit.closed) stampCustomerSync(cid, { lessonsWindowDays: 0 });
+      if (await refreshStaleOf(first.ids || [])) return resetStop();
       if (!balance)
         return {
           cid,
@@ -1442,6 +1451,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
         }
       }
+      if (await refreshStaleOf(first.ok ? first.ids || [] : customerSyncOf(cid).lessonsSeenIds || [])) return resetStop();
       const hit = mark(disk, alfa0, first.ok, censusOk);
       if (hit.closed) stampCustomerSync(cid, { lessonsWindowDays: 0 });
       else if (!range.full && (hit.short || hit.extra) && !customerSyncOf(cid).journalHoleApprovedAt) {
@@ -1460,10 +1470,15 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const fullWin = recheckWindowFull(windowFrom);
     const cardOnly = !fullWin && (Number(recheckDays) || 32) < 1095;
     const seatRounds = fullWin ? 80 : 20;
-    const censusOpts = {
+    const censusOpts: { dateFrom?: string; dateTo?: string; branches?: number[]; token?: string } = {
       ...(censusFrom ? { dateFrom: censusFrom, ...(windowTo ? { dateTo: windowTo } : {}) } : {}),
-      ...(cardOnly ? { branches: studentCardBranches(cid, branchId) } : {}),
     };
+    if (cardOnly) {
+      const { token } = await import("./alfacrm");
+      const t = await token();
+      censusOpts.token = t;
+      censusOpts.branches = await studentIndexBranches(branchId, cid, t);
+    }
     const census = await censusCustomerLessonIds(branchId, cid, censusOpts).catch(() => ({ ids: [] as number[], ok: false as const, error: "Alfa не ответила" }));
     disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
@@ -1497,6 +1512,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     } else if (holeApproved) {
       censusClosed = true;
       mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || 0, true);
+      if (await refreshStaleOf(census.ids)) return resetStop();
     } else {
       const haveBefore = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
       const applied = applyCustomerLessonCensus(cid, census.ids, true, fullWin ? "" : windowFrom, fullWin ? "" : windowTo);
@@ -1552,12 +1568,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       liveAlfa = Number(customerSyncOf(cid).lessonsAlfa) || alfaN;
       }
       mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || liveAlfa, true);
-      const stale = windowStaleLessonIds(census.ids, loadCustomerCalendar(cid) || []);
-      if (stale.length) {
-        const ref = await inboundRefreshSeatedLessons(branchId, cid, stale, { take: 50, resetAt: reset0 }).catch(() => ({ count: 0, skipped: undefined as string | undefined }));
-        if (abortedByReset() || (ref as { skipped?: string }).skipped === "reset") return resetStop();
-        disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
-      }
+      if (await refreshStaleOf(census.ids)) return resetStop();
       }
     }
     } finally {

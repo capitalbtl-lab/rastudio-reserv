@@ -1,5 +1,6 @@
 import { sessionCourseId } from "./group-status.ts";
 import { toAlfaLessonDate } from "./crm-journal-periods.ts";
+import { crmBranchIds } from "./crm-leads-stages.ts";
 
 export function inboundTake(opts: { pending?: boolean }) {
   return opts.pending ? ("skip" as const) : ("alfa" as const);
@@ -256,6 +257,19 @@ export function iceWindowOrNow(
   if (recheck && from && from <= "2015-01-01") return { from, to: to || "" };
   if (recheck) return recheckWindowYmd(recheckDays, now);
   return { from: from || "2015-01-01", to: "" };
+}
+
+/** Короткая синяя: Customer.branch_ids с index, не связи. Нет карточки — дом. */
+export function studentIndexBranchIds(home: number, cid: number, items: Record<string, unknown>[]): number[] {
+  const homeN = Number(home) || 1;
+  const id = Number(cid) || 0;
+  if (id <= 0) return [homeN];
+  const hit = (items || []).find((x) => Number((x as { id?: unknown }).id) === id);
+  if (!hit) return [homeN];
+  const want = new Set(crmBranchIds(hit).filter((b) => b >= 1 && b <= 4));
+  if (!want.size) return [homeN];
+  const order = [homeN, 1, 2, 3, 4].filter((b, i, a) => b >= 1 && b <= 4 && a.indexOf(b) === i);
+  return order.filter((b) => want.has(b));
 }
 
 /** Id переписи, которые уже на диске, но status не 3. Тело после teach не качали. */

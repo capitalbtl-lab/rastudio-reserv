@@ -32,6 +32,7 @@ import {
   groupJournalGreen,
   journalGroupNow,
   censusSeatLessonId,
+  studentIndexBranchIds,
 } from "./crm-inbound-core.ts";
 
 describe("вход из Alfa", () => {
@@ -208,6 +209,15 @@ describe("вход из Alfa", () => {
     assert.equal(censusSeatLessonId({ id: 3, date: "", lesson_date: "" }), 0);
     assert.equal(censusSeatLessonId({ id: 4, date: "2026-01-01", lesson_date: "" }), 4);
     assert.equal(censusSeatLessonId({ id: 0, date: "2026-01-01" }), 0);
+  });
+
+  it("короткая синяя: ветки с Customer.branch_ids, не связи", () => {
+    assert.deepEqual(studentIndexBranchIds(1, 10, [{ id: 10, branch_ids: [1, 2] }]), [1, 2]);
+    assert.deepEqual(studentIndexBranchIds(2, 10, [{ id: 10, branch_ids: [1, 2] }]), [2, 1]);
+    assert.deepEqual(studentIndexBranchIds(1, 10, [{ id: 99, branch_ids: [1, 2] }]), [1]);
+    assert.deepEqual(studentIndexBranchIds(1, 10, []), [1]);
+    assert.deepEqual(studentIndexBranchIds(1, 10, [{ id: 10 }]), [1]);
+    assert.deepEqual(studentIndexBranchIds(1, 10, [{ id: 10, branch_ids: [5, 0] }]), [1]);
   });
 });
 

@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, recheckWindowYmd, iceWindowOrNow, lessonsSetGap, groupWindowGone, idsChecksum, journalIdsReady, censusSeatLessonId } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, recheckWindowYmd, iceWindowOrNow, lessonsSetGap, groupWindowGone, idsChecksum, journalIdsReady, censusSeatLessonId, studentIndexBranchIds } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -497,6 +497,15 @@ export function studentCardBranches(cid: number, home = 0): number[] {
   }
   if (!bids.size) return uniqueBranches(homeN);
   return uniqueBranches(homeN).filter((b) => bids.has(b));
+}
+
+export async function studentIndexBranches(home: number, cid: number, token: string): Promise<number[]> {
+  const homeN = Number(home) || 1;
+  const id = Number(cid) || 0;
+  if (id <= 0) return [homeN];
+  const { request } = await import("./alfacrm");
+  const json = await request(`/v2api/${homeN}/customer/index`, { id, page: 0 }, token).catch(() => ({}));
+  return studentIndexBranchIds(homeN, id, crmUnwrapIndex(json).items as Record<string, unknown>[]);
 }
 
 /** Сколько занятий у ученика в Alfa: перепись уникальных номеров. Пустой catch ≠ конец. Полная страница на потолке — не закрыта. */
