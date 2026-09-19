@@ -1296,23 +1296,24 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   if (rowMatched(r)) {
     return { id: "ok", label: "Совпало", rec: "Клиенты, шапка и касса сходятся ±1 ₽. Трогать не нужно." + goodsNote };
   }
-  const header = Number.isFinite(r.alfaMoney as number) && moneyCloseUi(r.clients, r.alfaMoney);
-  const cashHi = Number.isFinite(r.alfaMoney as number) && (Number(r.cash) || 0) > (Number(r.alfaMoney) || 0) + 1;
-  const cashLo = Number.isFinite(r.alfaMoney as number) && (Number(r.cash) || 0) < (Number(r.alfaMoney) || 0) - 1;
-  if (header && cashHi) {
+  const cashN = Number(r.cash);
+  const alfaN = Number(r.alfaMoney);
+  const cashHi = Number.isFinite(cashN) && Number.isFinite(alfaN) && cashN > alfaN + 1;
+  const cashLo = Number.isFinite(cashN) && Number.isFinite(alfaN) && cashN < alfaN - 1;
+  if (cashHi) {
     if (codes.includes("lessons") || codes.includes("wo") || codes.includes("status")) {
       return { id: "cash-hi", label: "Касса больше шапки", rec: "На диске мало списаний. Шаг 2: календарь этого человека «Перепроверить». Шапку не подгонять." + goodsNote };
     }
     if (codes.includes("snap")) {
       return { id: "snap", label: "Касса не дочитана", rec: "Шаг 4: касса «Перепроверить» с начала. Потом снова шаг 5." };
     }
-    return { id: "cash-hi", label: "Касса больше шапки", rec: "Сначала шаг 2 (календарь), затем шаг 4 (касса). Шапку не трогать." + goodsNote };
+    return { id: "cash-hi", label: "Касса больше шапки", rec: "На диске формула больше Customer.balance. Сначала шаг 2 (календарь), затем шаг 4 (касса). Шапку не трогать." + goodsNote };
   }
-  if (header && cashLo) {
+  if (cashLo) {
     if (codes.includes("status") && !codes.includes("pays") && !codes.includes("snap")) {
       return { id: "status", label: "Урок ещё не проведён", rec: "В календаре цена, урок не проведён. Alfa ещё не списала. Ждать занятие, в Alfa не писать." };
     }
-    return { id: "cash-lo", label: "Касса меньше шапки", rec: "Не все оплаты на диске. Шаг 4: загрузить / перепроверить кассу. Затем снова сверка." + goodsNote };
+    return { id: "cash-lo", label: "Касса меньше шапки", rec: "На диске формула меньше Customer.balance. Шаг 4: загрузить / перепроверить кассу. Затем снова сверка." + goodsNote };
   }
   if (codes.includes("ctt")) {
     return { id: "ctt", label: "Спутали с абонементом", rec: "Сравнивали rest абонемента с общей шапкой. «Перепроверить» на шаге 5 — в Клиентах должна быть шапка, не rest." };

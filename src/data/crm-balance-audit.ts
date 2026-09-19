@@ -26,6 +26,7 @@ import {
   step5Reasons,
   step5SkipNote,
   step5StudyNum,
+  step5RemovedNum,
   step5Ymd,
   step5RemainderFormula,
 } from "./crm-step5-canon";
@@ -237,7 +238,7 @@ export async function diskAudit(cid: number, branchId: number) {
     refundGoodsSum: refundGoodsSumOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
     corrLooksGoods: payRows.some((r) => corrLooksGoods(r as { kind?: string; note?: string })),
     study: step5StudyNum(d?.extras?.is_study),
-    removed: step5StudyNum(d?.extras?.removed),
+    removed: step5RemovedNum(d?.extras?.removed),
     hasDossier: Boolean(d),
     headerAt: String(d?.extras?.headerAt || ""),
     extraN: Number(sync.lessonsExtraN) || 0,

@@ -89,6 +89,14 @@ export function step5StudyNum(raw: unknown): number {
   return Number.isFinite(n) ? n : Number.NaN;
 }
 
+/** Нет поля / пусто = не в архиве (0). В Alfa архив — removed=2. */
+export function step5RemovedNum(raw: unknown): number {
+  if (raw == null) return 0;
+  if (typeof raw === "string" && !raw.trim()) return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
 /** Остаток сайта для сверки с шапкой: лента без товара − списания. Товар не вычитаем. */
 export function step5RemainderFormula(cashLessons: number, writeoff: number) {
   return (Number(cashLessons) || 0) - (Number(writeoff) || 0);
@@ -103,14 +111,12 @@ export function step5CanSverka(p: {
   inArchiveSet: boolean;
 }) {
   if (!p.hasDossier) return false;
-  const rem = Number(p.removed);
-  const st = Number(p.isStudy);
-  if (rem === 1) return false;
-  if (!step5RoleDefined(p.isStudy, p.removed)) return false;
+  const role = step5Role(p.isStudy, p.removed);
+  if (role === "не разобрали") return false;
   if (!p.payFilled) return false;
-  if (st === 1 && rem === 0) return true;
-  if (st === 0 && rem === 0) return (Number(p.livePays) || 0) > 0;
-  if ((rem === 2 || st === 2) && p.inArchiveSet) return true;
+  if (role === "клиент") return true;
+  if (role === "лид") return (Number(p.livePays) || 0) > 0;
+  if (role === "архив") return Boolean(p.inArchiveSet);
   return false;
 }
 
@@ -121,14 +127,10 @@ export function step5SkipNote(p: {
   inArchiveSet: boolean;
   payFilled?: boolean;
 }) {
-  if (Number(p.removed) === 1) return "не разобрали";
-  if (step5Role(p.isStudy, p.removed) === "не разобрали") return "нет роли на досье, шапку не зовём";
-  const st = Number(p.isStudy);
-  const rem = Number(p.removed);
-  if ((rem === 2 || st === 2) && !p.inArchiveSet) {
-    return "не в наборе шага 2, не сверяем";
-  }
-  if (st === 0 && rem === 0 && (Number(p.livePays) || 0) < 1) return "кассы нет, не сверяем";
+  const role = step5Role(p.isStudy, p.removed);
+  if (role === "не разобрали") return "нет роли на досье, шапку не зовём";
+  if (role === "архив" && !p.inArchiveSet) return "не в наборе шага 2, не сверяем";
+  if (role === "лид" && (Number(p.livePays) || 0) < 1) return "кассы нет, не сверяем";
   if (p.payFilled === false) return "кассы нет / нет А";
   return "";
 }

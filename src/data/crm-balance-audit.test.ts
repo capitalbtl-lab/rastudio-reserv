@@ -290,6 +290,7 @@ describe("шаг 5 сверка остатка", () => {
     assert.match(src, /lesson\/index/);
     assert.match(src, /нет роли/);
     assert.match(src, /нет сверки/);
+    assert.match(src, /step5RemovedNum/);
     assert.match(src, /step5StudyNum/);
     assert.doesNotMatch(src, /study: Number\(d\?\.extras\?\.is_study\)/);
     assert.match(src, /alfa: Number\.NaN/);
@@ -308,7 +309,9 @@ describe("шаг 5 сверка остатка", () => {
     assert.match(ui, /id: "no-sverka"/);
     assert.match(ui, /headerStamped/);
     assert.match(ui, /Касса не закрыта шагом 4/);
-    assert.doesNotMatch(ui, /if \(who === "лид"\)/);
+    assert.match(ui, /Number.isFinite\(cashN\)/);
+    assert.doesNotMatch(ui, /header && cashHi/);
+    assert.doesNotMatch(ui, /Number\(r\.cash\) \|\| 0/);
     assert.doesNotMatch(ui, /includes\("лид"\) && !\(r\.codes \|\| \[\]\)\.includes\("ok"\)/);
     assert.match(ui, /Товар в ленте, в остаток Alfa не входит/);
     assert.doesNotMatch(ui, /Продажа товара вычитает из остатка/);
