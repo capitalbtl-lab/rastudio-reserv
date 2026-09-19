@@ -25,7 +25,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { debugEmit } from "@/data/debug-client";
-import { loadPageDocFn, placeBlockFn, publishPageFn, savePageDraftFn } from "@/data/page-layout-fn";
+import { loadPageDocFn, placeBlockFn, publishPageFn, savePageDraftFn, applyTypePatchFn } from "@/data/page-layout-fn";
 import { BLOCK_LIBRARY, isAtomType, libraryType } from "@/data/block-library-core";
 import { paintVeFrames } from "@/lib/ve-paint";
 import { mediaFromDrop } from "@/lib/media-drag";
@@ -48,6 +48,7 @@ import {
 } from "@/data/home-layout-core";
 import { StudioPanel } from "@/components/home-studio";
 import { HomeEditorCtx, useHomeEditor, type HomeEditorCtxValue } from "@/components/home-read";
+import { changedBlockIds, typeIdOf } from "@/data/page-layout-core";
 import { editorMenuTree, type EditorPageItem } from "@/data/page-layout-core";
 import { cn } from "@/lib/utils";
 import "./home-editor.css";
@@ -249,6 +250,12 @@ export function HomeEditorProvider({
   const hist = useRef<HomeLayoutDoc[]>([normalizeHomeLayout(initial)]);
   const histAt = useRef(0);
   const timer = useRef<number>(0);
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const scopesRef = useRef<Record<string, "one" | "type">>({});
+  const pendingRef = useRef<{ doc: HomeLayoutDoc; id: string } | null>(null);
+  const [scopes, setScopes] = useState<Record<string, "one" | "type">>({});
+  const [askScope, setAskScope] = useState<{ id: string; typeId: string; label: string } | null>(null);
 
   useEffect(() => {
     setDocState(normalizeHomeLayout(initial));
@@ -284,6 +291,7 @@ export function HomeEditorProvider({
       if (!res.ok) return;
       const next = normalizeHomeLayout(res.layout, here === "/");
       setDocState(next);
+      docRef.current = next;
       hist.current = [next];
       histAt.current = 0;
       setPages(res.pages || []);
@@ -309,26 +317,74 @@ export function HomeEditorProvider({
     [],
   );
 
+  const propagateType = useCallback((layout: HomeLayoutDoc, id: string) => {
+    const token = debugToken();
+    if (!token) return;
+    setDirty("на все страницы…");
+    void applyTypePatchFn({ data: { token, path: currentPath(), blockId: id, layout } }).then((res) => {
+      if (!res.ok) {
+        setDirty(res.error || "ошибка");
+        return;
+      }
+      const name = libraryType(res.typeId)?.label || res.typeId;
+      setDirty(`все «${name}»: ${res.pages} стр.`);
+    });
+  }, []);
+
   const setDoc = useCallback(
     (next: HomeLayoutDoc, write = true) => {
       const fill = currentPath() === "/";
+      const prev = docRef.current;
       const norm = normalizeHomeLayout(next, fill);
+      docRef.current = norm;
       setDocState(norm);
-      if (write) {
-        const cut = hist.current.slice(0, histAt.current + 1);
-        cut.push(norm);
-        hist.current = cut.slice(-40);
-        histAt.current = hist.current.length - 1;
-        persist(norm);
+      if (!write) return;
+      const cut = hist.current.slice(0, histAt.current + 1);
+      cut.push(norm);
+      hist.current = cut.slice(-40);
+      histAt.current = hist.current.length - 1;
+      const changed = changedBlockIds(prev, norm);
+      const id = changed[0];
+      if (id && !scopesRef.current[id]) {
+        pendingRef.current = { doc: norm, id };
+        const typeId = typeIdOf(id, norm);
+        setAskScope({
+          id,
+          typeId,
+          label: libraryType(typeId)?.label || homeBlockLabel(id, norm.customs),
+        });
+        return;
       }
+      persist(norm);
+      if (id && scopesRef.current[id] === "type") propagateType(norm, id);
     },
-    [persist],
+    [persist, propagateType],
+  );
+
+  const chooseScope = useCallback(
+    (scope: "one" | "type") => {
+      const pending = pendingRef.current;
+      const id = pending?.id || selected;
+      if (!id) {
+        setAskScope(null);
+        return;
+      }
+      scopesRef.current = { ...scopesRef.current, [id]: scope };
+      setScopes({ ...scopesRef.current });
+      setAskScope(null);
+      const layout = pending?.doc || docRef.current;
+      pendingRef.current = null;
+      persist(layout);
+      if (scope === "type") propagateType(layout, id);
+    },
+    [persist, propagateType, selected],
   );
 
   const undo = useCallback(() => {
     if (histAt.current <= 0) return;
     histAt.current -= 1;
     const next = hist.current[histAt.current];
+    docRef.current = next;
     setDocState(next);
     persist(next);
   }, [persist]);
@@ -337,6 +393,7 @@ export function HomeEditorProvider({
     if (histAt.current >= hist.current.length - 1) return;
     histAt.current += 1;
     const next = hist.current[histAt.current];
+    docRef.current = next;
     setDocState(next);
     persist(next);
   }, [persist]);
@@ -397,6 +454,11 @@ export function HomeEditorProvider({
         return;
       }
       if (e.key === "Escape") {
+        if (askScope) {
+          e.preventDefault();
+          chooseScope("one");
+          return;
+        }
         setSelected(null);
         setRail(null);
       }
@@ -417,7 +479,7 @@ export function HomeEditorProvider({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, selected, doc, setDoc, undo, redo, saveNow]);
+  }, [editing, selected, doc, setDoc, undo, redo, saveNow, askScope, chooseScope]);
 
   const canPublish = phoneIssues.length === 0 && dirty !== "на сайте" && dirty !== "сохраняем…";
 
@@ -446,9 +508,37 @@ export function HomeEditorProvider({
     phoneIssues,
     rail,
     setRail,
+    askScope,
+    chooseScope,
+    blockScope: (id) => scopes[id] || null,
   };
 
   return <HomeEditorCtx.Provider value={value}>{children}</HomeEditorCtx.Provider>;
+}
+
+function ScopeAsk() {
+  const ctx = useHomeEditor();
+  if (!ctx?.askScope) return null;
+  const label = ctx.askScope.label;
+  return (
+    <div className="ve-ui fixed inset-0 z-[80] grid place-items-center bg-black/45 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 text-fg shadow-[0_24px_60px_-24px_rgba(0,0,0,.45)]">
+        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">Куда применить</p>
+        <p className="mt-2 font-display text-2xl leading-tight">Изменения в блоке «{label}»</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted">Только этот блок на этой странице — или все блоки этого типа на сайте.</p>
+        <div className="mt-5 grid gap-2">
+          <button type="button" className="min-h-12 rounded-xl bg-primary px-4 py-2.5 text-left text-sm font-semibold text-primary-foreground" onClick={() => ctx.chooseScope("one")}>
+            Только этот блок
+            <span className="mt-0.5 block text-[0.75rem] font-normal opacity-85">Эта страница</span>
+          </button>
+          <button type="button" className="min-h-12 rounded-xl bg-surface-2 px-4 py-2.5 text-left text-sm font-semibold" onClick={() => ctx.chooseScope("type")}>
+            Все блоки «{label}»
+            <span className="mt-0.5 block text-[0.75rem] font-normal text-muted">Все страницы сайта</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function HomeEditorChrome() {
@@ -483,6 +573,7 @@ export function HomeEditorChrome() {
   return (
     <>
       <VeSync />
+      <ScopeAsk />
       <div className="ve-ui ve-chrome">
         <div className="ve-topbar">
           <PagePicker open={pageOpen} setOpen={setPageOpen} title={pageTitle} path={ctx.path} pages={ctx.pages} goPage={ctx.goPage} />
@@ -895,6 +986,28 @@ function InspectorFields({
     <>
       <p className={cn("text-[0.68rem] font-semibold uppercase tracking-[0.14em]", muted)}>Инспектор</p>
       <p className="mt-2 font-display text-xl leading-tight">{homeBlockLabel(selected, doc.customs)}</p>
+      {ctx ? (
+        <div className="mt-3 grid grid-cols-2 gap-1">
+          {(
+            [
+              ["one", "Этот блок"],
+              ["type", "Все такие на сайте"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={cn(
+                "min-h-9 rounded-lg px-2 text-[0.72rem] font-semibold",
+                ctx.blockScope(selected) === id ? "bg-primary text-primary-foreground" : chipOff,
+              )}
+              onClick={() => ctx.chooseScope(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <p className={cn("mt-2 text-[0.78rem] leading-relaxed", light ? "text-muted" : "text-header-fg/60")}>
         Текст на холсте. Фото — вкладка «Студия». DeepSeek правит тексты и придумывает блоки там же.
       </p>

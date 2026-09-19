@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { EDITOR_STATIC_PAGES, pageKindOf, type PageKind } from "./block-library-core.ts";
 import {
+  applyInstanceToType,
   cloneLayout,
   emptyPageDoc,
   homeToLayout,
@@ -151,4 +152,23 @@ export function draftHomeLayout() {
 
 export function layoutsDiffer(doc: PageDoc) {
   return !layoutsEqual(doc.draft, doc.published);
+}
+
+export function applyTypeFrom(path: string, blockId: string): { pages: number; blocks: number; typeId: string } {
+  const src = loadPageDoc(path);
+  const from = src.draft.blocks[blockId];
+  if (!from?.typeId) return { pages: 0, blocks: 0, typeId: "" };
+  let pages = 0;
+  let blocks = 0;
+  for (const item of listEditorPages()) {
+    const doc = loadPageDoc(item.path);
+    const next = applyInstanceToType(doc.draft, from.typeId, from);
+    if (layoutsEqual(next, doc.draft) && item.path !== src.path) continue;
+    if (!layoutsEqual(next, doc.draft)) {
+      savePageDraft(item.path, next);
+      pages += 1;
+    }
+    blocks += next.order.filter((id) => next.blocks[id]?.typeId === from.typeId).length;
+  }
+  return { pages, blocks, typeId: from.typeId };
 }

@@ -30,6 +30,9 @@ export type HomeEditorCtxValue = {
   phoneIssues: string[];
   rail: "elements" | "sections" | "pages" | "media" | "ai" | "agent" | null;
   setRail: (r: HomeEditorCtxValue["rail"]) => void;
+  askScope: { id: string; typeId: string; label: string } | null;
+  chooseScope: (scope: "one" | "type") => void;
+  blockScope: (id: string) => "one" | "type" | null;
 };
 
 export const HomeEditorCtx = createContext<HomeEditorCtxValue | null>(null);
@@ -74,6 +77,9 @@ export function HomeReadProvider({
       phoneIssues: [],
       rail: null,
       setRail: noop,
+      askScope: null,
+      chooseScope: noop,
+      blockScope: () => null,
     }),
     [doc],
   );

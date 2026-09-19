@@ -5,6 +5,7 @@ import { BLOCK_LIBRARY, HOME_TYPE_IDS, PAGE_TYPE_IDS, kindOrder, libraryType } f
 import {
   addInstance,
   applyHomeToPage,
+  applyInstanceToType,
   copyInstanceTo,
   emptyPageDoc,
   extrasOf,
@@ -40,6 +41,20 @@ describe("библиотека и документ страницы", () => {
     const paint = readFileSync(new URL("../lib/ve-paint.ts", import.meta.url), "utf8");
     assert.match(paint, /paintVeFrames/);
     assert.match(paint, /\[data-ve-frame\]/);
+  });
+
+  it("изменения типа идут во все блоки typeId, courseId страницы свой", () => {
+    const from = seedLayout("school");
+    from.blocks.schedule.style = { h: 480, bg: "ink" };
+    from.blocks.schedule.content.courseId = "/robototehnika-v-kolomne";
+    const art = seedLayout("school");
+    art.blocks.schedule.content.courseId = "/art-studio";
+    const next = applyInstanceToType(art, "schedule", from.blocks.schedule);
+    assert.equal(next.blocks.schedule.style.h, 480);
+    assert.equal(next.blocks.schedule.style.bg, "ink");
+    assert.equal(next.blocks.schedule.content.courseId, "/art-studio");
+    assert.equal(next.blocks.schedule.onAllPages, true);
+    assert.equal(next.blocks["course-hero"].style.h, undefined);
   });
 
   it("главная мигрирует в PageDoc и обратно без потери слотов", () => {
@@ -194,6 +209,10 @@ describe("библиотека и документ страницы", () => {
     assert.match(editor, /aliases/);
     assert.match(editor, /function VeSync/);
     assert.match(editor, /paintVeFrames/);
+    assert.match(editor, /Только этот блок/);
+    assert.match(editor, /Все блоки/);
+    assert.match(editor, /chooseScope/);
+    assert.match(editor, /applyTypePatchFn/);
     const extras = readFileSync(new URL("../components/page-extras.tsx", import.meta.url), "utf8");
     assert.match(extras, /md:grid-cols-2/);
     assert.match(extras, /overflow-x-clip/);
@@ -203,7 +222,8 @@ describe("библиотека и документ страницы", () => {
     assert.match(fn, /savePageDraft\(path, homeToLayout/);
     assert.match(fn, /publishPage\(path\)/);
     assert.match(fn, /listEditorPagesFn/);
-    assert.match(fn, /Нужен вход в редактор/);
+    assert.match(fn, /applyTypePatchFn/);
+    assert.match(fn, /applyTypeFrom/);
     assert.doesNotMatch(fn, /publicPageExtrasFn/);
     const pub = readFileSync(new URL("./page-extras-fn.ts", import.meta.url), "utf8");
     assert.match(pub, /publicPageExtrasFn/);

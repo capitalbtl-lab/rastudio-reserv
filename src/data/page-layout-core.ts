@@ -374,6 +374,60 @@ export function layoutToHome(layout: LayoutDoc): HomeLayoutDoc {
   return normalizeHomeLayout({ order: layout.order, styles, texts, customs, media }, false);
 }
 
+export function typeIdOf(id: string, home: HomeLayoutDoc): string {
+  const custom = home.customs.find((c) => c.id === id);
+  if (custom?.typeId) return custom.typeId;
+  return id;
+}
+
+export function instanceFingerprint(home: HomeLayoutDoc, id: string) {
+  const texts: Record<string, string> = {};
+  for (const [k, v] of Object.entries(home.texts)) {
+    if (k === id || k.startsWith(`${id}.`)) texts[k] = v;
+  }
+  return JSON.stringify({
+    style: home.styles[id] || {},
+    media: home.media[id] || "",
+    texts,
+    custom: home.customs.find((c) => c.id === id) || null,
+  });
+}
+
+export function changedBlockIds(prev: HomeLayoutDoc, next: HomeLayoutDoc): string[] {
+  const ids = new Set<string>([
+    ...prev.order,
+    ...next.order,
+    ...Object.keys(prev.styles),
+    ...Object.keys(next.styles),
+    ...Object.keys(prev.media),
+    ...Object.keys(next.media),
+    ...prev.customs.map((c) => c.id),
+    ...next.customs.map((c) => c.id),
+  ]);
+  for (const k of Object.keys(prev.texts)) ids.add(k.split(".")[0] || k);
+  for (const k of Object.keys(next.texts)) ids.add(k.split(".")[0] || k);
+  return [...ids].filter((id) => instanceFingerprint(prev, id) !== instanceFingerprint(next, id));
+}
+
+/** Копирует стиль и контент источника во все блоки того же typeId. courseId страницы не трогает. */
+export function applyInstanceToType(layout: LayoutDoc, typeId: string, from: BlockInstance): LayoutDoc {
+  const blocks = { ...layout.blocks };
+  let n = 0;
+  for (const id of layout.order) {
+    const b = blocks[id];
+    if (!b || b.typeId !== typeId) continue;
+    blocks[id] = {
+      ...b,
+      style: { ...from.style },
+      phone: { ...from.phone },
+      content: { ...from.content, courseId: b.content.courseId },
+      onAllPages: true,
+    };
+    n += 1;
+  }
+  return n ? { ...layout, blocks } : layout;
+}
+
 export function applyHomeToPage(page: PageDoc, home: HomeLayoutDoc): PageDoc {
   const draft = homeToLayout(home);
   for (const id of draft.order) {

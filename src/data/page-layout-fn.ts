@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { tokenOk } from "./admin-auth";
 import { addInstance, copyInstanceTo, homeToLayout, layoutToHome, phoneIssues } from "./page-layout-core.ts";
-import { listEditorPages, loadPageDoc, publishPage, savePageDraft, unpublishPage } from "./page-layout.ts";
+import { listEditorPages, loadPageDoc, publishPage, savePageDraft, unpublishPage, applyTypeFrom } from "./page-layout.ts";
 import { normalizeHomeLayout } from "./home-layout-core.ts";
 
 function guard(token?: string) {
@@ -92,4 +92,17 @@ export const placeBlockFn = createServerFn({ method: "POST" })
     }
     const saved = savePageDraft(path, draft);
     return { ok: true as const, layout: layoutToHome(saved.draft) };
+  });
+
+export const applyTypePatchFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string; path?: string; blockId?: string; layout?: unknown })
+  .handler(async ({ data }) => {
+    if (!guard(data.token)) return { ok: false as const, error: "Нужен вход в редактор." };
+    const path = String(data.path || "/");
+    const blockId = String(data.blockId || "");
+    if (!blockId) return { ok: false as const, error: "Не выбран блок." };
+    if (data.layout) savePageDraft(path, homeToLayout(normalizeHomeLayout(data.layout, path === "/" || path === "")));
+    const res = applyTypeFrom(path, blockId);
+    if (!res.typeId) return { ok: false as const, error: "Блока нет на странице." };
+    return { ok: true as const, ...res };
   });
