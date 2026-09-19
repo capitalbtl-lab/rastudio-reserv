@@ -298,3 +298,25 @@ html.home-editing [data-ve-stub] {
   background: var(--primary, #2563eb);
   color: #fff;
 }
+
+.ve-mini {
+  container-type: inline-size;
+  width: 100%;
+  overflow: hidden;
+  background: #f5f6f8;
+}
+
+.ve-mini-canvas {
+  transform-origin: 0 0;
+  transform: scale(calc(100cqi / var(--ve-src-w, 1280px)));
+}
+
+.ve-mini-canvas .photo-stack .shot,
+.ve-mini-canvas .ink::after {
+  animation: none !important;
+}
+
+.ve-mini-canvas img {
+  outline: none;
+}
+
