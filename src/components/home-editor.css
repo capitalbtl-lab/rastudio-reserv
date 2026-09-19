@@ -163,3 +163,55 @@ html.home-editing[data-home-device="phone"] [class*="lg:min-h"] {
 html.home-editing [data-ve-frame] {
   scroll-margin-top: 5.5rem;
 }
+
+.ve-nav-school {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.ve-nav-school:hover {
+  background: rgb(15 23 42 / 0.05);
+}
+
+.ve-nav-school.is-on {
+  background: var(--primary, #2563eb);
+  color: #fff;
+}
+
+.ve-nav-courses {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0.65rem 1.85rem;
+  padding: 0.15rem 0 0.15rem 0.55rem;
+  border-left: 2px solid rgb(15 23 42 / 0.1);
+}
+
+.ve-nav-course {
+  display: block;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.7rem;
+  background: #f3f5fa;
+  border: 1px solid rgb(15 23 42 / 0.08);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #334155;
+  white-space: normal;
+}
+
+.ve-nav-course:hover {
+  background: #e8ecf6;
+}
+
+.ve-nav-course.is-on {
+  background: var(--primary, #2563eb);
+  border-color: transparent;
+  color: #fff;
+}
