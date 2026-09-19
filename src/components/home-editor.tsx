@@ -21,6 +21,7 @@ import { BLOCK_LIBRARY, isAtomType } from "@/data/block-library-core";
 import {
   emptyHomeLayout,
   homeBlockLabel,
+  isCustomBlockId,
   moveHomeBlock,
   normalizeHomeLayout,
   patchHomeStyle,
@@ -645,6 +646,7 @@ function InspectorFields({
   setDoc: (next: HomeLayoutDoc, persist?: boolean) => void;
   light?: boolean;
 }) {
+  const ctx = useHomeEditor();
   const muted = light ? "text-muted" : "text-header-fg/45";
   const chipOff = light ? "bg-surface-2 hover:bg-black/5" : "bg-white/10 hover:bg-white/15";
   if (!selected) {
@@ -720,15 +722,54 @@ function InspectorFields({
           Ниже
         </button>
       </div>
-      <button
-        type="button"
-        className={cn("mt-3 min-h-11 w-full rounded-xl text-[0.78rem] font-semibold", chipOff)}
-        onClick={() => {
-          if (window.confirm("Вернуть заводской порядок, тексты и отступы?")) setDoc(emptyHomeLayout());
-        }}
-      >
-        Сброс
-      </button>
+      <PlaceOn id={selected} />
+      {ctx?.path === "/" ? (
+        <button
+          type="button"
+          className={cn("mt-3 min-h-11 w-full rounded-xl text-[0.78rem] font-semibold", chipOff)}
+          onClick={() => {
+            if (window.confirm("Вернуть заводской порядок, тексты и отступы главной?")) setDoc(emptyHomeLayout());
+          }}
+        >
+          Сброс
+        </button>
+      ) : null}
     </>
+  );
+}
+
+function PlaceOn({ id }: { id: string }) {
+  const ctx = useHomeEditor();
+  const [to, setTo] = useState("");
+  const [msg, setMsg] = useState("");
+  if (!ctx || !isCustomBlockId(id)) return null;
+  const others = ctx.pages.filter((p) => p.path !== ctx.path);
+  if (!others.length) return null;
+  async function go() {
+    const token = debugToken();
+    if (!token || !to) return;
+    const res = await placeBlockFn({ data: { token, path: to, fromPath: ctx.path, fromId: id } });
+    setMsg(res.ok ? `Скопирован на ${to}. Откройте страницу и смените контент.` : "error" in res ? res.error : "Ошибка");
+  }
+  return (
+    <div className="mt-5">
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">Поставить на другую страницу</p>
+      <select
+        className="mt-2 h-11 w-full rounded-xl bg-surface-2 px-3 text-[0.8rem]"
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+      >
+        <option value="">Страница…</option>
+        {others.map((p) => (
+          <option key={p.path} value={p.path}>
+            {p.title}
+          </option>
+        ))}
+      </select>
+      <button type="button" className="mt-2 min-h-11 w-full rounded-xl bg-black/5 text-[0.78rem] font-semibold" onClick={() => void go()} disabled={!to}>
+        Поставить этот блок
+      </button>
+      {msg ? <p className="mt-2 text-[0.72rem] text-primary">{msg}</p> : null}
+    </div>
   );
 }

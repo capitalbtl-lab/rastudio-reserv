@@ -8,9 +8,12 @@ function guard(token?: string) {
   return tokenOk(token);
 }
 
-export const listEditorPagesFn = createServerFn({ method: "GET" }).handler(async () => {
-  return { ok: true as const, pages: listEditorPages() };
-});
+export const listEditorPagesFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string })
+  .handler(async ({ data }) => {
+    if (!guard(data.token)) return { ok: false as const, error: "Нужен вход в редактор." };
+    return { ok: true as const, pages: listEditorPages() };
+  });
 
 export const loadPageDocFn = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; path?: string; which?: "draft" | "published" })

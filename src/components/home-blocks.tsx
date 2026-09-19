@@ -60,9 +60,72 @@ function CustomHomeBlock({ block }: { block: HomeCustomBlock }) {
   const kicker = ctx?.text(`${block.id}.kicker`, block.kicker) || block.kicker;
   const title = ctx?.text(`${block.id}.title`, block.title) || block.title;
   const text = ctx?.text(`${block.id}.text`, block.text) || block.text;
+  const typeId = block.typeId || "custom";
+  if (typeId === "heading") {
+    return (
+      <section className="page-wrap overflow-x-clip py-8">
+        <EditText id={`${block.id}.title`} as="h2" className="section-title">
+          {title}
+        </EditText>
+      </section>
+    );
+  }
+  if (typeId === "rich-text") {
+    return (
+      <section className="page-wrap max-w-3xl overflow-x-clip py-8">
+        {kicker ? (
+          <EditText id={`${block.id}.kicker`} as="p" className="kicker text-primary">
+            {kicker}
+          </EditText>
+        ) : null}
+        {title ? (
+          <EditText id={`${block.id}.title`} as="h2" className="section-title mt-3">
+            {title}
+          </EditText>
+        ) : null}
+        <EditText id={`${block.id}.text`} as="p" className="mt-5 whitespace-pre-wrap text-[0.98rem] leading-relaxed text-muted">
+          {text}
+        </EditText>
+      </section>
+    );
+  }
+  if (typeId === "image" && src) {
+    return (
+      <section className="page-wrap overflow-x-clip py-8">
+        {title ? (
+          <EditText id={`${block.id}.title`} as="h2" className="section-title mb-4">
+            {title}
+          </EditText>
+        ) : null}
+        <SeoImage src={src} alt={title} filename={title} className="aspect-[4/3] w-full max-w-full rounded-3xl" />
+      </section>
+    );
+  }
+  if (typeId === "video" && src) {
+    return (
+      <section className="page-wrap overflow-x-clip py-8">
+        <SiteVideo src={src} title={title} className="aspect-video w-full max-w-full overflow-hidden rounded-3xl" />
+      </section>
+    );
+  }
+  if (typeId === "buttons" && block.ctaLabel) {
+    return (
+      <section className="page-wrap overflow-x-clip py-6">
+        <Button asChild size="lg">
+          {isTrialHref(block.ctaHref || "#trial") ? (
+            <a href="#trial" onClick={(e) => { e.preventDefault(); openTrialForm(); }}>{block.ctaLabel}</a>
+          ) : block.ctaHref?.startsWith("/") ? (
+            <PageLink to={block.ctaHref}>{block.ctaLabel}</PageLink>
+          ) : (
+            <a href={block.ctaHref || "#trial"}>{block.ctaLabel}</a>
+          )}
+        </Button>
+      </section>
+    );
+  }
   return (
     <section className="page-wrap py-12 md:py-16">
-      <div className="grid items-center gap-8 overflow-hidden rounded-[2rem] bg-surface p-6 shadow-[var(--shadow-border)] md:grid-cols-2 md:gap-12 md:p-10">
+      <div className="grid items-center gap-8 overflow-x-clip rounded-[2rem] bg-surface p-6 shadow-[var(--shadow-border)] md:grid-cols-2 md:gap-12 md:p-10">
         <div>
           {kicker ? (
             <EditText id={`${block.id}.kicker`} as="p" className="kicker text-primary">

@@ -173,7 +173,29 @@ function PageEditorLazy({ children }: { children: ReactNode }) {
 function PageExtrasLazy() {
   const [Node, setNode] = useState<ComponentType | null>(null);
   useEffect(() => {
-    void import("@/components/page-extras").then((m) => setNode(() => m.PageExtras));
+    let gone = false;
+    const path = location.pathname.replace(/\/+$/, "") || "/";
+    const editing = Boolean(sessionStorage.getItem("ra_edit") || /(?:\?|&)edit=1(?:&|$)/.test(location.search));
+    const load = () => {
+      if (gone) return;
+      void import("@/components/page-extras").then((m) => {
+        if (!gone) setNode(() => m.PageExtras);
+      });
+    };
+    if (editing) {
+      load();
+      return () => {
+        gone = true;
+      };
+    }
+    void import("@/data/page-extras-fn").then(({ publicPageExtrasFn }) =>
+      publicPageExtrasFn({ data: { path } }).then((res) => {
+        if (res.ok && "extras" in res && res.extras.length) load();
+      }),
+    );
+    return () => {
+      gone = true;
+    };
   }, []);
   if (!Node) return null;
   return <Node />;

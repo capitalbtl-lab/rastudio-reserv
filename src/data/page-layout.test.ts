@@ -128,10 +128,14 @@ describe("библиотека и документ страницы", () => {
     assert.match(editor, /Опубликовать/);
     assert.match(editor, /Предпросмотр/);
     assert.match(editor, /Сохранить/);
+    assert.match(editor, /Поставить этот блок/);
+    assert.match(editor, /fromPath/);
+    assert.match(editor, /path === "\/"/);
     const cms = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
     assert.match(cms, /import\("@\/components\/page-editor"\)/);
     assert.doesNotMatch(cms, /from "@\/components\/page-editor"/);
     assert.match(cms, /import\("@\/components\/page-extras"\)/);
+    assert.match(cms, /import\("@\/data\/page-extras-fn"\)/);
     assert.doesNotMatch(cms, /from "@\/components\/page-extras"/);
     assert.doesNotMatch(cms, /page-layout-fn/);
     assert.match(cms, /HeroCollage/);
@@ -143,6 +147,8 @@ describe("библиотека и документ страницы", () => {
     const fn = readFileSync(new URL("./page-layout-fn.ts", import.meta.url), "utf8");
     assert.match(fn, /savePageDraft\(path, homeToLayout/);
     assert.match(fn, /publishPage\(path\)/);
+    assert.match(fn, /listEditorPagesFn/);
+    assert.match(fn, /Нужен вход в редактор/);
     assert.doesNotMatch(fn, /publicPageExtrasFn/);
     const pub = readFileSync(new URL("./page-extras-fn.ts", import.meta.url), "utf8");
     assert.match(pub, /publicPageExtrasFn/);
