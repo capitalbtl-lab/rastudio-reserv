@@ -23,8 +23,11 @@ function detailFlag(v: unknown): boolean | null {
 }
 
 function detailAmount(d: LessonDetail) {
-  const n = Number(d.commission ?? d.commision ?? d.cost ?? d.sum ?? d.paid ?? d.price ?? d.lesson_cost ?? d.amount ?? 0);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  const keys = ["commission", "commision", "cost", "sum", "paid", "price", "lesson_cost", "amount"] as const;
+  for (const k of keys) {
+    if (amountGiven(d[k])) return Number(d[k]);
+  }
+  return undefined;
 }
 
 /** Сумма задана явно, включая 0. Пусто — дырка, можно взять соседнюю. */
@@ -71,17 +74,22 @@ export function lessonDetailOf(item: Record<string, unknown>, customerId?: numbe
 }
 
 export function lessonWriteoffAmount(item: Record<string, unknown>, customerId?: number) {
+  const given = lessonWriteoffGiven(item, customerId);
+  return amountGiven(given) ? Number(given) : 0;
+}
+
+/** Явная сумма с Alfa, включая 0. Нет поля — не 0. */
+export function lessonWriteoffGiven(item: Record<string, unknown>, customerId?: number) {
   const d = lessonDetailOf(item, customerId);
   if (d) {
     const n = detailAmount(d);
-    if (n > 0) return n;
+    if (amountGiven(n)) return Number(n);
   }
   const keys = ["commission", "commision", "cost", "sum", "paid", "price", "lesson_cost", "amount"];
   for (const k of keys) {
-    const n = Number(item[k]);
-    if (Number.isFinite(n) && n > 0) return n;
+    if (amountGiven(item[k])) return Number(item[k]);
   }
-  return 0;
+  return undefined;
 }
 
 /** Абонемент списания: details[].ctt_id этого ученика, иначе урок. */
@@ -114,7 +122,7 @@ export function packLessonPupils(item: Record<string, unknown>): LessonPupil[] {
       customerId,
       name: detailName(d),
       attend,
-      amount,
+      amount: amountGiven(amount) ? Number(amount) : undefined,
       cttId: cttId || undefined,
       reasonId: reasonId || undefined,
       reason: reason || undefined,
@@ -125,12 +133,12 @@ export function packLessonPupils(item: Record<string, unknown>): LessonPupil[] {
   }
   for (const id of ids) {
     if (seen.has(id)) continue;
-    const amount = lessonWriteoffAmount(item, id);
+    const amount = lessonWriteoffGiven(item, id);
     const cttId = lessonWriteoffCtt(item, id);
     out.push({
       customerId: id,
       attend: true,
-      amount: amount || undefined,
+      amount: amountGiven(amount) ? Number(amount) : undefined,
       cttId: cttId || undefined,
     });
   }

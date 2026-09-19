@@ -449,7 +449,7 @@ describe("ручной журнал с Alfa", () => {
     const refFn = inbound.slice(refAt, inbound.indexOf("export async function inboundJournalChunk", refAt));
     assert.match(refFn, /for \(let i = 0; i < all\.length; i \+= take\)/);
     assert.match(inbound, /Все id окна, не первые 50/);
-    assert.match(inbound, /amountGiven\(mine\?\.amount\) \? Number\(mine\?\.amount\) : amountGiven\(charge\.amount\)/);
+    assert.match(inbound, /amountGiven\(mine\?\.amount\) \? Number\(mine\?\.amount\) : undefined/);
     assert.doesNotMatch(inbound, /charge\.amount \|\| undefined/);
     assert.match(pull, /inboundMissingUntilSeated/);
     assert.doesNotMatch(pull, /inboundMissingCustomerLessons/);
@@ -458,6 +458,8 @@ describe("ручной журнал с Alfa", () => {
     const missAt = inbound.indexOf("export async function inboundMissingCustomerLessons");
     const miss = inbound.slice(missAt, missAt + 9000);
     assert.match(miss, /id: lid, status/);
+    assert.match(miss, /customer_id: id/);
+    assert.match(miss, /bidsFor/);
     assert.match(miss, /LESSON_STATUSES/);
     assert.doesNotMatch(miss, /lesson_id: lid/);
     assert.doesNotMatch(miss, /2015-01-01/);
@@ -577,7 +579,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(miss, /break outer/);
     assert.match(miss, /packedRow/);
     assert.doesNotMatch(miss, /date_from/);
-    assert.doesNotMatch(miss, /customer_id: id/);
+    assert.match(miss, /customer_id: id/);
     assert.match(miss, /lessonsSeenIds: seenNext/);
   });
 });

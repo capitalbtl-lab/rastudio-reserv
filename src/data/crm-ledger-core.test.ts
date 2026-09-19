@@ -122,6 +122,12 @@ describe("журнал оплат и списаний", () => {
     assert.equal(pause[0]?.amount, 0);
     assert.equal(pause[0]?.attend, false);
     assert.equal(chargeFromPupils({ pupils: pause, amount: 743.75 }, 4982).amount, 0);
+    const thin = packLessonPupils({
+      customer_ids: [4982],
+      details: [{ customer_id: 4982, is_attend: 1 }],
+    });
+    assert.equal(thin[0]?.amount, undefined);
+    assert.equal(amountGiven(thin[0]?.amount), false);
     assert.equal(writeoffSumOf([{ status: 3, amount: 743.75, pupils: pause }], 4982), 0);
     assert.equal(amountGiven(0), true);
     assert.equal(amountGiven(undefined), false);

@@ -138,7 +138,7 @@ function packLight(
   const cid = Number(customerId) || 0;
   const charge = cid ? chargeFromPupils({ pupils, amount: lessonWriteoffAmount(rec, cid), cttId: lessonWriteoffCtt(rec, cid) }, cid) : { amount: 0, cttId: 0 };
   const mine = cid ? pupilOf(pupils, cid) : undefined;
-  const amount = cid ? (amountGiven(mine?.amount) ? Number(mine?.amount) : amountGiven(charge.amount) ? Number(charge.amount) : undefined) : undefined;
+  const amount = cid ? (amountGiven(mine?.amount) ? Number(mine?.amount) : undefined) : undefined;
   const cttId = cid ? charge.cttId : 0;
   return {
     date,
@@ -1048,8 +1048,19 @@ export async function inboundMissingCustomerLessons(
   const pulled: GroupCalLesson[] = [];
   const dropped: number[] = [];
   const failed: number[] = [];
-  const bodiesFor = (lid: number) =>
-    LESSON_STATUSES.map((status) => ({ page: 0, pageSize: 5, id: lid, status })) as Record<string, unknown>[];
+  const diskById = new Map((prevCal || []).map((l) => [Number(l.lessonId) || 0, l] as const).filter(([n]) => n > 0));
+  const bodiesFor = (lid: number) => {
+    const st = Number(diskById.get(lid)?.status || 0);
+    const order = st && LESSON_STATUSES.includes(st as (typeof LESSON_STATUSES)[number])
+      ? [st, ...LESSON_STATUSES.filter((s) => s !== st)]
+      : [...LESSON_STATUSES];
+    return order.map((status) => ({ page: 0, pageSize: 5, id: lid, status, customer_id: id })) as Record<string, unknown>[];
+  };
+  const bidsFor = (lid: number) => {
+    const home = Number(diskById.get(lid)?.branchId || 0);
+    if (home && branches.includes(home)) return [home, ...branches.filter((b) => b !== home)];
+    return branches;
+  };
   console.warn(`inbound missing cid=${id} want ${want.length}`);
   for (let i = 0; i < want.length; i += 1) {
     const lid = want[i];
@@ -1057,7 +1068,7 @@ export async function inboundMissingCustomerLessons(
     let packedRow: GroupCalLesson | undefined;
     let liveFail = false;
     let found = false;
-    outer: for (const bid of branches) {
+    outer: for (const bid of bidsFor(lid)) {
       for (const body of bodiesFor(lid)) {
         const live = await pullLessonPage(bid, body, t, 2);
         if (!live.ok) {
