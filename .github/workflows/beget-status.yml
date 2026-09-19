@@ -1,0 +1,46 @@
+name: Beget status
+
+on:
+  workflow_dispatch:
+
+jobs:
+  status:
+    name: Status
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: SSH status
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.BEGET_HOST }}
+          username: root
+          key: ${{ secrets.BEGET_SSH_KEY }}
+          command_timeout: 1m
+          script: |
+            set +e
+            echo "=== time ==="
+            date -u
+            echo "=== git ==="
+            cd /var/www/rastudio
+            git rev-parse --short HEAD
+            git log -1 --oneline
+            echo "=== live stamp ==="
+            cat .output/.deploy-rev 2>/dev/null | cut -c1-7
+            cat .deploy-rev 2>/dev/null | cut -c1-7
+            echo "=== lock ==="
+            ls -l /tmp/rastudio-deploy.lock 2>/dev/null || echo no-lock
+            echo "=== stage ==="
+            ls -d /var/www/rastudio/.build-stage 2>/dev/null || echo no-stage
+            echo "=== mem ==="
+            free -h | head -2
+            nproc
+            echo "=== pm2 ==="
+            pm2 jlist | python3 -c "import json,sys; d=json.load(sys.stdin);
+            [print(p.get('name'), p.get('pm2_env',{}).get('status'), p.get('pid')) for p in d]"
+            echo "=== procs ==="
+            ps aux | awk '/node|npm|vite/ && !/awk/ {print $2,$3,$4,$11,$12,$13}' | head -20
+            echo "=== log tail ==="
+            tail -n 40 /tmp/rastudio-deploy.bg.log 2>/dev/null || echo no-log
+            echo "=== port ==="
+            ss -ltnp | grep 3000 || echo no-3000
+            exit 0
