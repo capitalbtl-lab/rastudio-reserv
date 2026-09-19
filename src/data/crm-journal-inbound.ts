@@ -1,4 +1,4 @@
-import { loadGroupCard, saveGroupCard, saveGroupCards, mergeLocalCalendar, fanOutLessonWriteoffs, loadCustomerCalendar, replaceCustomerCalendar } from "./group-cards";
+import { loadGroupCard, saveGroupCard, saveGroupCards, mergeLocalCalendar, fanOutLessonWriteoffs, loadCustomerCalendar, replaceCustomerCalendar, upsertGroupCalendar } from "./group-cards";
 import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
@@ -18,6 +18,8 @@ import {
   lessonWriteoffAmount,
   lessonWriteoffCtt,
   lessonPupilsKey,
+  pupilOf,
+  amountGiven,
 } from "./crm-ledger-core";
 import {
   customerLessonsFresh,
@@ -135,7 +137,8 @@ function packLight(
   const total = pupils.length || (item.details || []).length || ids.length;
   const cid = Number(customerId) || 0;
   const charge = cid ? chargeFromPupils({ pupils, amount: lessonWriteoffAmount(rec, cid), cttId: lessonWriteoffCtt(rec, cid) }, cid) : { amount: 0, cttId: 0 };
-  const amount = cid ? charge.amount : 0;
+  const mine = cid ? pupilOf(pupils, cid) : undefined;
+  const amount = cid ? (amountGiven(mine?.amount) ? Number(mine?.amount) : amountGiven(charge.amount) ? Number(charge.amount) : undefined) : undefined;
   const cttId = cid ? charge.cttId : 0;
   return {
     date,
@@ -159,7 +162,7 @@ function packLight(
     subjectId: Number(item.subject_id || 0) || undefined,
     groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
     customerIds: cid && !ids.includes(cid) ? [...ids, cid] : ids.length ? ids : pupils.map((p) => p.customerId),
-    amount: amount || undefined,
+    amount,
     cttId: cttId || undefined,
     duration: Number(item.duration || 0) || undefined,
     pupils: pupils.length ? pupils : undefined,
@@ -327,7 +330,7 @@ export async function inboundJournalGroup(
         if (!opts?.defer) {
           saveGroupCard(card0);
           rememberLessons(seatedNew);
-          fanOutLessonWriteoffs(seatedNew);
+          fanOutLessonWriteoffs(recheck ? pulled : seatedNew);
         }
         return { ok: true as const, extra: noteOf(sliceWin(enriched.calendar).length, `, детали ${enriched.filled}${gapNote}`), count: sliceWin(enriched.calendar).length, calendar: enriched.calendar, card: card0, ...gap };
       }
@@ -362,7 +365,7 @@ export async function inboundJournalGroup(
   if (!opts?.defer) {
     saveGroupCard(card);
     rememberLessons(seatedNew);
-    fanOutLessonWriteoffs(seatedNew);
+    fanOutLessonWriteoffs(recheck ? calendar : seatedNew);
   }
   if (opts?.deep && calendar.length) {
     const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
@@ -372,7 +375,7 @@ export async function inboundJournalGroup(
       if (!opts?.defer) {
         saveGroupCard(card);
         rememberLessons(seatedNew);
-        fanOutLessonWriteoffs(seatedNew);
+        fanOutLessonWriteoffs(recheck ? enriched.calendar : seatedNew);
       }
       return { ok: true as const, extra: noteOf(sliceWin(enriched.calendar).length, `, детали ${enriched.filled}${gapNote}`), count: sliceWin(enriched.calendar).length, calendar: enriched.calendar, card, ...gap };
     }
@@ -711,7 +714,7 @@ export async function enrichCalendarDetails(
     l.detailsAt = new Date().toISOString();
     if (cid) {
       const charge = chargeFromPupils({ pupils: l.pupils, amount: lessonWriteoffAmount(rec, cid), cttId: lessonWriteoffCtt(rec, cid) }, cid);
-      if (charge.amount > 0) l.amount = charge.amount;
+      if (amountGiven(charge.amount)) l.amount = charge.amount;
       if (charge.cttId > 0) l.cttId = charge.cttId;
     }
     const named = withPupilNames(l);
@@ -863,7 +866,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         if (!packed.customerIds?.length) packed.customerIds = [id];
         const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
         if (prev) {
-          if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
+          if (!amountGiven(packed.amount) && amountGiven(prev.amount)) packed.amount = prev.amount;
           if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
           const merged = mergeLessonPupils(prev.pupils, packed.pupils);
           if (merged?.length) packed.pupils = merged;
@@ -898,7 +901,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         if (merged?.length) l.pupils = merged;
       }
       const charge = chargeFromPupils({ pupils: l.pupils, amount: lessonWriteoffAmount(rec, id), cttId: lessonWriteoffCtt(rec, id) }, id);
-      if (charge.amount > 0) l.amount = charge.amount;
+      if (amountGiven(charge.amount)) l.amount = charge.amount;
       if (charge.cttId > 0) l.cttId = charge.cttId;
       l.attend = (l.pupils || []).filter((p) => p.attend !== false).length;
       l.total = (l.pupils || []).length;
@@ -1031,17 +1034,20 @@ export async function inboundMissingCustomerLessons(
         if (!packed.customerIds?.length) packed.customerIds = [id];
         const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
         if (prev) {
-          if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
+          if (!amountGiven(packed.amount) && amountGiven(prev.amount)) packed.amount = prev.amount;
           if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
           const merged = mergeLessonPupils(prev.pupils, packed.pupils);
           if (merged?.length) packed.pupils = merged;
         }
-        packedRow = withPupilNames(packed);
+        packedRow = withPupilNames({ ...packed, branchId: bid || packed.branchId });
         break outer;
       }
     }
     if (packedRow) {
       pulled.push(packedRow);
+      const gid = Number((packedRow.groupIds || [])[0] || 0);
+      const bid = Number(packedRow.branchId || branch || 0);
+      if (gid && bid) upsertGroupCalendar(bid, gid, packedRow);
       continue;
     }
     if (liveFail && !found) {
@@ -1058,6 +1064,7 @@ export async function inboundMissingCustomerLessons(
     const hold = pendingExportIds(["lesson.update", "lesson.create"]);
     const next = mergeLocalCalendar(pulled, prevCal, hold, "union");
     replaceCustomerCalendar(id, next);
+    if (opts?.refresh) fanOutLessonWriteoffs(pulled);
     const before = new Set((prevCal || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
     const haveNow = new Set((loadCustomerCalendar(id) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
     const landed = pulled.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0 && haveNow.has(n) && !before.has(n));
@@ -1122,19 +1129,28 @@ export async function inboundMissingUntilSeated(
 }
 
 
-/** Уже на диске, status не 3: тот же index по id, пишем status и commission. Набор id не трогаем. */
+/** Уже на диске: тот же index по id, пишем status, явку и commission. Набор id не трогаем. Все id окна, не первые 50. */
 export async function inboundRefreshSeatedLessons(
   branchId: number,
   customerId: number,
   ids: number[],
   opts?: { take?: number; resetAt?: string },
 ) {
-  const want = uniquePositiveIds(ids).slice(0, Math.max(1, Math.min(50, Number(opts?.take) || 50)));
-  if (!want.length) return { count: 0, dropped: [] as number[] };
-  if (opts?.resetAt != null && String(customerSyncOf(customerId).lessonsResetAt || "") !== String(opts.resetAt)) {
-    return { count: 0, dropped: [] as number[], skipped: "reset" as const };
+  const all = uniquePositiveIds(ids);
+  if (!all.length) return { count: 0, dropped: [] as number[] };
+  const take = Math.max(1, Math.min(50, Number(opts?.take) || 50));
+  let count = 0;
+  const dropped: number[] = [];
+  for (let i = 0; i < all.length; i += take) {
+    if (opts?.resetAt != null && String(customerSyncOf(customerId).lessonsResetAt || "") !== String(opts.resetAt)) {
+      return { count, dropped: uniquePositiveIds(dropped), skipped: "reset" as const };
+    }
+    const chunk = all.slice(i, i + take);
+    const res = await inboundMissingCustomerLessons(branchId, customerId, chunk, { force: true, take: chunk.length, refresh: true });
+    count += Number(res.count) || 0;
+    if (Array.isArray(res.dropped)) dropped.push(...res.dropped);
   }
-  return inboundMissingCustomerLessons(branchId, customerId, want, { force: true, take: want.length, refresh: true });
+  return { count, dropped: uniquePositiveIds(dropped) };
 }
 
 export async function inboundJournalChunk(offset = 0, _take = 1) {

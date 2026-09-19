@@ -103,8 +103,16 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /lessonTileTone/);
     assert.match(strip, /lessonTileMark/);
     assert.match(strip, /data-tile-tone/);
+    assert.match(strip, /bg-\[#cfe8fb\]/);
     assert.match(strip, /bg-\[#ffe08a\]/);
     assert.match(strip, /bg-\[#ffc9c9\]/);
+    assert.match(strip, /Приостановка/);
+    assert.doesNotMatch(strip, /Приостановлен клиентом/);
+    assert.match(strip, /pupilPauseLike/);
+    assert.match(strip, /yellow: true/);
+    assert.match(strip, /yellow=\{paused\}/);
+    assert.match(strip, /title=\{paused \? "Приостановка"/);
+    assert.match(strip, /reasonId: Number\(c.reasonId\)/);
     assert.match(strip, /Показать легенду/);
     assert.match(strip, /Проведён и оплачен/);
     assert.match(strip, /Бесплатный пропуск/);
@@ -183,7 +191,7 @@ describe("форма занятия карточки", () => {
     assert.match(api, /pickLessonCtt/);
     assert.match(api, /status: nextStatus \|\| prevHit/);
     assert.match(api, /init: 1/);
-    assert.match(api, /reasonId === 2/);
+    assert.match(api, /storedWriteoff/);
     assert.match(api, /rest: Number\(t\.lessons\)/);
     assert.match(api, /lessonRosterThin/);
     assert.match(api, /pupilNameOk/);
@@ -196,6 +204,8 @@ describe("форма занятия карточки", () => {
     assert.match(cards, /ids.map\(\(customerId\)/);
     assert.match(cards, /journalGroupsOfCustomer/);
     assert.match(cards, /Любой статус/);
+    assert.match(cards, /Number\(row.amount\) === 0/);
+    assert.match(cards, /p.attend === false \|\| \(p.amount != null && Number\(p.amount\) === 0\)/);
     assert.doesNotMatch(cards, /Number\(l.status\) === 3 && \(l.pupils/);
     const journal = readFileSync(new URL("./crm-journal-core.ts", import.meta.url), "utf8");
     assert.match(journal, /pupils: lesson.pupils/);

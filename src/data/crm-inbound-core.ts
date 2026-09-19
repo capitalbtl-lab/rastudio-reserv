@@ -83,7 +83,21 @@ function gidsOf(row: { groupIds?: number[] } | undefined) {
   return Array.isArray(row?.groupIds) && row.groupIds.length ? row.groupIds : undefined;
 }
 
-function foldLesson<T extends { lessonId?: number; date?: string; from?: string; amount?: number; topic?: string; homework?: string; note?: string; customerIds?: number[]; groupIds?: number[]; group?: string }>(
+/** 0 из details/пропуска затирает диск. 0 без состава — дырка, сумму не трогаем. */
+export function foldLessonAmount(
+  row: { amount?: number; pupils?: { amount?: number; attend?: boolean }[] },
+  old: { amount?: number },
+) {
+  if (Number(row.amount) > 0) return Number(row.amount);
+  const skipZero =
+    Number(row.amount) === 0 &&
+    (row.pupils || []).some((p) => p.attend === false || (p.amount != null && Number(p.amount) === 0));
+  if (skipZero) return 0;
+  if (old.amount != null && Number.isFinite(Number(old.amount))) return Number(old.amount);
+  return row.amount;
+}
+
+function foldLesson<T extends { lessonId?: number; date?: string; from?: string; amount?: number; topic?: string; homework?: string; note?: string; customerIds?: number[]; groupIds?: number[]; group?: string; pupils?: { amount?: number; attend?: boolean }[] }>(
   old: T,
   row: T,
 ): T {
@@ -92,7 +106,7 @@ function foldLesson<T extends { lessonId?: number; date?: string; from?: string;
     ...old,
     ...row,
     lessonId: lid || old.lessonId,
-    amount: Number(row.amount) > 0 ? row.amount : old.amount,
+    amount: foldLessonAmount(row, old),
     topic: String(row.topic || "").trim() || old.topic,
     homework: String(row.homework || "").trim() || old.homework,
     note: String(row.note || "").trim() || old.note,
@@ -289,6 +303,27 @@ export function windowStaleLessonIds(
     if (id <= 0 || seen.has(id) || !byId.has(id)) continue;
     seen.add(id);
     if (byId.get(id) === 3) continue;
+    out.push(id);
+  }
+  return out;
+}
+
+/** Id переписи, которые уже на диске — любое status. Синяя перепроверка перечитывает тело. */
+export function windowSeatedLessonIds(
+  censusIds: Iterable<number>,
+  cal: { lessonId?: unknown }[],
+): number[] {
+  const have = new Set<number>();
+  for (const l of cal || []) {
+    const id = Number(l.lessonId) || 0;
+    if (id > 0) have.add(id);
+  }
+  const out: number[] = [];
+  const seen = new Set<number>();
+  for (const n of censusIds) {
+    const id = Number(n) || 0;
+    if (id <= 0 || seen.has(id) || !have.has(id)) continue;
+    seen.add(id);
     out.push(id);
   }
   return out;

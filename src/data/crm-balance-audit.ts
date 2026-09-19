@@ -3,7 +3,7 @@
  * diskAlfaRole не зовём. Лид в Альфе: шапки клиента нет — снято. Пустая лента при А — нули, шапку зовём.
  */
 
-import { uniqueBranches, lessonWriteoffAmount } from "./crm-ledger-core";
+import { uniqueBranches, lessonWriteoffAmount, chargeFromPupils } from "./crm-ledger-core";
 import { liveCttOf } from "./crm-pay-core";
 import {
   classifyAudit,
@@ -147,16 +147,23 @@ function livePayRows(rows: PayLike[]) {
   });
 }
 
-function writeoffCanon(cal: { lessonId?: unknown; status?: unknown; amount?: unknown }[], lessonsDisk: number, jready: boolean) {
+function writeoffCanon(
+  cal: { lessonId?: unknown; status?: unknown; amount?: unknown; pupils?: { customerId?: number; amount?: number; attend?: boolean; cttId?: number }[] }[],
+  lessonsDisk: number,
+  jready: boolean,
+  customerId?: number,
+) {
   if (lessonsDisk < 1) return { ok: true, n: 0, k: 0 };
   if (!jready) return { ok: false, n: 0, k: 0 };
   let n = 0;
   let k = 0;
+  const cid = Number(customerId) || 0;
   for (const l of cal) {
     if ((Number(l.lessonId) || 0) <= 0) continue;
     if (Number(l.status) !== 3) continue;
-    const a = step5Money(l.amount);
-    if (!a.ok) continue;
+    const raw = cid ? chargeFromPupils(l, cid).amount : l.amount;
+    const a = step5Money(raw);
+    if (!a.ok || !(a.n > 0)) continue;
     n += a.n;
     k += 1;
   }
@@ -205,7 +212,7 @@ export async function diskAudit(cid: number, branchId: number) {
   const lessonsDisk = new Set(ids).size;
   const sync = customerSyncOf(id);
   const jready = lessonsJournalReady(sync);
-  const wo = writeoffCanon(cal as { lessonId?: unknown; status?: unknown; amount?: unknown }[], lessonsDisk, jready);
+  const wo = writeoffCanon(cal as { lessonId?: unknown; status?: unknown; amount?: unknown; pupils?: { customerId?: number; amount?: number; attend?: boolean; cttId?: number }[] }[], lessonsDisk, jready, id);
   // Канон 5 / дока ТМЦ: товар в ленте pay есть, в Customer.balance не входит.
   const goodsNet = goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]);
   const formulaSite = cashAllOk && wo.ok ? step5RemainderFormula(cashLessons, wo.n, goodsNet) : Number.NaN;

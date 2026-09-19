@@ -116,7 +116,7 @@ export function clientLessonFromJournal(lesson: JournalLesson, groupName?: strin
     topic: String(lesson.topic || "").trim() || undefined,
     homework: String(lesson.homework || "").trim() || undefined,
     note: String(lesson.note || "").trim() || undefined,
-    amount: Number(lesson.amount || 0) || undefined,
+    amount: lesson.amount != null && Number.isFinite(Number(lesson.amount)) ? Number(lesson.amount) : undefined,
     cttId: Number(lesson.cttId || 0) || undefined,
     groupIds: (lesson.groupIds || []).map(Number).filter((n) => n) || undefined,
     customerIds: (lesson.customerIds || []).map(Number).filter((n) => n),

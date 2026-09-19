@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { inheritRegularPeriod, isoDateOrEmpty, ruDate, beatFollowsGroup, stampBeatsPeriodIfFollow, maskHm, maskRuDate, mergeLessonRoster, lessonRestLabel, lessonRestLeft, pupilNameOk, lessonRosterThin, mergeLessonPupils, lessonTileTone, lessonTileMark } from "./crm-slots-core.ts";
+import { inheritRegularPeriod, isoDateOrEmpty, ruDate, beatFollowsGroup, stampBeatsPeriodIfFollow, maskHm, maskRuDate, mergeLessonRoster, lessonRestLabel, lessonRestLeft, pupilNameOk, lessonRosterThin, mergeLessonPupils, lessonTileTone, lessonTileMark, pupilPauseLike } from "./crm-slots-core.ts";
 
 describe("второй урок в группе копирует период первого", () => {
   it("isoDateOrEmpty не подставляет сегодня", () => {
@@ -125,6 +125,34 @@ describe("карточка занятия группы: весь состав", 
     assert.equal(lessonRosterThin({ status: 3, pupils: [{ customerId: 5842, attend: true }] }), true);
     assert.equal(lessonRosterThin({ status: 3, pupils: [{ customerId: 1, name: "Алехин", attend: true, amount: 1087.5 }] }), false);
     assert.equal(lessonRosterThin({ status: 1, customerIds: [1] }), false);
+    assert.equal(
+      lessonRosterThin({ status: 3, pupils: [{ customerId: 4982, name: "Тихомирова", attend: false, amount: 743.75 }] }),
+      true,
+    );
+    assert.equal(
+      lessonRosterThin({
+        status: 3,
+        pupils: [{ customerId: 4982, name: "Тихомирова", attend: false, amount: 743.75, reasonId: 2 }],
+      }),
+      false,
+    );
+    const keepReason = mergeLessonPupils(
+      [{ customerId: 4982, attend: false, amount: 0, reasonId: 2, reason: "По решению руководства (0% списания)" }],
+      [{ customerId: 4982, attend: false, amount: 743.75, name: "Тихомирова", reasonId: undefined, reason: undefined }],
+    );
+    assert.equal(keepReason?.find((p) => p.customerId === 4982)?.reasonId, 2);
+    assert.equal(keepReason?.find((p) => p.customerId === 4982)?.reason, "По решению руководства (0% списания)");
+    const zeroWins = mergeLessonPupils(
+      [{ customerId: 4982, attend: true, amount: 743.75 }],
+      [{ customerId: 4982, attend: false, amount: 0, reasonId: 2 }],
+    );
+    assert.equal(zeroWins?.find((p) => p.customerId === 4982)?.amount, 0);
+    assert.equal(zeroWins?.find((p) => p.customerId === 4982)?.attend, false);
+    const holeKeeps = mergeLessonPupils(
+      [{ customerId: 4982, attend: true, amount: 743.75 }],
+      [{ customerId: 4982, attend: true, name: "Тихомирова" }],
+    );
+    assert.equal(holeKeeps?.find((p) => p.customerId === 4982)?.amount, 743.75);
     const merged = mergeLessonPupils(
       [{ customerId: 1, name: "клиент 1", attend: true }],
       [
@@ -194,6 +222,48 @@ describe("цвет ячейки как легенда Alfa", () => {
     assert.equal(
       lessonTileTone({ date: "2026-10-01", status: 1, pupils: [{ customerId: 670, attend: true, cttId: 0 }] } as never, today, 670),
       "plannedNoCtt",
+    );
+  });
+  it("приостановка: голубая плитка и жёлтый крестик", () => {
+    const cid = 4982;
+    assert.equal(pupilPauseLike({ reasonId: 2 }), true);
+    assert.equal(pupilPauseLike({ reason: "По решению руководства (0% списания)" }), true);
+    assert.equal(pupilPauseLike({ reason: "Болезнь (0% списания)" }), false);
+    assert.equal(pupilPauseLike({ reasonId: 1, attend: false } as never), false);
+    assert.equal(
+      lessonTileTone(
+        { date: "2026-09-11", status: 3, pupils: [{ customerId: cid, attend: false, amount: 0, reasonId: 2 }] },
+        today,
+        cid,
+      ),
+      "paused",
+    );
+    assert.equal(
+      lessonTileTone(
+        {
+          date: "2026-09-11",
+          status: 3,
+          amount: 743.75,
+          pupils: [{ customerId: cid, attend: false, amount: 743.75, reason: "По решению руководства (0% списания)" }],
+        },
+        today,
+        cid,
+      ),
+      "paused",
+    );
+    assert.equal(
+      lessonTileTone({ date: "2026-03-10", status: 3, pupils: [{ customerId: cid, attend: false, amount: 0 }] }, today, cid),
+      "missFree",
+    );
+    assert.equal(lessonTileMark("paused"), "times");
+    assert.equal(lessonTileMark("prepaidPaused"), "times");
+    assert.equal(
+      lessonTileTone(
+        { date: "2026-10-01", status: 1, cttId: 88, pupils: [{ customerId: cid, attend: false, cttId: 88, reasonId: 2 }] } as never,
+        today,
+        cid,
+      ),
+      "prepaidPaused",
     );
   });
 });

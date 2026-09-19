@@ -21,6 +21,7 @@ import {
   iceWindowOrNow,
   windowNewLessonIds,
   windowStaleLessonIds,
+  windowSeatedLessonIds,
   windowGoneLessonIds,
   windowAlfaKeep,
   windowAlfaLive,
@@ -115,6 +116,13 @@ describe("вход из Alfa", () => {
     assert.equal(merged[0]?.lessonId, 50);
     assert.equal(merged[0]?.amount, 350);
     assert.equal((merged[0] as { topic?: string }).topic, "роботы");
+    const pause = mergeJournalInbound(
+      [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, amount: 0, pupils: [{ customerId: 4982, attend: false, amount: 0 }] }],
+      [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, amount: 743.75 }],
+      [],
+      "union",
+    );
+    assert.equal(pause[0]?.amount, 0);
   });
 
   it("два урока без номера в разных группах на одно время — две строки", () => {
@@ -290,6 +298,16 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.deepEqual(windowStaleLessonIds([10], [{ lessonId: 10, status: 3 }]), []);
     assert.deepEqual(windowStaleLessonIds([99], [{ lessonId: 10, status: 1 }]), []);
     assert.deepEqual(windowStaleLessonIds([11, 11, 0], [{ lessonId: 11, status: 2 }]), [11]);
+    assert.deepEqual(
+      windowSeatedLessonIds(
+        [10, 11, 12, 99],
+        [
+          { lessonId: 10, status: 3 },
+          { lessonId: 11, status: 1 },
+        ],
+      ),
+      [10, 11],
+    );
   });
 
   it("синяя: новые и ушедшие id, keep не из длины окна", () => {
@@ -321,8 +339,8 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.equal(red.from, "2015-01-01");
     assert.equal(red.to, "");
     const fresh = iceWindowOrNow(true, "2015-01-01", "", 32, now);
-    assert.equal(fresh.from, "2026-08-13");
-    assert.equal(fresh.to, "2026-10-16");
+    assert.equal(fresh.from, "2015-01-01");
+    assert.equal(fresh.to, "");
     assert.deepEqual(windowNewLessonIds([1, 2, 11], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), [11]);
     assert.deepEqual(windowGoneLessonIds([1, 2, 3], [1, 2]), [3]);
     assert.equal(windowAlfaKeep(10, 1, 0), 11);

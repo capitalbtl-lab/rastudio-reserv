@@ -171,10 +171,12 @@ export function mergeLessonPupils(a?: LessonPupil[], b?: LessonPupil[]): LessonP
         ...p,
         customerId: id,
         name: pupilNameOk(p.name) || pupilNameOk(prev.name) || p.name || prev.name,
-        amount: Number(p.amount) > 0 ? p.amount : prev.amount,
+        amount: p.amount != null && Number.isFinite(Number(p.amount)) ? Number(p.amount) : prev.amount,
         cttId: Number(p.cttId) > 0 ? p.cttId : prev.cttId,
         attend: p.attend === false || (prev.attend === false && !pupilNameOk(p.name) && !(Number(p.amount) > 0)) ? false : p.attend ?? prev.attend,
         rest: p.rest || prev.rest,
+        reasonId: Number(p.reasonId) > 0 ? p.reasonId : prev.reasonId,
+        reason: p.reason || prev.reason,
       });
     }
   }
@@ -188,6 +190,7 @@ export function lessonRosterThin(hit?: { status?: number; pupils?: LessonPupil[]
   const pupils = hit.pupils || [];
   if (!pupils.length) return true;
   if (pupils.some((p) => !pupilNameOk(p.name))) return true;
+  if (pupils.some((p) => p.attend === false && !(Number(p.reasonId) > 0) && !String(p.reason || "").trim())) return true;
   if (!pupils.some((p) => Number(p.amount) > 0)) return true;
   return false;
 }
@@ -233,11 +236,17 @@ function isTrialLike(l: { type?: string; typeId?: number }) {
   return Number(l.typeId) === 3 || /пробн/i.test(String(l.type || ""));
 }
 
+/** Причина пропуска паузы Alfa: reason_id=2 в студии, либо текст «по решению руководства». Не болезнь и не «не посещает». */
+export function pupilPauseLike(p?: { reasonId?: number; reason?: string } | null) {
+  if (!p) return false;
+  if (Number(p.reasonId) === 2) return true;
+  return /приостанов|по решению руководства/i.test(String(p.reason || ""));
+}
+
 export function lessonTileMark(tone: LessonTileTone): LessonTileMark {
   if (tone === "donePaid" || tone === "doneDebt" || tone === "doneFree") return "check";
-  if (tone === "missDebt" || tone === "missFree" || tone === "missPaid") return "times";
+  if (tone === "missDebt" || tone === "missFree" || tone === "missPaid" || tone === "paused" || tone === "prepaidPaused") return "times";
   if (tone === "overdue") return "question";
-  if (tone === "paused" || tone === "prepaidPaused") return "pause";
   if (tone === "cancelled") return "minus";
   return "";
 }
@@ -252,11 +261,16 @@ export function lessonTileTone(
   const isToday = Boolean(ymd && ymd === today);
   const trial = isTrialLike(l);
   const mine = customerId ? (l.pupils || []).find((p) => Number(p.customerId) === customerId) : undefined;
-  const amount = Number(mine?.amount ?? l.amount) || 0;
+  const amount = mine ? Number(mine.amount) || 0 : Number(l.amount) || 0;
   const ctt = Number(mine?.cttId ?? l.cttId) || 0;
-  const reasonId = Number(mine?.reasonId) || 0;
-  const excused = reasonId === 2;
+  const excused = Number(mine?.reasonId) === 2;
+  const pause = pupilPauseLike(mine);
   const free = trial || excused;
+
+  if (pause && mine?.attend === false) {
+    if (Number(l.status) !== 3 && ctt) return "prepaidPaused";
+    return "paused";
+  }
 
   if (Number(l.status) === 3) {
     if (mine && mine.attend === false) {

@@ -4,9 +4,9 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
-import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar, countAlfaLessonUniq } from "./crm-inbound-core";
+import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar, countAlfaLessonUniq, foldLessonAmount } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm-journal-core";
-import { chargeFromPupils } from "./crm-ledger-core";
+import { chargeFromPupils, amountGiven } from "./crm-ledger-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
 import { tryLockStudentAlfa, unlockStudentAlfa, ownsStudentAlfa, noteAlfaLessonsLanded } from "./crm-customer-sync";
@@ -211,7 +211,7 @@ function mergeLessonPatch(old: GroupCalLesson, row: GroupCalLesson): GroupCalLes
     detailsAt: old.detailsAt || row.detailsAt,
     pupils: pupils?.length ? pupils : row.pupils || old.pupils,
     customerIds: row.customerIds?.length ? row.customerIds : old.customerIds || (pupils || []).map((p) => p.customerId),
-    amount: Number(row.amount) > 0 ? row.amount : old.amount,
+    amount: foldLessonAmount(row, old),
     cttId: Number(row.cttId) > 0 ? row.cttId : old.cttId,
     lessonId: Number(row.lessonId) || old.lessonId,
   };
@@ -395,7 +395,7 @@ export function collectCustomerJournal(
     const row: GroupCalLesson = withPupilFio({
       ...les,
       group: les.group || groupName || "",
-      amount: charge.amount || les.amount,
+      amount: amountGiven(charge.amount) ? charge.amount : les.amount,
       cttId: charge.cttId || les.cttId,
       ...(bid ? { branchId: bid } : {}),
     });
@@ -403,7 +403,10 @@ export function collectCustomerJournal(
     const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
     const prev = seen.has(key) ? out.find((x) => String(x.lessonId || `${x.date}|${x.from}|${x.type}|${x.group}`) === key) : undefined;
     if (prev) {
-      if (!(Number(prev.amount) > 0) && Number(row.amount) > 0) prev.amount = row.amount;
+      if (amountGiven(row.amount) && Number(row.amount) === 0) {
+        const p = (row.pupils || []).find((x) => Number(x.customerId) === id);
+        if (p && (p.attend === false || (p.amount != null && Number(p.amount) === 0))) prev.amount = 0;
+      } else if (!amountGiven(prev.amount) && amountGiven(row.amount)) prev.amount = Number(row.amount);
       if (!(Number(prev.cttId) > 0) && Number(row.cttId) > 0) prev.cttId = row.cttId;
       const merged = mergeLessonPupils(prev.pupils, row.pupils);
       if (merged?.length) {
@@ -463,7 +466,7 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
     }
     for (const cid of cids) {
       const charge = chargeFromPupils(lesson, cid);
-      const packed = { ...lesson, amount: charge.amount || undefined, cttId: charge.cttId || undefined };
+      const packed = { ...lesson, amount: amountGiven(charge.amount) ? charge.amount : undefined, cttId: charge.cttId || undefined };
       const list = add.get(cid) || [];
       list.push(packed);
       add.set(cid, list);

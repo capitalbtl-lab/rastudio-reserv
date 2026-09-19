@@ -35,7 +35,7 @@ import { beatsOf, lessonRestLabel, pupilNameOk, lessonRosterThin } from "./crm-s
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar, upsertCustomerCalendar, collectCustomerJournal, fanOutLessonWriteoffs } from "./group-cards";
 import { stampJournal, clientLessonFromJournal } from "./crm-journal-core";
-import { packLessonPupils } from "./crm-ledger-core";
+import { packLessonPupils, storedWriteoff } from "./crm-ledger-core";
 import { wantAlfaPull, loadAlfaLink, saveAlfaLink, alfaLinkOf } from "./crm-alfa-link";
 import { scheduleVoiceTurn } from "./schedule-voice";
 import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, saveSiteTree, slotTreeKey } from "./site-tree";
@@ -3932,13 +3932,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
           }
           return `клиент ${cid}`;
         }
-        function chargeOf(cid: number, stored?: number, reasonId?: number) {
-          if (Number(stored) > 0) return Number(stored);
-          if (Number(reasonId) === 2) return 0;
+        function chargeOf(cid: number, stored?: number, reasonId?: number, attend?: boolean) {
           const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
           const live = parseDossierCtt(d?.extras);
           const t = pickLessonCtt(live, { subjectId, subject: subjectName, catalog: catalogTariffs });
-          return lessonWriteoffOf(t, catalogTariffs);
+          return storedWriteoff(stored, lessonWriteoffOf(t, catalogTariffs), { attend, reasonId });
         }
         function cttOf(cid: number, stored?: number) {
           if (Number(stored) > 0) return Number(stored);
@@ -3955,7 +3953,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
               id: cid,
               name: personName(cid, row.name),
               attend: row.attend !== false,
-              amount: chargeOf(cid, row.amount, Number(row.reasonId) || 0),
+              amount: chargeOf(cid, row.amount, Number(row.reasonId) || 0, row.attend),
               cttId: cttOf(cid, row.cttId),
               reasonId: Number(row.reasonId) || 0,
               reason: String(row.reason || ""),
@@ -4062,6 +4060,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
                 customer_name: p.name,
                 ctt_id: p.cttId,
                 reason_id: p.reasonId,
+                reason_name: p.reason,
                 grade: p.grade,
                 homework_grade: p.homeworkGrade,
                 note: p.note,
@@ -4096,13 +4095,14 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
         const live = parseDossierCtt(d?.extras);
         const t0 = pickLessonCtt(live, { subjectId: subjectIdRaw, subject: subjectName, catalog: catalogTariffs });
-        const stored = "amount" in p ? Number(p.amount) : 0;
+        const stored = "amount" in p ? p.amount : undefined;
         const reasonId = Number("reasonId" in p ? p.reasonId : 0) || 0;
+        const attend = "attend" in p ? Boolean(p.attend) : true;
         return {
           id: cid,
           name: name || `клиент ${cid}`,
-          attend: "attend" in p ? Boolean(p.attend) : true,
-          amount: stored > 0 ? stored : reasonId === 2 ? 0 : lessonWriteoffOf(t0, catalogTariffs),
+          attend,
+          amount: storedWriteoff(stored, lessonWriteoffOf(t0, catalogTariffs), { attend, reasonId }),
           cttId: Number("cttId" in p ? p.cttId : 0) || Number(t0?.id) || 0,
           reasonId,
           reason: String("reason" in p ? p.reason || "" : ""),

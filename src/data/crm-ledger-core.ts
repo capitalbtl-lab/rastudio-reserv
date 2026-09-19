@@ -27,6 +27,20 @@ function detailAmount(d: LessonDetail) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+/** Сумма задана явно, включая 0. Пусто — дырка, можно взять соседнюю. */
+export function amountGiven(v: unknown): boolean {
+  if (v == null || v === "") return false;
+  return Number.isFinite(Number(v));
+}
+
+/** Явная сумма (в т.ч. 0) не заполняется тарифом. Пропуск без суммы — 0. */
+export function storedWriteoff(stored: unknown, fallback: number, opts?: { attend?: boolean; reasonId?: number }) {
+  if (amountGiven(stored)) return Number(stored);
+  if (opts?.attend === false) return 0;
+  if (Number(opts?.reasonId) === 2) return 0;
+  return fallback;
+}
+
 function detailName(d: LessonDetail) {
   const s = String(d.customer_name || d.customerName || d.name || d.fio || "").trim();
   return s || undefined;
@@ -100,7 +114,7 @@ export function packLessonPupils(item: Record<string, unknown>): LessonPupil[] {
       customerId,
       name: detailName(d),
       attend,
-      amount: amount || undefined,
+      amount,
       cttId: cttId || undefined,
       reasonId: reasonId || undefined,
       reason: reason || undefined,
@@ -137,7 +151,7 @@ export function chargeFromPupils(
   const p = pupilOf(lesson.pupils, customerId);
   if (p) {
     return {
-      amount: Number(p.amount) || Number(lesson.amount) || 0,
+      amount: amountGiven(p.amount) ? Number(p.amount) : Number(lesson.amount) || 0,
       cttId: Number(p.cttId) || Number(lesson.cttId) || 0,
       attend: Boolean(p.attend),
     };
@@ -199,7 +213,7 @@ export function writeoffSumOf(
       seenSlot.add(slot);
     }
     if (cid) {
-      n += chargeFromPupils(l, cid).amount || Number(l.amount) || 0;
+      n += chargeFromPupils(l, cid).amount;
       continue;
     }
     n += Number(l.amount) || 0;
@@ -216,7 +230,7 @@ export function writeoffSumForCtt(
   for (const l of lessons || []) {
     if (Number(l.status) !== 3) continue;
     const fromPupil = (l.pupils || []).find((p) => (Number(p.cttId) || 0) === want);
-    if (fromPupil && (Number(fromPupil.amount) || 0) > 0 && want) {
+    if (fromPupil && want) {
       n += Number(fromPupil.amount) || 0;
       continue;
     }

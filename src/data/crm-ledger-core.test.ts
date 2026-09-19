@@ -12,6 +12,8 @@ import {
   packLessonPupils,
   chargeFromPupils,
   lessonPupilsKey,
+  amountGiven,
+  storedWriteoff,
 } from "./crm-ledger-core.ts";
 
 describe("журнал оплат и списаний", () => {
@@ -111,7 +113,20 @@ describe("журнал оплат и списаний", () => {
     assert.equal(writeoffSumOf([lesson], 91), 1200);
     assert.equal(writeoffSumOf([lesson], 88), 850);
     assert.equal(chargeFromPupils({ pupils: lesson.pupils, amount: 0 }, 91).amount, 1200);
-    assert.equal(chargeFromPupils({ pupils: [{ customerId: 91, amount: 0, attend: true }], amount: 400 }, 91).amount, 400);
+    assert.equal(chargeFromPupils({ pupils: [{ customerId: 91, amount: 0, attend: true }], amount: 400 }, 91).amount, 0);
+    assert.equal(chargeFromPupils({ pupils: [{ customerId: 91, attend: true }], amount: 400 }, 91).amount, 400);
+    const pause = packLessonPupils({
+      details: [{ customer_id: 4982, is_attend: 0, commission: 0, reason_id: 2, reason_name: "По решению руководства (0% списания)" }],
+    });
+    assert.equal(pause[0]?.amount, 0);
+    assert.equal(pause[0]?.attend, false);
+    assert.equal(chargeFromPupils({ pupils: pause, amount: 743.75 }, 4982).amount, 0);
+    assert.equal(writeoffSumOf([{ status: 3, amount: 743.75, pupils: pause }], 4982), 0);
+    assert.equal(amountGiven(0), true);
+    assert.equal(amountGiven(undefined), false);
+    assert.equal(storedWriteoff(0, 743.75, { attend: false }), 0);
+    assert.equal(storedWriteoff(undefined, 743.75, { attend: true }), 743.75);
+    assert.equal(storedWriteoff(undefined, 743.75, { attend: false }), 0);
   });
 
   it("одно занятие дважды на диске не удваивает списание", () => {

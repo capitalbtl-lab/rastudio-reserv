@@ -19,7 +19,7 @@ import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote
 import { journalJobSnapshot, parseJobItems, historyWorkerBeat } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { loadPlanLog } from "./crm-sync-plan-log";
-import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowStaleLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady, journalGroupNow, groupJournalGreen, lessonsSetGap, type GroupPeriodHit, type GroupWhollyHit } from "./crm-inbound-core";
+import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowStaleLessonIds, windowSeatedLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady, journalGroupNow, groupJournalGreen, lessonsSetGap, type GroupPeriodHit, type GroupWhollyHit } from "./crm-inbound-core";
 import { diskIsArchive, dossierAuditRole } from "./crm-person-role";
 import { reviveAuditReport } from "./crm-balance-audit";
 
@@ -1303,9 +1303,10 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     return { short, extra, closed };
   };
   const refreshStaleOf = async (ids: Iterable<number>) => {
-    const stale = windowStaleLessonIds(ids, loadCustomerCalendar(cid) || []);
-    if (!stale.length) return false;
-    const ref = await inboundRefreshSeatedLessons(branchId, cid, stale, { take: 50, resetAt: reset0 }).catch(() => ({ skipped: undefined as string | undefined }));
+    const cal = loadCustomerCalendar(cid) || [];
+    const want = recheck ? windowSeatedLessonIds(ids, cal) : windowStaleLessonIds(ids, cal);
+    if (!want.length) return false;
+    const ref = await inboundRefreshSeatedLessons(branchId, cid, want, { take: 50, resetAt: reset0 }).catch(() => ({ skipped: undefined as string | undefined }));
     if (abortedByReset() || (ref as { skipped?: string }).skipped === "reset") return true;
     disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
     return false;

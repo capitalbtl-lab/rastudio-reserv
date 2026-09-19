@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Calendar, Check, HelpCircle, MinusCircle, Pause, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GroupCalLesson, LessonPupil, LessonRosterPerson, LessonTileMark, LessonTileTone } from "@/data/crm-slots-core";
-import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate, pupilNameOk, lessonTileTone, lessonTileMark } from "@/data/crm-slots-core";
+import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate, pupilNameOk, lessonTileTone, lessonTileMark, pupilPauseLike } from "@/data/crm-slots-core";
 import { adminSchedule } from "@/data/admin-schedule";
 import { RA_POP } from "@/data/admin-ui";
 import { RaSelect } from "@/components/ra-select";
@@ -90,25 +90,26 @@ const TILE_TONE: Record<LessonTileTone, string> = {
   missFree: "bg-[#ffe08a] text-fg ring-1 ring-amber-500/80",
   missPaid: "bg-[#ffe08a] text-[#c0392b] ring-1 ring-[#ed5565]/70",
   overdue: "bg-[#f3f3f4] text-muted ring-1 ring-dashed ring-[#ed5565]",
-  paused: "bg-[#f3f3f4] text-neutral-400 ring-1 ring-neutral-300",
-  prepaidPaused: "bg-[#d9f3ec] text-neutral-500 ring-1 ring-[#1ab394]/40",
+  paused: "bg-[#cfe8fb] text-[#1565a8] ring-1 ring-[#5baee3]/90",
+  prepaidPaused: "bg-[#cfe8fb] text-[#1565a8] ring-1 ring-[#5baee3]/90",
   cancelled: "bg-[#f3f3f4] text-neutral-400 ring-1 ring-neutral-300",
 };
 
-const TILE_MARK_CLASS = "absolute top-0.5 left-1/2 z-[1] -translate-x-1/2 opacity-50";
-
-function TileMark({ mark, danger }: { mark: LessonTileMark; danger?: boolean }) {
+function TileMark({ mark, danger, yellow }: { mark: LessonTileMark; danger?: boolean; yellow?: boolean }) {
   if (!mark) return null;
-  const cls = cn(TILE_MARK_CLASS, danger ? "text-[#ed5565]" : "text-current");
+  const cls = cn(
+    "absolute top-0.5 left-1/2 z-[1] -translate-x-1/2",
+    yellow ? "opacity-90 text-amber-500" : "opacity-50",
+    danger ? "text-[#ed5565]" : yellow ? "text-amber-500" : "text-current",
+  );
   if (mark === "check") return <Check className={cn(cls, "size-2.5")} strokeWidth={3} />;
   if (mark === "times") return <X className={cn(cls, "size-2.5")} strokeWidth={3} />;
   if (mark === "question") return <HelpCircle className={cn(cls, "size-2.5 text-[#ed5565]")} strokeWidth={2.5} />;
-  if (mark === "pause") return <Pause className={cn(cls, "size-2.5")} strokeWidth={2.5} />;
   if (mark === "minus") return <MinusCircle className={cn(cls, "size-2.5")} strokeWidth={2.5} />;
   return null;
 }
 
-const TILE_LEGEND: { tone: LessonTileTone; mark: LessonTileMark; danger?: boolean; label: string }[] = [
+const TILE_LEGEND: { tone: LessonTileTone; mark: LessonTileMark; danger?: boolean; yellow?: boolean; label: string }[] = [
   { tone: "planned", mark: "", label: "Запланирован" },
   { tone: "plannedFree", mark: "", label: "Запланирован бесплатный" },
   { tone: "plannedNoCtt", mark: "", label: "Запланирован без абонемента" },
@@ -119,10 +120,10 @@ const TILE_LEGEND: { tone: LessonTileTone; mark: LessonTileMark; danger?: boolea
   { tone: "missFree", mark: "times", label: "Бесплатный пропуск" },
   { tone: "missPaid", mark: "times", danger: true, label: "Пропуск оплач." },
   { tone: "overdue", mark: "question", label: "Забыли провести?" },
-  { tone: "paused", mark: "pause", label: "Приостановлен клиентом" },
+  { tone: "paused", mark: "times", yellow: true, label: "Приостановка" },
   { tone: "cancelled", mark: "minus", label: "Отменён" },
   { tone: "doneFree", mark: "check", label: "Проведен без списания (бесплатный)" },
-  { tone: "prepaidPaused", mark: "pause", label: "Предоплачен и приостановлен" },
+  { tone: "prepaidPaused", mark: "times", yellow: true, label: "Предоплачен, приостановка" },
 ];
 
 function LessonTile({
@@ -143,7 +144,8 @@ function LessonTile({
   const d = parseYmd(l.date);
   const tone = lessonTileTone(l, today, customerId);
   const mark = lessonTileMark(tone);
-  const cancelled = tone === "cancelled" || tone === "paused" || tone === "prepaidPaused";
+  const cancelled = tone === "cancelled";
+  const paused = tone === "paused" || tone === "prepaidPaused";
   const isToday = tone === "today";
   const dangerMark = tone === "missPaid" || tone === "missDebt" || tone === "doneDebt";
   return (
@@ -157,13 +159,13 @@ function LessonTile({
       data-lesson-id={l.lessonId || undefined}
       data-lesson-status={l.status}
       data-lesson-type={l.typeId || undefined}
-      title={l.type ? `${l.type} ${l.from || ""}`.trim() : undefined}
+      title={paused ? "Приостановка" : l.type ? `${l.type} ${l.from || ""}`.trim() : undefined}
       className={cn(
         "relative flex h-[3.35rem] w-[2.76rem] min-w-[2.76rem] cursor-pointer flex-col items-center justify-center rounded-lg px-0.5 pt-2 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
         TILE_TONE[tone],
       )}
     >
-      <TileMark mark={mark} danger={dangerMark} />
+      <TileMark mark={mark} danger={dangerMark} yellow={paused} />
       {isToday ? (
         <>
           <span className="text-[0.83rem] font-semibold tabular-nums text-white">{d.getDate()}</span>
@@ -172,9 +174,9 @@ function LessonTile({
         </>
       ) : (
         <>
-          <span className={cn("text-[0.6rem] font-semibold uppercase tracking-wider", cancelled ? "text-neutral-400" : "text-neutral-500")}>{WD[(d.getDay() + 6) % 7]}</span>
+          <span className={cn("text-[0.6rem] font-semibold uppercase tracking-wider", cancelled ? "text-neutral-400" : paused ? "text-[#1565a8]" : "text-neutral-500")}>{WD[(d.getDay() + 6) % 7]}</span>
           <span className="text-[0.83rem] font-semibold tabular-nums">{d.getDate()}</span>
-          <span className={cn("text-[0.6rem] font-medium", cancelled ? "text-neutral-400" : "text-neutral-500")}>{MONTHS_SHORT[d.getMonth()]}</span>
+          <span className={cn("text-[0.6rem] font-medium", cancelled ? "text-neutral-400" : paused ? "text-[#1565a8]" : "text-neutral-500")}>{MONTHS_SHORT[d.getMonth()]}</span>
         </>
       )}
     </div>
@@ -263,12 +265,14 @@ function LessonCard({
       } as never,
     }).then((res) => {
       if (!live || !res.ok || !("lesson" in res)) return;
-      const customers = ((res as { lesson?: { customers?: { id: number; name?: string; attend?: boolean; amount?: number; cttId?: number; rest?: string }[] } }).lesson?.customers || []).map((c) => ({
+      const customers = ((res as { lesson?: { customers?: { id: number; name?: string; attend?: boolean; amount?: number; cttId?: number; reasonId?: number; reason?: string; rest?: string }[] } }).lesson?.customers || []).map((c) => ({
         customerId: Number(c.id) || 0,
         name: c.name,
         attend: c.attend !== false,
         amount: Number(c.amount) || 0,
         cttId: c.cttId,
+        reasonId: Number(c.reasonId) || undefined,
+        reason: c.reason,
         rest: c.rest,
       }));
       if (customers.length) setFetched(customers);
@@ -318,12 +322,19 @@ function LessonCard({
             const amt = done
               ? Number(p.amount || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
               : "";
+            const pause = pupilPauseLike(p);
             const line = (
-              <span className={cn("flex min-w-0 flex-1 items-center gap-1.5", p.attend ? tone || "text-fg" : "text-muted")}>
-                {p.attend ? <span className="shrink-0 text-[0.7rem] text-emerald-600">✓</span> : <span className="w-3 shrink-0" />}
-                <span className={cn("min-w-0 truncate", !p.attend && "line-through")}>{name}</span>
+              <span className={cn("flex min-w-0 flex-1 items-center gap-1.5", pause ? "text-[#1565a8]" : p.attend ? tone || "text-fg" : "text-muted")}>
+                {pause ? (
+                  <Pause className="size-3 shrink-0 text-[#1565a8]" strokeWidth={2.5} />
+                ) : p.attend ? (
+                  <span className="shrink-0 text-[0.7rem] text-emerald-600">✓</span>
+                ) : (
+                  <span className="w-3 shrink-0" />
+                )}
+                <span className={cn("min-w-0 truncate", !p.attend && !pause && "line-through")}>{name}</span>
                 {!amt && p.rest ? <span className="shrink-0 tabular-nums">({p.rest})</span> : null}
-                {amt ? <span className={cn("ml-auto shrink-0 tabular-nums text-fg", !p.attend && "line-through")}>{amt}</span> : null}
+                {amt ? <span className={cn("ml-auto shrink-0 tabular-nums text-fg", !p.attend && !pause && "line-through")}>{amt}</span> : null}
               </span>
             );
             return (
@@ -338,9 +349,9 @@ function LessonCard({
                       onOpenPupil(p.customerId);
                     }}
                   >
-                    {p.attend ? line : <s className="flex min-w-0 flex-1 text-muted">{line}</s>}
+                    {p.attend || pause ? line : <s className="flex min-w-0 flex-1 text-muted">{line}</s>}
                   </button>
-                ) : p.attend ? (
+                ) : p.attend || pause ? (
                   <span className="flex min-w-0 flex-1">{line}</span>
                 ) : (
                   <s className="flex min-w-0 flex-1 text-muted">{line}</s>
@@ -831,6 +842,7 @@ function LessonEdit({
         attend: c.attend !== false,
         amount: Number(c.amount) || undefined,
         cttId: c.cttId,
+        reasonId: c.reasonId,
         reason: c.reason,
         grade: c.grade,
         homeworkGrade: c.homeworkGrade,
@@ -1366,7 +1378,7 @@ export function LessonStrip({
             {TILE_LEGEND.map((row) => (
               <span key={row.tone} className="inline-flex items-center gap-1.5 text-[0.68rem] text-muted">
                 <span className={cn("relative grid h-7 w-9 shrink-0 place-items-center rounded-[4px] text-[0.58rem] font-semibold", TILE_TONE[row.tone])}>
-                  <TileMark mark={row.mark} danger={row.danger} />
+                  <TileMark mark={row.mark} danger={row.danger} yellow={row.yellow} />
                   <span className={cn(row.mark && "mt-1")}>01.01</span>
                 </span>
                 {row.label}

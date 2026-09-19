@@ -65,7 +65,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /byKey.set\(`id:\$\{lid\}`/);
     assert.match(inbound, /recheckDays/);
     assert.match(inbound, /groupWindowGone/);
-    assert.match(inbound, /fanOutLessonWriteoffs\(seatedNew\)/);
+    assert.match(inbound, /fanOutLessonWriteoffs\(recheck \? pulled : seatedNew\)/);
+    assert.match(inbound, /fanOutLessonWriteoffs\(recheck \? calendar : seatedNew\)/);
     assert.match(inbound, /const pageSize = 500/);
     assert.match(inbound, /recheckWindowYmd/);
     assert.match(inbound, /iceWindowOrNow/);
@@ -207,11 +208,15 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(ui, /Сверить 10/);
     assert.match(ui, /function pullAudit/);
     assert.match(ui, /HINT\.auditAll/);
+    assert.doesNotMatch(ui, /догружает журнал или кассу/);
+    assert.match(ui, /Журнал и кассу не качает и не чинит/);
+    assert.match(ui, /Журнал, кассу, платежи и списания не переписывает/);
     assert.match(ui, /AUDIT_ROLES/);
     assert.match(ui, /Все роли/);
     assert.match(ui, /function auditRole/);
     assert.match(ui, /codes.includes\("лид"\) \|\| \/Лид в Альфе\/.test\(extra\)/);
-    assert.match(ui, /if \(r.seen && auditFail\(codes\)\) return "лид"/);
+    assert.match(ui, /r\.alfaRole === "лид" \|\| Number\(r\.study\) === 0/);
+    assert.doesNotMatch(ui, /if \(r.seen && auditFail\(codes\)\) return "лид"/);
     assert.doesNotMatch(ui, /return "нет"/);
     assert.match(ui, /const by = new Map\(hits.map/);
     assert.doesNotMatch(ui, /for \(const h of hits\)/);
@@ -432,6 +437,12 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /export async function inboundMissingUntilSeated/);
     assert.match(inbound, /export async function inboundRefreshSeatedLessons/);
     assert.match(inbound, /refresh: true/);
+    const refAt = inbound.indexOf("export async function inboundRefreshSeatedLessons");
+    const refFn = inbound.slice(refAt, inbound.indexOf("export async function inboundJournalChunk", refAt));
+    assert.match(refFn, /for \(let i = 0; i < all\.length; i \+= take\)/);
+    assert.match(inbound, /Все id окна, не первые 50/);
+    assert.match(inbound, /amountGiven\(mine\?\.amount\) \? Number\(mine\?\.amount\) : amountGiven\(charge\.amount\)/);
+    assert.doesNotMatch(inbound, /charge\.amount \|\| undefined/);
     assert.match(pull, /inboundMissingUntilSeated/);
     assert.doesNotMatch(pull, /inboundMissingCustomerLessons/);
     assert.match(pull, /missing\.length/);
@@ -484,6 +495,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /refreshStaleOf\(census.ids\)/);
     assert.match(one, /refreshStaleOf/);
     assert.match(one, /windowStaleLessonIds/);
+    assert.match(one, /windowSeatedLessonIds/);
+    assert.match(one, /recheck \? windowSeatedLessonIds/);
     assert.match(one, /inboundRefreshSeatedLessons/);
     assert.match(one, /if \(await refreshStaleOf\(first.ids/);
     assert.match(rec, /windowAlfaLive/);
