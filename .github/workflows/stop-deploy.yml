@@ -21,13 +21,16 @@ jobs:
             set +e
             pm2 stop rastudio-deploy
             touch /tmp/rastudio-deploy.lock
-            pkill -f "scripts/beget-deploy.sh" || true
-            pkill -f "/var/www/rastudio/.build-stage" || true
-            pkill -f "npm run build:beget" || true
+            for pid in $(pgrep -f /var/www/rastudio/.build-stage || true); do
+              kill "$pid" 2>/dev/null
+            done
             sleep 1
-            pkill -9 -f "scripts/beget-deploy.sh" || true
-            pkill -9 -f "/var/www/rastudio/.build-stage" || true
+            for pid in $(pgrep -f /var/www/rastudio/.build-stage || true); do
+              kill -9 "$pid" 2>/dev/null
+            done
             rm -rf /var/www/rastudio/.build-stage
-            echo "[stop] vite killed, rastudio-deploy stopped, live :3000 not touched"
+            echo "[stop] rastudio-deploy stopped, stage removed, live :3000 not touched"
             ss -ltnp | grep 3000 || true
+            pgrep -af vite || echo no-vite
             pm2 list
+            exit 0
