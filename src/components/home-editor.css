@@ -216,8 +216,8 @@ html.home-editing [data-ve-frame] {
   color: #fff;
 }
 
-.ve-fly .flex.items-center.gap-0\\.5 > button.min-h-9.flex-1,
-.ve-topbar .flex.items-center.gap-0\\.5 > button.min-h-9.flex-1 {
+.ve-fly .flex.items-center > button.min-h-9.flex-1,
+.ve-topbar .flex.items-center > button.min-h-9.flex-1 {
   font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.25;
