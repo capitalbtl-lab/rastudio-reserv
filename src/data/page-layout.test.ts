@@ -220,7 +220,7 @@ describe("библиотека и документ страницы", () => {
     assert.match(editor, /BlockPreview/);
     const preview = readFileSync(new URL("../components/block-preview.tsx", import.meta.url), "utf8");
     assert.match(preview, /shot-art/);
-    assert.match(preview, /h-\[6\.75rem\]/);
+    assert.match(preview, /h-32/);
     assert.doesNotMatch(preview, /from "@\/components\/home-editor"/);
     assert.match(editor, /data-ve-stub/);
     assert.doesNotMatch(editor, /aliases/);

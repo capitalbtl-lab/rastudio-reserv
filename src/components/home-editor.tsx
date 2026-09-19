@@ -986,16 +986,16 @@ function BlocksRail({
           {groups.map(([cat, list]) => (
             <div key={cat}>
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">{cat}</p>
-              <ul className="mt-1.5 space-y-2.5">
+              <ul className="mt-2 space-y-3">
                 {list.map((b) => (
-                  <li key={b.typeId} className="rounded-xl px-1 py-1 hover:bg-black/[0.03]">
-                    <p className="px-1 text-[0.8rem] font-medium">{b.label}</p>
+                  <li key={b.typeId} className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/[0.08] shadow-[0_10px_28px_-18px_rgba(15,23,42,.5)]">
+                    <p className="px-2.5 pt-2 pb-1.5 text-[0.78rem] font-medium tracking-[-0.01em]">{b.label}</p>
                     <BlockPreview typeId={b.typeId} />
-                    <div className="mt-1 grid grid-cols-2 gap-1">
-                      <button type="button" className="h-4 rounded-md bg-black/15 px-2 text-[0.62rem] font-semibold leading-none hover:bg-black/25" onClick={() => void add(b.typeId, "empty")}>
+                    <div className="grid grid-cols-2 border-t border-black/[0.06]">
+                      <button type="button" className="h-7 text-[0.62rem] font-semibold text-black/50 hover:bg-black/[0.03] hover:text-black" onClick={() => void add(b.typeId, "empty")}>
                         Новый блок
                       </button>
-                      <button type="button" className="h-4 rounded-md bg-black/15 px-2 text-[0.62rem] font-semibold leading-none hover:bg-black/25" onClick={() => void add(b.typeId, "template")}>
+                      <button type="button" className="h-7 border-l border-black/[0.06] text-[0.62rem] font-semibold text-black/50 hover:bg-black/[0.03] hover:text-black" onClick={() => void add(b.typeId, "template")}>
                         Из шаблонов
                       </button>
                     </div>
