@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Eye, EyeOff, Monitor, Redo2, Smartphone, Tablet, Undo2 } from "lucide-react";
+import { Eye, EyeOff, GripVertical, Monitor, Redo2, Smartphone, Tablet, Undo2 } from "lucide-react";
 import { debugSession } from "@/data/debug-fn";
 import { debugEmit } from "@/data/debug-client";
 import { saveHomeLayoutFn } from "@/data/home-layout-fn";
@@ -21,7 +21,10 @@ import {
 } from "@/data/home-layout-core";
 import { StudioPanel } from "@/components/home-studio";
 import { HomeEditorCtx, useHomeEditor, type HomeEditorCtxValue } from "@/components/home-read";
+import { useHomeSlots, slotBg } from "@/components/home-public";
+import { endMediaDrag, mediaFromDrop, moveMediaDrag } from "@/lib/media-drag";
 import { cn } from "@/lib/utils";
+import "./home-editor.css";
 
 export { EditText, useHomeEditor } from "@/components/home-read";
 
@@ -497,3 +500,169 @@ function InspectorFields({
     </>
   );
 }
+
+export function HomeEditorSession({
+  initial,
+  children,
+}: {
+  initial?: unknown;
+  children: ReactNode;
+}) {
+  return (
+    <HomeEditorProvider initial={initial}>
+      <HomeEditorInner>{children}</HomeEditorInner>
+    </HomeEditorProvider>
+  );
+}
+
+function HomeEditorInner({ children }: { children: ReactNode }) {
+  const ctx = useHomeEditor();
+  const [drag, setDrag] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ctx?.editing) return;
+    const move = (e: DragEvent) => moveMediaDrag(e.clientX, e.clientY);
+    const end = () => endMediaDrag();
+    window.addEventListener("dragover", move);
+    window.addEventListener("dragend", end);
+    window.addEventListener("drop", end);
+    return () => {
+      window.removeEventListener("dragover", move);
+      window.removeEventListener("dragend", end);
+      window.removeEventListener("drop", end);
+      endMediaDrag();
+    };
+  }, [ctx?.editing]);
+
+  if (!ctx) return children;
+  const slots = useHomeSlots(children, true);
+  const phone = ctx.editing && ctx.device === "phone";
+  const tablet = ctx.editing && ctx.device === "tablet";
+
+  return (
+    <div className={cn(ctx.editing && "home-layout-on")}>
+      {ctx.editing ? <HomeEditorChrome /> : null}
+      <div className={cn(ctx.editing && "md:pl-[15.25rem] lg:pr-[23.25rem] md:py-6")}>
+        <div
+          className={cn(
+            "min-w-0",
+            phone && "home-device-phone mx-auto overflow-x-clip",
+            tablet && "home-device-tablet mx-auto overflow-x-clip",
+          )}
+        >
+          {slots.map((slot) => (
+            <HomeSlotFrame
+              key={slot.id}
+              id={slot.id}
+              drag={drag}
+              over={over}
+              onDragId={setDrag}
+              onOver={setOver}
+            >
+              {slot.node}
+            </HomeSlotFrame>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HomeSlotFrame({
+  id,
+  drag,
+  over,
+  onDragId,
+  onOver,
+  children,
+}: {
+  id: string;
+  drag: string | null;
+  over: string | null;
+  onDragId: (id: string | null) => void;
+  onOver: (id: string | null) => void;
+  children: ReactNode;
+}) {
+  const ctx = useHomeEditor();
+  const editing = Boolean(ctx?.editing);
+  const selected = ctx?.selected === id;
+  const style = ctx?.doc.styles[id];
+  const bg = slotBg(style);
+
+  if (!editing) {
+    return (
+      <div className={bg} style={{ paddingTop: style?.padTop || undefined, paddingBottom: style?.padBottom || undefined }}>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "relative transition-[outline-color,opacity,box-shadow]",
+        bg,
+        selected ? "outline outline-2 outline-primary" : over ? "outline outline-2 outline-primary/50 ve-media-over" : "outline outline-1 outline-primary/20",
+        drag === id && "opacity-40",
+        style?.hidden && "opacity-50",
+      )}
+      style={{ paddingTop: style?.padTop || undefined, paddingBottom: style?.padBottom || undefined }}
+      onClick={(e) => {
+        e.stopPropagation();
+        ctx?.select(id);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        onOver(id);
+      }}
+      onDragLeave={() => onOver(null)}
+      onDrop={(e) => {
+        e.preventDefault();
+        const media = mediaFromDrop(e);
+        const from = e.dataTransfer.getData("text/home-block") as HomeBlockId;
+        onOver(null);
+        onDragId(null);
+        endMediaDrag();
+        if (media && ctx) {
+          ctx.select(id);
+          ctx.setDoc(setHomeMedia(ctx.doc, id, media));
+          return;
+        }
+        if (from && from !== id && ctx) ctx.setDoc({ ...ctx.doc, order: placeHomeBlock(ctx.doc.order, from, id) });
+      }}
+    >
+      <div className="ve-ui pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-2">
+        <div
+          className={cn(
+            "pointer-events-auto flex items-center gap-1 rounded-full px-1.5 py-1 text-[0.7rem] font-semibold shadow-[0_10px_24px_-12px_rgba(0,0,0,.55)]",
+            selected ? "bg-primary text-primary-foreground" : "bg-header text-header-fg",
+          )}
+        >
+          <button
+            type="button"
+            draggable
+            aria-label={`Переместить «${homeBlockLabel(id, ctx?.doc.customs)}»`}
+            className="grid size-7 cursor-grab place-items-center rounded-full hover:bg-white/15 active:cursor-grabbing"
+            onClick={(e) => e.stopPropagation()}
+            onDragStart={(e) => {
+              e.dataTransfer.setData("text/home-block", id);
+              e.dataTransfer.effectAllowed = "move";
+              onDragId(id);
+            }}
+            onDragEnd={() => {
+              onDragId(null);
+              onOver(null);
+            }}
+          >
+            <GripVertical className="size-3.5" />
+          </button>
+          <span className="px-1">{homeBlockLabel(id, ctx?.doc.customs)}</span>
+          {style?.hidden ? <span className="pr-2 opacity-80">скрыт</span> : null}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+

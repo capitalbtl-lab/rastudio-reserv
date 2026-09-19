@@ -1,0 +1,115 @@
+.home-layout-on a,
+.home-layout-on button {
+  pointer-events: none;
+}
+
+.home-layout-on .ve-ui,
+.home-layout-on .ve-ui * {
+  pointer-events: auto;
+}
+
+.home-layout-on .ve-text {
+  pointer-events: auto;
+  cursor: text;
+  outline: 1px dashed color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 0.2rem;
+}
+
+.home-layout-on .ve-text:focus {
+  outline: 2px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.home-device-phone,
+.home-device-tablet {
+  background: var(--color-bg);
+  border-radius: 1.75rem;
+  box-shadow: 0 24px 60px -28px rgb(0 0 0 / 0.45);
+  outline: 1px solid rgb(0 0 0 / 0.08);
+}
+
+.home-device-phone {
+  width: min(390px, 100%);
+}
+
+.home-device-tablet {
+  width: min(768px, 100%);
+}
+
+.home-device-phone .page-wrap,
+.home-device-tablet .page-wrap {
+  width: calc(100% - 1.5rem);
+}
+
+.home-device-phone [class*="lg:grid-cols"],
+.home-device-phone [class*="md:grid-cols"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.home-device-phone [class*="lg:min-h"] {
+  min-height: 0 !important;
+}
+
+html.home-editing .mobile-dock {
+  display: none !important;
+}
+
+html.home-editing main {
+  padding-bottom: 0;
+}
+
+html.home-editing .agent-shell {
+  display: none !important;
+}
+
+html.home-editing .debug-dock {
+  bottom: 0.75rem;
+  z-index: 30;
+}
+
+.ve-media-ghost {
+  position: fixed;
+  z-index: 90;
+  width: 7.6rem;
+  height: 7.6rem;
+  pointer-events: none;
+  overflow: hidden;
+  background: #111;
+  outline: 3px solid #fff;
+  outline-offset: -1px;
+  border: 2px dashed #205edc;
+  box-shadow: 11px 16px 0 rgb(0 0 0 / 0.22), 0 22px 38px rgb(0 0 0 / 0.38);
+  transform: rotate(var(--ve-rot, -9deg)) skewX(var(--ve-skew, -6deg)) translate(var(--ve-shift, 4px), 3px);
+}
+
+.ve-media-ghost img {
+  width: 124%;
+  height: 124%;
+  object-fit: cover;
+  margin: -12% 0 0 -14%;
+  filter: contrast(1.05) saturate(1.08);
+}
+
+.ve-media-ghost span {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ve-media-over {
+  outline: 3px dashed var(--color-primary) !important;
+  outline-offset: -3px;
+  background-image: repeating-linear-gradient(
+    -12deg,
+    color-mix(in srgb, var(--color-primary) 14%, transparent),
+    color-mix(in srgb, var(--color-primary) 14%, transparent) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+}

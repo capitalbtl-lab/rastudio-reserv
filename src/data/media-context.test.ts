@@ -26,9 +26,9 @@ describe("папки медиатеки", () => {
     assert.match(studio, /Не добавлять/);
     assert.match(studio, /startMediaDrag/);
     assert.match(studio, /folder/);
-    const blocks = readFileSync(new URL("../components/home-blocks.tsx", import.meta.url), "utf8");
-    assert.match(blocks, /mediaFromDrop/);
-    assert.match(blocks, /setHomeMedia/);
+    const editor = readFileSync(new URL("../components/home-editor.tsx", import.meta.url), "utf8");
+    assert.match(editor, /mediaFromDrop/);
+    assert.match(editor, /setHomeMedia/);
     const fn = readFileSync(new URL("./site-studio-fn.ts", import.meta.url), "utf8");
     assert.match(fn, /askCaption/);
     assert.match(fn, /proposeMediaCaption/);
