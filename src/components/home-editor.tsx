@@ -957,7 +957,7 @@ function BlocksRail({
         revealBlock(last);
       }
       const name = BLOCK_LIBRARY.find((b) => b.typeId === typeId)?.label || typeId;
-      setMsg(seed === "template" ? `«${name}» как в шаблоне` : `«${name}» на эту страницу`);
+      setMsg(seed === "template" ? `«${name}» из шаблонов` : `«${name}» — новый блок`);
     } else setMsg(res.ok ? "" : res.error);
   }
   const groups = useMemo(() => {
@@ -981,7 +981,7 @@ function BlocksRail({
       </div>
       {tab === "lib" ? (
         <div className="mt-3 space-y-4">
-          <p className="text-[0.72rem] leading-relaxed text-black/50">Типовые блоки сайта. «На эту страницу» — пустой экземпляр. «Как в шаблоне» — тексты и медиа оригинала. Потом правите только здесь.</p>
+          <p className="text-[0.72rem] leading-relaxed text-black/50">Типовые блоки сайта. «Новый блок» — пустой. «Из шаблонов» — тексты и медиа оригинала. Потом правите только здесь.</p>
           {groups.map(([cat, list]) => (
             <div key={cat}>
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">{cat}</p>
@@ -991,10 +991,10 @@ function BlocksRail({
                     <p className="px-1 text-[0.8rem] font-medium">{b.label}</p>
                     <div className="mt-1 grid grid-cols-2 gap-1">
                       <button type="button" className="min-h-8 rounded-lg bg-black/5 px-2 text-[0.68rem] font-semibold hover:bg-black/10" onClick={() => void add(b.typeId, "empty")}>
-                        На эту страницу
+                        Новый блок
                       </button>
                       <button type="button" className="min-h-8 rounded-lg bg-black/5 px-2 text-[0.68rem] font-semibold hover:bg-black/10" onClick={() => void add(b.typeId, "template")}>
-                        Как в шаблоне
+                        Из шаблонов
                       </button>
                     </div>
                   </li>

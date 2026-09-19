@@ -214,8 +214,8 @@ describe("библиотека и документ страницы", () => {
     const schedule = readFileSync(new URL("../routes/schedule.tsx", import.meta.url), "utf8");
     assert.match(schedule, /data-ve-frame="course-story"/);
     assert.match(editor, /Генератор блоков/);
-    assert.match(editor, /Как в шаблоне/);
-    assert.match(editor, /На эту страницу/);
+    assert.match(editor, /Из шаблонов/);
+    assert.match(editor, /Новый блок/);
     assert.match(editor, /function BlocksRail/);
     assert.match(editor, /data-ve-stub/);
     assert.doesNotMatch(editor, /aliases/);
