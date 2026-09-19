@@ -1,5 +1,6 @@
 import { SITE, BRANCHES, FOOTER_LINKS, SCHOOLS } from "@/data/site";
 import { PageLink } from "@/components/page-link";
+import { EditorEntry } from "@/components/editor-entry";
 
 export function SiteFooter() {
   return (
@@ -81,6 +82,7 @@ export function SiteFooter() {
             >
               Кабинет
             </PageLink>
+            <EditorEntry />
             <button
               type="button"
               className="inline-flex h-8 items-center rounded-full bg-white/10 px-3.5 text-[0.72rem] font-semibold text-header-fg hover:bg-white/16"

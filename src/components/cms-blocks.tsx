@@ -160,7 +160,7 @@ function PageEditorLazy() {
   const [Boot, setBoot] = useState<ComponentType | null>(null);
   useEffect(() => {
     try {
-      if (!sessionStorage.getItem("ra_debug") && !/(?:\?|&)edit=1(?:&|$)/.test(location.search)) return;
+      if (!sessionStorage.getItem("ra_edit") && !/(?:\?|&)edit=1(?:&|$)/.test(location.search)) return;
     } catch {
       return;
     }

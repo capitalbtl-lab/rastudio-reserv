@@ -17,7 +17,7 @@ type SchoolRow = { id: string; label: string; folder: string };
 function token() {
   if (typeof document === "undefined") return "";
   try {
-    return sessionStorage.getItem("ra_debug") || "";
+    return sessionStorage.getItem("ra_edit") || sessionStorage.getItem("ra_debug") || "";
   } catch {
     return "";
   }

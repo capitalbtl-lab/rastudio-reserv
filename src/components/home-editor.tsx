@@ -41,11 +41,23 @@ import "./home-editor.css";
 
 export { EditText, useHomeEditor } from "@/components/home-read";
 
-const KEY = "ra_debug";
+const KEY = "ra_edit";
 
 function debugToken() {
   try {
-    return sessionStorage.getItem(KEY) || "";
+    const s = sessionStorage.getItem(KEY);
+    if (s) return s;
+  } catch {
+    /* */
+  }
+  try {
+    const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
+    if (m) return decodeURIComponent(m[1]);
+  } catch {
+    /* */
+  }
+  try {
+    return localStorage.getItem("ra_admin") || "";
   } catch {
     return "";
   }
@@ -100,13 +112,13 @@ export function HomeEditorProvider({
         return;
       }
       void debugSession({ data: { token: t } }).then((res) => {
-        const door = /(?:\?|&)edit=1(?:&|$)/.test(location.search);
-        setEditing(Boolean(res.ok && "tools" in res && (door || res.tools.layout !== false)));
+        const door = /(?:\?|&)edit=1(?:&|$)/.test(location.search) || Boolean(sessionStorage.getItem(KEY));
+        setEditing(Boolean(res.ok && door));
       });
     };
     check();
-    window.addEventListener("ra-debug-session", check);
-    return () => window.removeEventListener("ra-debug-session", check);
+    window.addEventListener("ra-edit-session", check);
+    return () => window.removeEventListener("ra-edit-session", check);
   }, []);
 
   useEffect(() => {

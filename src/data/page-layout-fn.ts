@@ -15,14 +15,13 @@ export const listEditorPagesFn = createServerFn({ method: "GET" }).handler(async
 export const loadPageDocFn = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; path?: string; which?: "draft" | "published" })
   .handler(async ({ data }) => {
-    if (!guard(data.token)) return { ok: false as const, error: "Нужен режим отладки." };
+    if (!guard(data.token)) return { ok: false as const, error: "Нужен вход в редактор." };
     const path = String(data.path || "/");
     const doc = loadPageDoc(path);
     const which = data.which === "published" ? "published" : "draft";
     const layout = layoutToHome(doc[which]);
     return {
       ok: true as const,
-      doc,
       layout,
       path: doc.path,
       title: doc.title,
@@ -37,46 +36,45 @@ export const loadPageDocFn = createServerFn({ method: "POST" })
 export const savePageDraftFn = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; path?: string; layout?: unknown; pageDraft?: unknown })
   .handler(async ({ data }) => {
-    if (!guard(data.token)) return { ok: false as const, error: "Нужен режим отладки." };
+    if (!guard(data.token)) return { ok: false as const, error: "Нужен вход в редактор." };
     const path = String(data.path || "/");
     const cur = loadPageDoc(path);
     const fillHome = path === "/" || path === "";
     const draft = data.pageDraft || homeToLayout(normalizeHomeLayout(data.layout, fillHome));
-    const doc = savePageDraft(path, draft);
+    const saved = savePageDraft(path, draft);
     return {
       ok: true as const,
-      doc,
-      layout: layoutToHome(doc.draft),
-      differ: JSON.stringify(doc.draft) !== JSON.stringify(cur.published) && JSON.stringify(doc.draft) !== JSON.stringify(doc.published),
-      phoneIssues: phoneIssues(doc.draft),
+      layout: layoutToHome(saved.draft),
+      differ: JSON.stringify(saved.draft) !== JSON.stringify(cur.published),
+      phoneIssues: phoneIssues(saved.draft),
     };
   });
 
 export const publishPageFn = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; path?: string; layout?: unknown; pageDraft?: unknown })
   .handler(async ({ data }) => {
-    if (!guard(data.token)) return { ok: false as const, error: "Нужен режим отладки." };
+    if (!guard(data.token)) return { ok: false as const, error: "Нужен вход в редактор." };
     const path = String(data.path || "/");
     if (data.pageDraft) savePageDraft(path, data.pageDraft);
     else if (data.layout) savePageDraft(path, homeToLayout(normalizeHomeLayout(data.layout, path === "/" || path === "")));
     const issues = phoneIssues(loadPageDoc(path).draft);
     if (issues.length) return { ok: false as const, error: `На телефоне едет: ${issues[0]}`, phoneIssues: issues };
-    const doc = publishPage(path);
-    return { ok: true as const, doc, layout: layoutToHome(doc.published), phoneIssues: [] as string[] };
+    const saved = publishPage(path);
+    return { ok: true as const, layout: layoutToHome(saved.published), phoneIssues: [] as string[] };
   });
 
 export const revertPublishFn = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; path?: string })
   .handler(async ({ data }) => {
-    if (!guard(data.token)) return { ok: false as const, error: "Нужен режим отладки." };
-    const doc = unpublishPage(String(data.path || "/"));
-    return { ok: true as const, doc, layout: layoutToHome(doc.published) };
+    if (!guard(data.token)) return { ok: false as const, error: "Нужен вход в редактор." };
+    const saved = unpublishPage(String(data.path || "/"));
+    return { ok: true as const, layout: layoutToHome(saved.published) };
   });
 
 export const placeBlockFn = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; path?: string; typeId?: string; fromPath?: string; fromId?: string; before?: string })
   .handler(async ({ data }) => {
-    if (!guard(data.token)) return { ok: false as const, error: "Нужен режим отладки." };
+    if (!guard(data.token)) return { ok: false as const, error: "Нужен вход в редактор." };
     const path = String(data.path || "/");
     const doc = loadPageDoc(path);
     let draft = doc.draft;
@@ -90,5 +88,5 @@ export const placeBlockFn = createServerFn({ method: "POST" })
       draft = addInstance(draft, typeId, data.before);
     }
     const saved = savePageDraft(path, draft);
-    return { ok: true as const, doc: saved, layout: layoutToHome(saved.draft) };
+    return { ok: true as const, layout: layoutToHome(saved.draft) };
   });

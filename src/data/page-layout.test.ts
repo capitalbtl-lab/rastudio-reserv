@@ -45,7 +45,7 @@ describe("библиотека и документ страницы", () => {
     assert.ok(back.order.includes("c_abc1"));
     assert.equal(back.texts["hero.title"], "Заголовок");
     assert.equal(back.customs[0].title, "Лето");
-    assert.deepEqual(new Set(back.order.filter((id) => defaultHomeOrder().includes(id as (typeof defaultHomeOrder)[number]))), new Set(defaultHomeOrder()));
+    assert.deepEqual(new Set(back.order.filter((id) => defaultHomeOrder().includes(id as ReturnType<typeof defaultHomeOrder>[number]))), new Set(defaultHomeOrder()));
   });
 
   it("миграция копирует текущую главную даже без кастомных блоков", () => {

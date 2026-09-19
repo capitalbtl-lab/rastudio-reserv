@@ -30,7 +30,7 @@ export type BlockInstance = {
     ctaLabel?: string;
     ctaHref?: string;
     courseId?: string;
-    items?: unknown[];
+    items?: string[];
   };
   style: {
     hidden?: boolean;
@@ -145,6 +145,7 @@ function asInstance(raw: unknown, fallbackId: string): BlockInstance | null {
       ctaLabel: asText(c.ctaLabel, 40) || undefined,
       ctaHref: asText(c.ctaHref, 180) || undefined,
       courseId: asText(c.courseId, 180) || undefined,
+      items: Array.isArray(c.items) ? c.items.map((x) => asText(x, 200)).filter(Boolean).slice(0, 24) : undefined,
     },
     style: {
       hidden: Boolean(st.hidden) || undefined,

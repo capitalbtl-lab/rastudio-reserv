@@ -11,7 +11,7 @@ function staffToken() {
     /* */
   }
   try {
-    return localStorage.getItem("ra_admin") || "";
+    return localStorage.getItem("ra_admin") || sessionStorage.getItem("ra_edit") || "";
   } catch {
     return "";
   }
@@ -19,7 +19,7 @@ function staffToken() {
 
 function wantsEdit() {
   try {
-    if (sessionStorage.getItem("ra_debug")) return true;
+    if (sessionStorage.getItem("ra_edit")) return true;
   } catch {
     /* */
   }
@@ -27,7 +27,7 @@ function wantsEdit() {
     if (!/(?:\?|&)edit=1(?:&|$)/.test(location.search)) return false;
     const t = staffToken();
     if (!t) return false;
-    sessionStorage.setItem("ra_debug", t);
+    sessionStorage.setItem("ra_edit", t);
     return true;
   } catch {
     return false;

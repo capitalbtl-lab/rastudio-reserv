@@ -1082,8 +1082,7 @@ html.home-editing .agent-shell {
 }
 
 html.home-editing .debug-dock {
-  bottom: 0.75rem;
-  z-index: 30;
+  display: none !important;
 }
 
 .ve-media-ghost {
