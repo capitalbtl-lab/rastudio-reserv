@@ -81,7 +81,7 @@ export function PageExtras() {
     const path = typeof location !== "undefined" ? location.pathname.replace(/\/+$/, "") || "/" : "/";
     if (path === "/") return;
     let gone = false;
-    void import("@/data/page-layout-fn").then(({ publicPageExtrasFn }) =>
+    void import("@/data/page-extras-fn").then(({ publicPageExtrasFn }) =>
       publicPageExtrasFn({ data: { path } }).then((res) => {
         if (!gone && res.ok && "extras" in res) setRemote(res.extras);
       }),

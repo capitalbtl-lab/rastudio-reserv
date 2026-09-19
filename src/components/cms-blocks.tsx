@@ -17,7 +17,6 @@ import { ageBadge, courseNameOnly } from "@/data/ages";
 import { cn } from "@/lib/utils";
 import { collageShotsFor, HeroCollage, type CollageShot } from "@/components/hero-collage";
 import { SiteVideo } from "@/components/site-video";
-import { PageExtras } from "@/components/page-extras";
 export { ScheduleBlock } from "@/components/schedule-block";
 
 export function Kicker({ children, className }: { children: string; className?: string }) {
@@ -171,6 +170,15 @@ function PageEditorLazy({ children }: { children: ReactNode }) {
   return <Boot>{children}</Boot>;
 }
 
+function PageExtrasLazy() {
+  const [Node, setNode] = useState<ComponentType | null>(null);
+  useEffect(() => {
+    void import("@/components/page-extras").then((m) => setNode(() => m.PageExtras));
+  }, []);
+  if (!Node) return null;
+  return <Node />;
+}
+
 export function CoursePageHero({
   kicker,
   age,
@@ -265,7 +273,7 @@ export function CoursePageHero({
         <SiteVideo src={video} title={title} className="aspect-video w-full overflow-hidden rounded-3xl" />
       </div>
     ) : null}
-    <PageExtras />
+    <PageExtrasLazy />
     </PageEditorLazy>
   );
 }
