@@ -9,11 +9,11 @@ function ExtraBlock({ block }: { block: PageExtra }) {
   const pad = block.bg === "ink" ? "ink text-header-fg" : block.bg === "paper" ? "bg-surface-2" : "";
   const type: CSSProperties = {
     textAlign: block.align,
-    fontSize: block.fontSize ? `${Math.min(block.fontSize, 32)}px` : undefined,
+    fontSize: block.fontSize ? `${block.fontSize}px` : undefined,
     fontWeight: block.bold ? 700 : undefined,
     fontStyle: block.italic ? "italic" : undefined,
     textDecoration: block.underline ? "underline" : undefined,
-    minHeight: block.h ? Math.min(block.h, 640) : undefined,
+    minHeight: block.h || undefined,
     paddingTop: block.padTop,
     paddingBottom: block.padBottom,
   };

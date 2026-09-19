@@ -292,16 +292,16 @@ function HomeSlotFrame({
   return (
     <div
       className={cn(
-        "relative transition-[outline-color,opacity,box-shadow]",
+        "relative overflow-visible transition-[outline-color,opacity,box-shadow]",
         bg,
-        selected ? "outline outline-2 outline-primary" : over ? "outline outline-2 outline-primary/50 ve-media-over" : "outline outline-1 outline-primary/20",
+        selected ? "outline outline-2 outline-primary pb-3" : over ? "outline outline-2 outline-primary/50 ve-media-over" : "outline outline-1 outline-primary/20",
         drag === id && "opacity-40",
         style?.hidden && "opacity-50",
       )}
       style={{
         paddingTop: style?.padTop || undefined,
         paddingBottom: style?.padBottom || undefined,
-        height: style?.h || undefined,
+        minHeight: style?.h || undefined,
         textAlign: style?.align,
       }}
       onClick={(e) => {
@@ -358,37 +358,38 @@ function HomeSlotFrame({
         </div>
       </div>
       {children}
+      {selected ? (
       <button
         type="button"
         aria-label="Высота секции"
-        className={cn(
-          "absolute inset-x-[10%] -bottom-1 z-30 flex h-4 cursor-ns-resize items-center justify-center",
-          selected ? "opacity-100" : "opacity-0 hover:opacity-100",
-        )}
-        onMouseDown={(e) => {
+        className="absolute inset-x-[10%] bottom-0 z-30 flex h-4 cursor-ns-resize items-center justify-center"
+        onPointerDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          const el = e.currentTarget;
+          el.setPointerCapture(e.pointerId);
           const startY = e.clientY;
-          const box = (e.currentTarget.parentElement as HTMLElement | null)?.getBoundingClientRect();
+          const box = (el.parentElement as HTMLElement | null)?.getBoundingClientRect();
           const start = style?.h || Math.round(box?.height || 160);
           const base = ctx?.doc;
           if (!base || !ctx) return;
           let last = base;
-          const move = (ev: MouseEvent) => {
+          const move = (ev: PointerEvent) => {
             last = patchHomeStyle(base, id, { h: start + (ev.clientY - startY) });
             ctx.setDoc(last, false);
           };
           const up = () => {
-            window.removeEventListener("mousemove", move);
-            window.removeEventListener("mouseup", up);
+            el.removeEventListener("pointermove", move);
+            el.removeEventListener("pointerup", up);
             ctx.setDoc(last, true);
           };
-          window.addEventListener("mousemove", move);
-          window.addEventListener("mouseup", up);
+          el.addEventListener("pointermove", move);
+          el.addEventListener("pointerup", up);
         }}
       >
-        <span className={cn("h-1.5 w-14 rounded-full", selected ? "bg-primary" : "bg-primary/50")} />
+        <span className="h-1.5 w-14 rounded-full bg-primary" />
       </button>
+      ) : null}
     </div>
   );
 }

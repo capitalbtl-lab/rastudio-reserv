@@ -870,7 +870,8 @@ function TextToolbar() {
           type="number"
           min={12}
           max={72}
-          value={st.fontSize || 16}
+          placeholder="авто"
+          value={st.fontSize || ""}
           className="h-8 w-14 rounded-md bg-surface-2 px-1 text-[0.78rem] text-fg"
           onChange={(e) => ctx.setDoc(patchHomeStyle(ctx.doc, ctx.selected!, { fontSize: Number(e.target.value) }))}
         />
