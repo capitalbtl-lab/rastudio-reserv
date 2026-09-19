@@ -22,14 +22,8 @@ export function loadHomeDraft(): HomeLayoutDoc {
 /** Пишет черновик главной. Гость читает published. */
 export function saveHomeLayout(raw: unknown): HomeLayoutDoc {
   const next = normalizeHomeLayout(raw);
-  try {
-    const page = applyHomeToPage(loadPageDoc("/"), next);
-    savePageDraft("/", page.draft);
-    return layoutToHome(loadPageDoc("/").draft);
-  } catch {
-    saveHomeLayoutFile(next);
-    return next;
-  }
+  const page = applyHomeToPage(loadPageDoc("/"), next);
+  return layoutToHome(savePageDraft("/", page.draft).draft);
 }
 
 export function resetHomeLayout(): HomeLayoutDoc {

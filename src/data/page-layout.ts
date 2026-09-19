@@ -1,8 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { EDITOR_STATIC_PAGES, pageKindOf, type PageKind } from "./block-library-core.ts";
 import {
-  applyHomeToPage,
   cloneLayout,
   emptyPageDoc,
   homeToLayout,
@@ -55,15 +54,7 @@ function migrateHomeIfNeeded(doc: PageDoc): PageDoc {
   const home = loadHomeLayoutFile();
   if (!home) return doc;
   const fromFile = homeToLayout(home);
-  if (!doc.draft.order.length) return { ...doc, draft: fromFile, published: cloneLayout(fromFile) };
-  const onlySeed = doc.draft.order.every((id) => id === doc.draft.blocks[id]?.typeId) && !doc.draft.order.some((id) => id.startsWith("c_") || id.startsWith("inst_"));
-  const hasCustoms = Boolean(home.customs?.length) || Object.keys(home.texts || {}).length || Object.keys(home.media || {}).length;
-  if (onlySeed && hasCustoms) {
-    const next = applyHomeToPage(doc, home);
-    next.published = cloneLayout(fromFile);
-    return next;
-  }
-  return doc;
+  return { ...doc, draft: fromFile, published: cloneLayout(fromFile) };
 }
 
 export function loadPageDoc(path: string): PageDoc {

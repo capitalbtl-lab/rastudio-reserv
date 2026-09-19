@@ -4,7 +4,7 @@ import { listSiteMedia, saveSiteMedia, deleteSiteUpload } from "./site-media";
 import { proposeMediaCaption, acceptMediaCaption, loadSitePulse, refreshSitePulse, noteCustomBlock } from "./site-pulse";
 import { loadMediaAlts } from "./media-alts";
 import { schoolSlug } from "./media-context";
-import { loadHomeLayout, saveHomeLayout } from "./home-layout";
+import { loadHomeDraft, saveHomeLayout } from "./home-layout";
 import {
   addCustomBlock,
   homeBlockLabel,
@@ -99,7 +99,7 @@ export const siteStudio = createServerFn({ method: "POST" })
       const src = String(data.src || "");
       const slot = String(data.slot || "");
       if (!src || !slot) return { ok: false as const, error: "Выберите блок и файл." };
-      const layout = saveHomeLayout(setHomeMedia(loadHomeLayout(), slot, src));
+      const layout = saveHomeLayout(setHomeMedia(loadHomeDraft(), slot, src));
       return { ok: true as const, layout };
     }
     if (data.action === "upload") {
@@ -136,7 +136,7 @@ export const siteStudio = createServerFn({ method: "POST" })
       const name = src.split("/").pop() || src;
       const kind = /\.mp4($|\?)/i.test(src) ? "video" : "image";
       try {
-        let layout = loadHomeLayout();
+        let layout = loadHomeDraft();
         if (data.slot) {
           layout = saveHomeLayout(setHomeMedia(layout, data.slot, src));
         }
@@ -165,7 +165,7 @@ JSON: {"ideas":[{"kicker","title","text","ctaLabel","ctaHref","why"}]} why — �
         const raw = await deepseekText(ask, 900);
         if (data.action === "generate") {
           const one = extractJson<Omit<HomeCustomBlock, "id">>(raw);
-          let layout = addCustomBlock(loadHomeLayout(), one);
+          let layout = addCustomBlock(loadHomeDraft(), one);
           if (data.slot) {
             const id = layout.customs.at(-1)?.id;
             if (id) layout = { ...layout, order: placeHomeBlock(layout.order, id, data.slot) };
@@ -184,7 +184,7 @@ JSON: {"ideas":[{"kicker","title","text","ctaLabel","ctaHref","why"}]} why — �
     if (data.action === "place") {
       const block = data.block;
       if (!block?.title) return { ok: false as const, error: "Нет заголовка блока." };
-      let layout = addCustomBlock(loadHomeLayout(), block);
+      let layout = addCustomBlock(loadHomeDraft(), block);
       const id = layout.customs.find((c) => c.title === block.title)?.id || layout.customs.at(-1)?.id || "";
       if (data.src && id) layout = setHomeMedia(layout, id, data.src);
       if (data.slot && id) layout = { ...layout, order: placeHomeBlock(layout.order, id, data.slot) };
@@ -195,7 +195,7 @@ JSON: {"ideas":[{"kicker","title","text","ctaLabel","ctaHref","why"}]} why — �
     if (data.action === "rewrite") {
       const slot = String(data.slot || "");
       if (!slot) return { ok: false as const, error: "Выберите блок на странице." };
-      const layout = loadHomeLayout();
+      const layout = loadHomeDraft();
       const current: Record<string, string> = {};
       for (const [k, v] of Object.entries(layout.texts)) {
         if (k === slot || k.startsWith(`${slot}.`)) current[k] = v;

@@ -48,6 +48,16 @@ describe("библиотека и документ страницы", () => {
     assert.deepEqual(new Set(back.order.filter((id) => defaultHomeOrder().includes(id as (typeof defaultHomeOrder)[number]))), new Set(defaultHomeOrder()));
   });
 
+  it("миграция копирует текущую главную даже без кастомных блоков", () => {
+    const home = normalizeHomeLayout({ order: ["hero", "about"], styles: { about: { padTop: 32, bg: "paper" } } });
+    const layout = homeToLayout(home);
+    assert.equal(layout.blocks.about.style.padTop, 32);
+    assert.equal(layout.blocks.about.style.bg, "paper");
+    assert.ok(layout.order.includes("hero"));
+    const back = layoutToHome(layout);
+    assert.equal(back.styles.about?.padTop, 32);
+  });
+
   it("один typeId — два экземпляра на разных страницах, разный контент", () => {
     const home = emptyPageDoc("/", "Главная", "home");
     const art = emptyPageDoc("/art-studio", "Художка", "school");
@@ -96,5 +106,9 @@ describe("библиотека и документ страницы", () => {
     assert.match(editor, /Опубликовать/);
     assert.match(editor, /Предпросмотр/);
     assert.match(editor, /Сохранить/);
+    const cms = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
+    assert.match(cms, /import\("@\/components\/page-editor"\)/);
+    assert.doesNotMatch(cms, /from "@\/components\/page-editor"/);
+    assert.match(cms, /HeroCollage/);
   });
 });
