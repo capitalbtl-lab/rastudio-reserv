@@ -215,3 +215,49 @@ html.home-editing [data-ve-frame] {
   border-color: transparent;
   color: #fff;
 }
+
+.ve-fly .flex.items-center.gap-0\\.5 > button.min-h-9.flex-1,
+.ve-topbar .flex.items-center.gap-0\\.5 > button.min-h-9.flex-1 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.25;
+  min-height: 2.4rem;
+  white-space: normal;
+}
+
+.ve-fly .pl-8,
+.ve-topbar .pl-8 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0.7rem;
+  padding: 0.15rem 0 0.15rem 0.55rem;
+  border-left: 2px solid rgb(15 23 42 / 0.1);
+}
+
+.ve-fly .pl-8 > button,
+.ve-topbar .pl-8 > button {
+  display: block;
+  min-height: 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.7rem;
+  background: #f3f5fa;
+  border: 1px solid rgb(15 23 42 / 0.08);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #334155;
+  white-space: normal;
+}
+
+.ve-fly .pl-8 > button:hover,
+.ve-topbar .pl-8 > button:hover {
+  background: #e8ecf6;
+}
+
+.ve-fly .pl-8 > button.bg-primary,
+.ve-topbar .pl-8 > button.bg-primary {
+  background: var(--primary, #2563eb);
+  color: #fff;
+  border-color: transparent;
+}
