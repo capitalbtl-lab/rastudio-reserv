@@ -86,13 +86,33 @@ function editUrl(path: string) {
 }
 
 function revealBlock(id: string) {
-  const ids = id === "trial-form" ? ["trial-form", "convert-aside"] : [id];
+  const aliases: Record<string, string[]> = {
+    "trial-form": ["trial-form", "convert-aside"],
+    "video-grid": ["video-grid", "course-hero"],
+    gallery: ["gallery", "course-hero"],
+    "page-reviews": ["page-reviews", "course-story"],
+    schedule: ["schedule", "convert-band", "trial-form"],
+    "school-courses": ["school-courses", "course-story"],
+    why: ["why", "course-story"],
+    program: ["program", "course-story"],
+    "sell-why": ["sell-why", "why", "course-story"],
+    "sell-program": ["sell-program", "program", "course-story"],
+    trajectory: ["trajectory", "course-story"],
+    related: ["related", "catalog", "school-courses"],
+    ages: ["ages", "catalog"],
+    catalog: ["catalog", "ages"],
+    "convert-band": ["convert-band", "convert-aside"],
+    teachers: ["teachers"],
+    branches: ["branches"],
+  };
+  const ids = aliases[id] || [id];
   const find = () => {
     for (const key of ids) {
       const el = document.querySelector(`[data-ve-frame="${CSS.escape(key)}"]`) as HTMLElement | null;
       if (el) return el;
     }
-    return id === "trial-form" ? document.getElementById("trial") : null;
+    if (id === "trial-form") return document.getElementById("trial");
+    return document.querySelector("main [data-ve-frame], article [data-ve-frame]") as HTMLElement | null;
   };
   const go = () => {
     const el = find();

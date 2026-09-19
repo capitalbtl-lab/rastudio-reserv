@@ -52,7 +52,7 @@ export type PageArticleProps = {
 function Gallery({ page }: { page: SitePage }) {
   if (!page.images.length) return null;
   return (
-    <div className="mt-10 grid gap-3 sm:grid-cols-2">
+    <div className="mt-10 grid gap-3 sm:grid-cols-2" data-ve-frame="gallery">
       {page.images.slice(0, 8).map((img) => (
         <SeoImage
           key={img.src}
@@ -339,7 +339,7 @@ function PlainPage({
         secondary={{ href: "/allcourses", label: "Смотреть курсы" }}
       />
       <div className="page-wrap py-12 md:py-16">
-        <div className="max-w-3xl space-y-5 text-lg leading-relaxed text-fg/90">
+        <div className="max-w-3xl space-y-5 text-lg leading-relaxed text-fg/90" data-ve-frame="course-story">
           {body.map((p) => (
             <p key={p.slice(0, 48)}>{p}</p>
           ))}
@@ -377,7 +377,7 @@ function TeamPage({ page, teachers, signup = SITE_SIGNUP_DEFAULT }: { page: Site
         stats={STATS.map((s) => ({ value: s.value, label: s.label }))}
       />
       <div className="page-wrap py-12 md:py-16">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-ve-frame="teachers">
           {teachers.map((t) => (
             <PageLink
               key={t.href + t.name}
@@ -449,6 +449,7 @@ function CatalogPage({ page, courses, signup = SITE_SIGNUP_DEFAULT }: { page: Si
         stats={STATS.map((s) => ({ value: s.value, label: s.label }))}
       />
       <div className="page-wrap py-12 md:py-16">
+      <div data-ve-frame="ages">
       <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted">Возраст</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
@@ -462,6 +463,7 @@ function CatalogPage({ page, courses, signup = SITE_SIGNUP_DEFAULT }: { page: Si
           Все
         </button>
         <AgeChips active={age} />
+      </div>
       </div>
       <p className="mt-6 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted">Город</p>
       <div className="mt-2 flex flex-wrap gap-2">
@@ -505,7 +507,7 @@ function CatalogPage({ page, courses, signup = SITE_SIGNUP_DEFAULT }: { page: Si
           className="h-12 w-full max-w-md rounded-sm border border-border bg-surface px-5 text-sm shadow-[var(--shadow-border)] outline-none focus:ring-2 focus:ring-ring"
         />
       </label>
-      <div className="catalog-grid mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="catalog-grid mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-ve-frame="catalog">
         {filtered.map((c) => (
           <PageLink
             key={c.href}
@@ -563,7 +565,7 @@ function ContactsPage({ page, signup = SITE_SIGNUP_DEFAULT }: { page: SitePage; 
         ]}
       />
       <div className="page-wrap py-12 md:py-16">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3" data-ve-frame="branches">
         {BRANCHES.map((b) => (
           <div key={b.address} className="overflow-hidden rounded-lg bg-surface shadow-[var(--shadow-border)]">
             <iframe
@@ -605,7 +607,7 @@ function MasterListPage({ page, masters, signup = SITE_SIGNUP_DEFAULT }: { page:
         secondary={{ href: "/allcourses", label: "Все курсы" }}
       />
       <div className="page-wrap py-12 md:py-16">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2" data-ve-frame="course-story">
         {masters.map((item) => (
           <PageLink
             key={item.path}

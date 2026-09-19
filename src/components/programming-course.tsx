@@ -86,7 +86,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
       ) : null}
 
       {course.aboutLead ? (
-        <section className="border-b border-border bg-surface">
+        <section className="border-b border-border bg-surface" data-ve-frame="course-story">
           <div className="mx-auto max-w-[1180px] px-4 py-10 md:px-5 md:py-14">
             <p className="display max-w-4xl text-2xl leading-snug md:text-3xl">{course.aboutLead}</p>
             {course.resultLevel ? (
@@ -97,7 +97,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
       ) : null}
 
       <div className="mx-auto max-w-[1180px] space-y-16 px-4 py-12 md:px-5 md:py-16">
-        <section>
+        <section data-ve-frame="course-story">
           <Kicker>О курсе</Kicker>
           <h2 className="display section-title mt-2">{course.aboutTitle}</h2>
           <div className="mt-6 max-w-3xl">
@@ -106,7 +106,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
         </section>
 
         {course.trajectory.length ? (
-          <section>
+          <section data-ve-frame="trajectory">
             <Kicker>Траектория</Kicker>
             <h2 className="display section-title mt-2">{course.trajectoryTitle}</h2>
             {course.trajectoryText ? (
@@ -153,7 +153,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
         <CourseSellAfterWhy path={course.pathDecoded || course.path || page.path} />
 
         {course.programText ? (
-          <section>
+          <section data-ve-frame="program">
             <Kicker>Программа</Kicker>
             <h2 className="display section-title mt-2">{course.programTitle}</h2>
             <div className="mt-6 max-w-3xl">

@@ -52,7 +52,7 @@ export function MasterClassPage({ page, master, signup = SITE_SIGNUP_DEFAULT }: 
           <Meta label="Место" value={master.places.join(", ")} />
         </dl>
 
-        <div className="mt-14 space-y-14">
+        <div className="mt-14 space-y-14" data-ve-frame="course-story">
           {sections.map((s) => (
             <section key={s.title}>
               <Kicker>Мастер-класс</Kicker>
@@ -152,7 +152,7 @@ export function MasterListPageCms({ page, masters, signup = SITE_SIGNUP_DEFAULT 
           className="h-12 w-full max-w-md rounded-sm border border-border bg-surface px-5 text-sm shadow-[var(--shadow-border)] outline-none focus:ring-2 focus:ring-ring"
         />
       </label>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-ve-frame="course-story">
         {filtered.map((m) => (
           <PageLink
             key={m.id}
