@@ -2,22 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
   ChevronDown,
   Eye,
   EyeOff,
   Files,
   Image as ImageIcon,
+  Italic,
   LayoutTemplate,
   Monitor,
   Plus,
   Redo2,
   Smartphone,
   Tablet,
+  Underline,
   Undo2,
 } from "lucide-react";
 import { debugEmit } from "@/data/debug-client";
 import { loadPageDocFn, placeBlockFn, publishPageFn, savePageDraftFn } from "@/data/page-layout-fn";
-import { BLOCK_LIBRARY, isAtomType } from "@/data/block-library-core";
+import { BLOCK_LIBRARY, isAtomType, libraryType } from "@/data/block-library-core";
 import {
   emptyHomeLayout,
   homeBlockLabel,
@@ -29,6 +35,7 @@ import {
   setHomeText,
   setHomeMedia,
   type HomeBg,
+  type HomeBlockStyle,
   type HomeBlockId,
   type HomeDevice,
   type HomeLayoutDoc,
@@ -353,6 +360,8 @@ export function HomeEditorChrome() {
           </button>
         </div>
 
+        <TextToolbar />
+
         <aside className="ve-rail hidden md:block">
           <button type="button" className={cn("ve-icon", rail === "elements" && "is-on")} title="Добавить элементы" onClick={() => toggleRail("elements")}>
             <Plus className="size-4" />
@@ -642,7 +651,7 @@ function InspectorFields({
 }: {
   selected: string | null;
   doc: HomeLayoutDoc;
-  style: { hidden?: boolean; padTop?: number; padBottom?: number; bg?: HomeBg };
+  style: HomeBlockStyle;
   setDoc: (next: HomeLayoutDoc, persist?: boolean) => void;
   light?: boolean;
 }) {
@@ -671,6 +680,36 @@ function InspectorFields({
           onChange={(e) => setDoc(patchHomeStyle(doc, selected, { hidden: !e.target.checked }))}
         />
       </label>
+      <CourseField id={selected} doc={doc} setDoc={setDoc} />
+      <p className={cn("mt-5 text-[0.68rem] font-semibold uppercase tracking-[0.14em]", muted)}>Высота секции</p>
+      <input
+        type="range"
+        min={0}
+        max={900}
+        value={style.h || 0}
+        className="mt-2 w-full"
+        onChange={(e) => setDoc(patchHomeStyle(doc, selected, { h: Number(e.target.value) }))}
+      />
+      <p className={cn("text-right text-[0.7rem]", muted)}>{style.h ? `${style.h} px` : "авто"}</p>
+      <p className={cn("mt-4 text-[0.68rem] font-semibold uppercase tracking-[0.14em]", muted)}>Выравнивание текста</p>
+      <div className="mt-2 flex gap-1">
+        {(
+          [
+            ["left", AlignLeft],
+            ["center", AlignCenter],
+            ["right", AlignRight],
+          ] as const
+        ).map(([id, Icon]) => (
+          <button
+            key={id}
+            type="button"
+            className={cn("grid size-9 place-items-center rounded-lg", (style.align || "left") === id ? "bg-primary text-primary-foreground" : chipOff)}
+            onClick={() => setDoc(patchHomeStyle(doc, selected, { align: id }))}
+          >
+            <Icon className="size-3.5" />
+          </button>
+        ))}
+      </div>
       <p className={cn("mt-5 text-[0.68rem] font-semibold uppercase tracking-[0.14em]", muted)}>Отступ сверху</p>
       <input
         type="range"
@@ -735,6 +774,92 @@ function InspectorFields({
         </button>
       ) : null}
     </>
+  );
+}
+
+function slotTypeId(doc: HomeLayoutDoc, id: string) {
+  return doc.customs.find((c) => c.id === id)?.typeId || id;
+}
+
+function CourseField({
+  id,
+  doc,
+  setDoc,
+}: {
+  id: string;
+  doc: HomeLayoutDoc;
+  setDoc: (next: HomeLayoutDoc, persist?: boolean) => void;
+}) {
+  const ctx = useHomeEditor();
+  const type = libraryType(slotTypeId(doc, id));
+  if (!type?.fields.some((f) => f.kind === "courseId")) return null;
+  const value = doc.texts[`${id}.courseId`] || doc.customs.find((c) => c.id === id)?.courseId || "";
+  const courses = (ctx?.pages || []).filter((p) => p.kind === "course");
+  return (
+    <label className="mt-5 block text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">
+      Курс (courseId)
+      <select
+        className="mt-2 h-11 w-full rounded-xl bg-surface-2 px-3 text-[0.8rem] font-normal text-fg"
+        value={value}
+        onChange={(e) => {
+          const courseId = e.target.value;
+          const texts = { ...doc.texts };
+          if (courseId) texts[`${id}.courseId`] = courseId;
+          else delete texts[`${id}.courseId`];
+          const customs = doc.customs.map((c) => (c.id === id ? { ...c, courseId: courseId || undefined } : c));
+          setDoc({ ...doc, texts, customs });
+        }}
+      >
+        <option value="">Не выбран</option>
+        {courses.map((p) => (
+          <option key={p.path} value={p.path}>
+            {p.title}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function TextToolbar() {
+  const ctx = useHomeEditor();
+  if (!ctx?.editing || !ctx.selected) return null;
+  const st = ctx.doc.styles[ctx.selected] || {};
+  const btn = (on: boolean) => cn("grid size-8 place-items-center rounded-md", on ? "bg-primary text-primary-foreground" : "hover:bg-black/5");
+  return (
+    <div className="pointer-events-auto fixed left-1/2 top-[3.35rem] z-[72] flex -translate-x-1/2 items-center gap-0.5 rounded-xl bg-white p-1 shadow-[0_12px_32px_-16px_rgba(0,0,0,.4)] ring-1 ring-black/10">
+      <button type="button" className={btn(Boolean(st.bold))} title="Жирный" onClick={() => ctx.setDoc(patchHomeStyle(ctx.doc, ctx.selected!, { bold: !st.bold }))}>
+        <Bold className="size-3.5" />
+      </button>
+      <button type="button" className={btn(Boolean(st.italic))} title="Курсив" onClick={() => ctx.setDoc(patchHomeStyle(ctx.doc, ctx.selected!, { italic: !st.italic }))}>
+        <Italic className="size-3.5" />
+      </button>
+      <button type="button" className={btn(Boolean(st.underline))} title="Подчёркнутый" onClick={() => ctx.setDoc(patchHomeStyle(ctx.doc, ctx.selected!, { underline: !st.underline }))}>
+        <Underline className="size-3.5" />
+      </button>
+      <span className="mx-1 h-5 w-px bg-black/10" />
+      <button type="button" className={btn(st.align === "left" || !st.align)} title="Слева" onClick={() => ctx.setDoc(patchHomeStyle(ctx.doc, ctx.selected!, { align: "left" }))}>
+        <AlignLeft className="size-3.5" />
+      </button>
+      <button type="button" className={btn(st.align === "center")} title="По центру" onClick={() => ctx.setDoc(patchHomeStyle(ctx.doc, ctx.selected!, { align: "center" }))}>
+        <AlignCenter className="size-3.5" />
+      </button>
+      <button type="button" className={btn(st.align === "right")} title="Справа" onClick={() => ctx.setDoc(patchHomeStyle(ctx.doc, ctx.selected!, { align: "right" }))}>
+        <AlignRight className="size-3.5" />
+      </button>
+      <span className="mx-1 h-5 w-px bg-black/10" />
+      <label className="flex items-center gap-1 px-1 text-[0.68rem] text-black/50">
+        кегль
+        <input
+          type="number"
+          min={12}
+          max={72}
+          value={st.fontSize || 16}
+          className="h-8 w-14 rounded-md bg-surface-2 px-1 text-[0.78rem] text-fg"
+          onChange={(e) => ctx.setDoc(patchHomeStyle(ctx.doc, ctx.selected!, { fontSize: Number(e.target.value) }))}
+        />
+      </label>
+    </div>
   );
 }
 

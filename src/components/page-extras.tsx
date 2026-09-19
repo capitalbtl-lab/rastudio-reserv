@@ -1,22 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useHomeEditor } from "@/components/home-read";
 import { extrasFromHome, type PageExtra } from "@/data/page-layout-core";
 import { cn } from "@/lib/utils";
 
 function ExtraBlock({ block }: { block: PageExtra }) {
   const pad = block.bg === "ink" ? "ink text-header-fg" : block.bg === "paper" ? "bg-surface-2" : "";
+  const type: CSSProperties = {
+    textAlign: block.align,
+    fontSize: block.fontSize ? `${Math.min(block.fontSize, 32)}px` : undefined,
+    fontWeight: block.bold ? 700 : undefined,
+    fontStyle: block.italic ? "italic" : undefined,
+    textDecoration: block.underline ? "underline" : undefined,
+    minHeight: block.h ? Math.min(block.h, 640) : undefined,
+    paddingTop: block.padTop,
+    paddingBottom: block.padBottom,
+  };
   if (block.typeId === "heading") {
     return (
-      <section className={cn("page-wrap py-8", pad)}>
+      <section className={cn("page-wrap py-8 overflow-x-clip", pad)} style={type}>
         <h2 className="display text-3xl leading-tight md:text-4xl">{block.title}</h2>
       </section>
     );
   }
   if (block.typeId === "rich-text") {
     return (
-      <section className={cn("page-wrap max-w-3xl py-8 text-[1.02rem] leading-relaxed text-fg/85", pad)}>
+      <section className={cn("page-wrap max-w-3xl py-8 text-[1.02rem] leading-relaxed text-fg/85 overflow-x-clip", pad)} style={type}>
         {block.kicker ? <p className="kicker mb-3">{block.kicker}</p> : null}
         {block.title ? <h2 className="display mb-4 text-3xl">{block.title}</h2> : null}
         <p className="whitespace-pre-wrap">{block.text}</p>
@@ -25,7 +35,7 @@ function ExtraBlock({ block }: { block: PageExtra }) {
   }
   if (block.typeId === "image" && block.image) {
     return (
-      <section className={cn("page-wrap py-8", pad)}>
+      <section className={cn("page-wrap py-8 overflow-x-clip", pad)} style={type}>
         {block.title ? <h2 className="display mb-4 text-3xl">{block.title}</h2> : null}
         <img src={block.image} alt={block.title || ""} className="h-auto w-full max-w-full rounded-3xl object-cover" />
       </section>
@@ -33,7 +43,7 @@ function ExtraBlock({ block }: { block: PageExtra }) {
   }
   if (block.typeId === "video" && block.video) {
     return (
-      <section className={cn("page-wrap py-8", pad)}>
+      <section className={cn("page-wrap py-8 overflow-x-clip", pad)} style={type}>
         {block.title ? <h2 className="display mb-4 text-3xl">{block.title}</h2> : null}
         <video src={block.video} controls className="aspect-video w-full max-w-full rounded-3xl" />
       </section>
@@ -41,7 +51,7 @@ function ExtraBlock({ block }: { block: PageExtra }) {
   }
   if (block.typeId === "buttons" && (block.ctaLabel || block.ctaHref)) {
     return (
-      <section className={cn("page-wrap py-6", pad)}>
+      <section className={cn("page-wrap py-6 overflow-x-clip", pad)} style={type}>
         <a
           href={block.ctaHref || "#trial"}
           className="inline-flex min-h-11 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground"
@@ -52,7 +62,7 @@ function ExtraBlock({ block }: { block: PageExtra }) {
     );
   }
   return (
-    <section className={cn("page-wrap grid items-center gap-8 overflow-x-clip py-10 md:grid-cols-2 md:gap-12", pad)}>
+    <section className={cn("page-wrap grid items-center gap-8 overflow-x-clip py-10 md:grid-cols-2 md:gap-12", pad)} style={type}>
       <div className="min-w-0">
         {block.kicker ? <p className="kicker">{block.kicker}</p> : null}
         {block.title ? <h2 className="display mt-3 text-3xl leading-tight md:text-4xl">{block.title}</h2> : null}

@@ -4,7 +4,7 @@ import { Children, isValidElement, useEffect, useState, type ComponentType, type
 import { GripVertical } from "lucide-react";
 import { EditText, useHomeEditor } from "@/components/home-read";
 import { HomeEditorGate } from "@/components/home-editor-gate";
-import { homeBlockLabel, placeHomeBlock, setHomeMedia, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
+import { homeBlockLabel, placeHomeBlock, patchHomeStyle, setHomeMedia, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
 import { SiteVideo } from "@/components/site-video";
 import { SeoImage } from "@/components/seo-image";
 import { mediaAlt } from "@/data/media-alts-core";
@@ -275,7 +275,15 @@ function HomeSlotFrame({
 
   if (!editing) {
     return (
-      <div className={bg} style={{ paddingTop: style?.padTop || undefined, paddingBottom: style?.padBottom || undefined }}>
+      <div
+        className={bg}
+        style={{
+          paddingTop: style?.padTop || undefined,
+          paddingBottom: style?.padBottom || undefined,
+          minHeight: style?.h || undefined,
+          textAlign: style?.align,
+        }}
+      >
         {children}
       </div>
     );
@@ -290,7 +298,12 @@ function HomeSlotFrame({
         drag === id && "opacity-40",
         style?.hidden && "opacity-50",
       )}
-      style={{ paddingTop: style?.padTop || undefined, paddingBottom: style?.padBottom || undefined }}
+      style={{
+        paddingTop: style?.padTop || undefined,
+        paddingBottom: style?.padBottom || undefined,
+        minHeight: style?.h || undefined,
+        textAlign: style?.align,
+      }}
       onClick={(e) => {
         e.stopPropagation();
         ctx?.select(id);
@@ -344,6 +357,43 @@ function HomeSlotFrame({
           {style?.hidden ? <span className="pr-2 opacity-80">скрыт</span> : null}
         </div>
       </div>
+      <button
+        type="button"
+        aria-label="Зазор сверху"
+        className="absolute inset-x-8 top-0 z-10 h-2 cursor-ns-resize bg-primary/0 hover:bg-primary/40"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const startY = e.clientY;
+          const start = style?.padTop || 0;
+          const move = (ev: MouseEvent) => ctx?.setDoc(patchHomeStyle(ctx.doc, id, { padTop: start + (ev.clientY - startY) }));
+          const up = () => {
+            window.removeEventListener("mousemove", move);
+            window.removeEventListener("mouseup", up);
+          };
+          window.addEventListener("mousemove", move);
+          window.addEventListener("mouseup", up);
+        }}
+      />
+      <button
+        type="button"
+        aria-label="Высота секции"
+        className="absolute inset-x-16 bottom-0 z-10 h-2 cursor-ns-resize bg-primary/0 hover:bg-primary/50"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const startY = e.clientY;
+          const box = (e.currentTarget.parentElement as HTMLElement | null)?.getBoundingClientRect();
+          const start = style?.h || Math.round(box?.height || 160);
+          const move = (ev: MouseEvent) => ctx?.setDoc(patchHomeStyle(ctx.doc, id, { h: start + (ev.clientY - startY) }));
+          const up = () => {
+            window.removeEventListener("mousemove", move);
+            window.removeEventListener("mouseup", up);
+          };
+          window.addEventListener("mousemove", move);
+          window.addEventListener("mouseup", up);
+        }}
+      />
       {children}
     </div>
   );

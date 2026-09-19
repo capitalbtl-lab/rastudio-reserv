@@ -43,6 +43,10 @@ export type BlockInstance = {
     x?: number;
     y?: number;
     align?: "left" | "center" | "right" | "justify";
+    fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
   };
   phone: {
     hidden?: boolean;
@@ -161,6 +165,10 @@ function asInstance(raw: unknown, fallbackId: string): BlockInstance | null {
         st.align === "left" || st.align === "center" || st.align === "right" || st.align === "justify"
           ? st.align
           : undefined,
+      fontSize: Number(st.fontSize) > 0 ? Math.min(72, Math.max(12, Math.round(Number(st.fontSize)))) : undefined,
+      bold: st.bold ? true : undefined,
+      italic: st.italic ? true : undefined,
+      underline: st.underline ? true : undefined,
     },
     phone: asPhone(s.phone),
     onAllPages: s.onAllPages ? true : undefined,
@@ -266,12 +274,19 @@ export function homeToLayout(home: HomeLayoutDoc): LayoutDoc {
         image: home.media[id] || custom?.image || undefined,
         ctaLabel: custom?.ctaLabel,
         ctaHref: custom?.ctaHref,
+        courseId: home.texts[`${id}.courseId`] || custom?.courseId || undefined,
       },
       style: {
         hidden: style.hidden,
         padTop: style.padTop,
         padBottom: style.padBottom,
         bg: style.bg,
+        h: style.h,
+        align: style.align,
+        fontSize: style.fontSize,
+        bold: style.bold,
+        italic: style.italic,
+        underline: style.underline,
       },
       phone: { stack: isAtomType(typeId) ? "column" : undefined },
     };
@@ -287,17 +302,24 @@ export function layoutToHome(layout: LayoutDoc): HomeLayoutDoc {
   for (const id of layout.order) {
     const b = layout.blocks[id];
     if (!b) continue;
-    if (b.style.hidden || b.style.padTop || b.style.padBottom || b.style.bg) {
+    if (b.style.hidden || b.style.padTop || b.style.padBottom || b.style.bg || b.style.h || b.style.align || b.style.fontSize || b.style.bold || b.style.italic || b.style.underline) {
       styles[id] = {
         hidden: b.style.hidden,
         padTop: b.style.padTop,
         padBottom: b.style.padBottom,
         bg: b.style.bg,
+        h: b.style.h,
+        align: b.style.align,
+        fontSize: b.style.fontSize,
+        bold: b.style.bold,
+        italic: b.style.italic,
+        underline: b.style.underline,
       };
     }
     if (b.content.kicker) texts[`${id}.kicker`] = b.content.kicker;
     if (b.content.title) texts[`${id}.title`] = b.content.title;
     if (b.content.text) texts[`${id}.text`] = b.content.text;
+    if (b.content.courseId) texts[`${id}.courseId`] = b.content.courseId;
     if (b.content.image) media[id] = b.content.image;
     else if (b.content.video) media[id] = b.content.video;
     if (!isHomeType(b.typeId) || isCustomBlockId(id)) {
@@ -310,6 +332,7 @@ export function layoutToHome(layout: LayoutDoc): HomeLayoutDoc {
         image: b.content.image,
         ctaLabel: b.content.ctaLabel,
         ctaHref: b.content.ctaHref,
+        courseId: b.content.courseId,
         why: undefined,
       });
     }
@@ -385,7 +408,16 @@ export type PageExtra = {
   video?: string;
   ctaLabel?: string;
   ctaHref?: string;
+  courseId?: string;
   bg?: HomeBg;
+  align?: BlockInstance["style"]["align"];
+  h?: number;
+  padTop?: number;
+  padBottom?: number;
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
 };
 
 export function extrasOf(layout: LayoutDoc): PageExtra[] {
@@ -404,7 +436,16 @@ export function extrasOf(layout: LayoutDoc): PageExtra[] {
       video: b.content.video,
       ctaLabel: b.content.ctaLabel,
       ctaHref: b.content.ctaHref,
+      courseId: b.content.courseId,
       bg: b.style.bg,
+      align: b.style.align,
+      h: b.style.h,
+      padTop: b.style.padTop,
+      padBottom: b.style.padBottom,
+      fontSize: b.style.fontSize,
+      bold: b.style.bold,
+      italic: b.style.italic,
+      underline: b.style.underline,
     });
   }
   return out;

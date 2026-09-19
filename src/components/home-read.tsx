@@ -95,12 +95,25 @@ export function EditText({
   const fallback = String(children).replace(/\s+/g, " ").trim();
   const value = ctx?.text(id, fallback) || fallback;
   const editing = Boolean(ctx?.editing);
+  const slot = id.includes(".") ? id.slice(0, id.indexOf(".")) : id;
+  const st = ctx?.doc.styles[slot];
   return (
     <Tag
+      data-ve-slot={slot}
       className={cn(className, editing && "ve-text")}
       contentEditable={editing}
       suppressContentEditableWarning
+      style={{
+        textAlign: st?.align,
+        fontSize: st?.fontSize ? `${st.fontSize}px` : undefined,
+        fontWeight: st?.bold ? 700 : undefined,
+        fontStyle: st?.italic ? "italic" : undefined,
+        textDecoration: st?.underline ? "underline" : undefined,
+      }}
       onMouseDown={(e) => editing && e.stopPropagation()}
+      onFocus={() => {
+        if (editing) ctx?.select(slot);
+      }}
       onBlur={(e) => {
         const next = (e.currentTarget.textContent || "").trim();
         if (next && next !== value) ctx?.setText(id, next);

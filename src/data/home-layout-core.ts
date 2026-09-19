@@ -23,6 +23,12 @@ export type HomeBlockStyle = {
   padTop?: number;
   padBottom?: number;
   bg?: HomeBg;
+  h?: number;
+  align?: "left" | "center" | "right" | "justify";
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
 };
 
 export type HomeCustomBlock = {
@@ -35,6 +41,7 @@ export type HomeCustomBlock = {
   ctaHref?: string;
   why?: string;
   typeId?: string;
+  courseId?: string;
 };
 
 export type HomeLayoutDoc = {
@@ -77,6 +84,39 @@ export function clampPad(n: unknown) {
   const x = Number(n);
   if (!Number.isFinite(x)) return 0;
   return Math.max(0, Math.min(160, Math.round(x)));
+}
+
+export function clampH(n: unknown) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 0;
+  return Math.max(0, Math.min(900, Math.round(x)));
+}
+
+export function clampFont(n: unknown) {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x <= 0) return 0;
+  return Math.max(12, Math.min(72, Math.round(x)));
+}
+
+function asAlign(v: unknown): HomeBlockStyle["align"] | undefined {
+  return v === "left" || v === "center" || v === "right" || v === "justify" ? v : undefined;
+}
+
+export function cleanHomeStyle(st: HomeBlockStyle): HomeBlockStyle | undefined {
+  const next: HomeBlockStyle = {
+    hidden: st.hidden || undefined,
+    padTop: clampPad(st.padTop) || undefined,
+    padBottom: clampPad(st.padBottom) || undefined,
+    bg: asBg(st.bg) === "inherit" ? undefined : asBg(st.bg),
+    h: clampH(st.h) || undefined,
+    align: asAlign(st.align),
+    fontSize: clampFont(st.fontSize) || undefined,
+    bold: st.bold || undefined,
+    italic: st.italic || undefined,
+    underline: st.underline || undefined,
+  };
+  if (!next.hidden && !next.padTop && !next.padBottom && !next.bg && !next.h && !next.align && !next.fontSize && !next.bold && !next.italic && !next.underline) return undefined;
+  return next;
 }
 
 export function normalizeHomeOrder(raw?: unknown, extraIds: string[] = [], fillMissing = true): HomeSlotId[] {
@@ -124,6 +164,7 @@ function asCustom(raw: unknown): HomeCustomBlock | null {
     ctaHref: String(c.ctaHref || "").trim().slice(0, 180) || undefined,
     why: String(c.why || "").trim().slice(0, 240) || undefined,
     typeId: String(c.typeId || "").trim().slice(0, 80) || undefined,
+    courseId: String(c.courseId || "").trim().slice(0, 180) || undefined,
   };
 }
 
@@ -139,13 +180,8 @@ export function normalizeHomeLayout(raw?: unknown, fillMissing = true): HomeLayo
     const s = rawStyles[id];
     if (!s || typeof s !== "object") continue;
     const st = s as HomeBlockStyle;
-    styles[id] = {
-      hidden: Boolean(st.hidden) || undefined,
-      padTop: clampPad(st.padTop) || undefined,
-      padBottom: clampPad(st.padBottom) || undefined,
-      bg: asBg(st.bg) === "inherit" ? undefined : asBg(st.bg),
-    };
-    if (!styles[id]?.hidden && !styles[id]?.padTop && !styles[id]?.padBottom && !styles[id]?.bg) delete styles[id];
+    const next = cleanHomeStyle(st);
+    if (next) styles[id] = next;
   }
   const texts: Record<string, string> = {};
   if (src.texts && typeof src.texts === "object") {
@@ -183,15 +219,9 @@ export function placeHomeBlock(order: HomeSlotId[], id: HomeSlotId, before?: str
 }
 
 export function patchHomeStyle(doc: HomeLayoutDoc, id: HomeSlotId, patch: HomeBlockStyle): HomeLayoutDoc {
-  const cur = { ...(doc.styles[id] || {}), ...patch };
-  const next: HomeBlockStyle = {
-    hidden: cur.hidden || undefined,
-    padTop: clampPad(cur.padTop) || undefined,
-    padBottom: clampPad(cur.padBottom) || undefined,
-    bg: asBg(cur.bg) === "inherit" ? undefined : asBg(cur.bg),
-  };
+  const next = cleanHomeStyle({ ...(doc.styles[id] || {}), ...patch });
   const styles = { ...doc.styles };
-  if (!next.hidden && !next.padTop && !next.padBottom && !next.bg) delete styles[id];
+  if (!next) delete styles[id];
   else styles[id] = next;
   return { ...doc, styles };
 }

@@ -79,6 +79,18 @@ describe("библиотека и документ страницы", () => {
     assert.notEqual(homeExtras[0].id, extras[0].id);
     const school = seedLayout("school");
     assert.equal(extrasOf(school).length, 0);
+    const styled = addInstance(art.draft, "two-col", null, { title: "Жирный" });
+    const sid = Object.values(styled.blocks).find((b) => b.typeId === "two-col")!.id;
+    styled.blocks[sid].style.bold = true;
+    styled.blocks[sid].style.align = "center";
+    styled.blocks[sid].content.courseId = "/art-studio";
+    const packed = layoutToHome(styled);
+    assert.equal(packed.styles[sid]?.bold, true);
+    assert.equal(packed.styles[sid]?.align, "center");
+    assert.equal(packed.texts[`${sid}.courseId`], "/art-studio");
+    const back = homeToLayout(packed);
+    assert.equal(back.blocks[sid].style.bold, true);
+    assert.equal(back.blocks[sid].content.courseId, "/art-studio");
   });
 
   it("roundtrip inst_ и школы не подмешивает слоты главной", () => {
@@ -131,6 +143,9 @@ describe("библиотека и документ страницы", () => {
     assert.match(editor, /Поставить этот блок/);
     assert.match(editor, /fromPath/);
     assert.match(editor, /path === "\/"/);
+    assert.match(editor, /TextToolbar/);
+    assert.match(editor, /courseId/);
+    assert.match(editor, /кегль/);
     const cms = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
     assert.match(cms, /import\("@\/components\/page-editor"\)/);
     assert.doesNotMatch(cms, /from "@\/components\/page-editor"/);
