@@ -90,33 +90,11 @@ function editUrl(path: string) {
 }
 
 function revealBlock(id: string) {
-  const aliases: Record<string, string[]> = {
-    "trial-form": ["trial-form", "convert-aside"],
-    "video-grid": ["video-grid", "course-hero"],
-    gallery: ["gallery", "course-hero"],
-    "page-reviews": ["page-reviews", "course-story"],
-    schedule: ["schedule", "convert-band", "trial-form"],
-    "school-courses": ["school-courses", "course-story"],
-    why: ["why", "course-story"],
-    program: ["program", "course-story"],
-    "sell-why": ["sell-why", "why", "course-story"],
-    "sell-program": ["sell-program", "program", "course-story"],
-    trajectory: ["trajectory", "course-story"],
-    related: ["related", "catalog", "school-courses"],
-    ages: ["ages", "catalog"],
-    catalog: ["catalog", "ages"],
-    "convert-band": ["convert-band", "convert-aside"],
-    teachers: ["teachers"],
-    branches: ["branches"],
-  };
-  const ids = aliases[id] || [id];
   const find = () => {
-    for (const key of ids) {
-      const el = document.querySelector(`[data-ve-frame="${CSS.escape(key)}"]`) as HTMLElement | null;
-      if (el) return el;
-    }
+    const el = document.querySelector(`[data-ve-frame="${CSS.escape(id)}"]`) as HTMLElement | null;
+    if (el) return el;
     if (id === "trial-form") return document.getElementById("trial");
-    return document.querySelector("main [data-ve-frame], article [data-ve-frame]") as HTMLElement | null;
+    return null;
   };
   const go = () => {
     const el = find();
@@ -127,7 +105,10 @@ function revealBlock(id: string) {
   if (go()) return;
   requestAnimationFrame(() => {
     if (go()) return;
-    window.setTimeout(go, 60);
+    window.setTimeout(() => {
+      if (go()) return;
+      window.setTimeout(go, 180);
+    }, 60);
   });
 }
 
@@ -225,6 +206,67 @@ function VeSync() {
       : null;
   if (!host || host.querySelector('[data-ve-h="slot"]')) return null;
   return createPortal(<VeHeightHandle id={ctx!.selected!} />, host);
+}
+
+function VeStubBody({ id }: { id: string }) {
+  const ctx = useHomeEditor();
+  const title = ctx?.text(`${id}.title`, "") || "";
+  const text = ctx?.text(`${id}.text`, "") || "";
+  const media = ctx?.doc.media[id] || "";
+  const video = /\.(mp4|webm|mov)(\?|$)/i.test(media);
+  return (
+    <div data-ve-body={id}>
+      {title ? <h2 className="display mt-3 text-3xl leading-tight">{title}</h2> : null}
+      {text ? <p className="mt-3 max-w-2xl text-lg leading-relaxed text-muted">{text}</p> : null}
+      {media ? (
+        video ? (
+          <video className="mt-4 max-h-64 w-full rounded-2xl object-cover" src={media} muted playsInline />
+        ) : (
+          <img className="mt-4 max-h-64 w-full rounded-2xl object-cover" src={media} alt="" />
+        )
+      ) : null}
+      {!title && !text && !media ? (
+        <p className="mt-3 text-sm text-muted">Пустой блок этой страницы. Текст на холсте, фото — Студия.</p>
+      ) : null}
+    </div>
+  );
+}
+
+function VeStubs() {
+  const ctx = useHomeEditor();
+  const [missing, setMissing] = useState<string[]>([]);
+  useLayoutEffect(() => {
+    if (!ctx?.editing) return;
+    const scan = () => {
+      const miss = ctx.doc.order.filter((id) => {
+        const nodes = [...document.querySelectorAll(`[data-ve-frame="${CSS.escape(id)}"]`)];
+        return !nodes.some((n) => n.getAttribute("data-ve-stub") !== "1");
+      });
+      setMissing((prev) => (prev.join("\0") === miss.join("\0") ? prev : miss));
+    };
+    scan();
+    const root = document.getElementById("content") || document.body;
+    const mo = new MutationObserver(scan);
+    mo.observe(root, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, [ctx, ctx?.editing, ctx?.doc.order]);
+  const host = typeof document !== "undefined" ? document.getElementById("content") : null;
+  if (!ctx?.editing || !host || !missing.length) return null;
+  return createPortal(
+    <div className="ve-stubs">
+      {missing.map((id) => (
+        <section key={id} data-ve-frame={id} data-ve-stub="1" className="relative border-t border-black/5">
+          <div className="page-wrap py-10">
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">
+              {libraryType(id)?.label || homeBlockLabel(id, ctx.doc.customs)}
+            </p>
+            <VeStubBody id={id} />
+          </div>
+        </section>
+      ))}
+    </div>,
+    host,
+  );
 }
 
 function previewUrl(path: string) {
@@ -573,6 +615,7 @@ export function HomeEditorChrome() {
   return (
     <>
       <VeSync />
+      <VeStubs />
       <ScopeAsk />
       <div className="ve-ui ve-chrome">
         <div className="ve-topbar">

@@ -95,7 +95,7 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
   const active = Boolean(city || branch || age || day || course);
 
   return (
-    <section className="mt-8">
+    <section className="mt-8" data-ve-frame="schedule">
       <div className="rounded-[1.5rem] bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
         <div>
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Город</p>

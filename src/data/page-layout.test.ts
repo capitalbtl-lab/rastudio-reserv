@@ -205,8 +205,13 @@ describe("библиотека и документ страницы", () => {
     assert.match(prog, /data-ve-frame="trajectory"/);
     assert.match(prog, /data-ve-frame="program"/);
     const convert = readFileSync(new URL("../components/convert.tsx", import.meta.url), "utf8");
-    assert.match(convert, /data-ve-frame="convert-band"/);
-    assert.match(editor, /aliases/);
+    const finder = readFileSync(new URL("../components/schedule-finder.tsx", import.meta.url), "utf8");
+    assert.match(finder, /data-ve-frame="schedule"/);
+    const schedule = readFileSync(new URL("../routes/schedule.tsx", import.meta.url), "utf8");
+    assert.match(schedule, /data-ve-frame="course-story"/);
+    assert.match(editor, /function VeStubs/);
+    assert.match(editor, /data-ve-stub/);
+    assert.doesNotMatch(editor, /aliases/);
     assert.match(editor, /function VeSync/);
     assert.match(editor, /paintVeFrames/);
     assert.match(editor, /Только этот блок/);

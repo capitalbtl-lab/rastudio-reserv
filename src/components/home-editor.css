@@ -178,6 +178,11 @@ html.home-editing [data-ve-frame].ve-frame-on {
   outline-offset: -2px;
 }
 
+html.home-editing [data-ve-stub] {
+  min-height: 8rem;
+  background: color-mix(in srgb, var(--surface, #f4f1ea) 70%, transparent);
+}
+
 .ve-nav-school {
   flex: 1;
   min-width: 0;

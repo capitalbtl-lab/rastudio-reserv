@@ -34,7 +34,7 @@ function SchedulePage() {
         secondary={{ href: "/allcourses", label: "Все курсы" }}
         path="/schedule"
       />
-      <article className="page-wrap py-12 md:py-16">
+      <article className="page-wrap py-12 md:py-16" data-ve-frame="course-story">
         <ScheduleFinder sessions={sessions} />
       </article>
     </SiteShell>
