@@ -91,9 +91,10 @@ describe("макет главной", () => {
     const gate = readFileSync(new URL("../components/home-editor-gate.tsx", import.meta.url), "utf8");
     assert.match(gate, /edit=1/);
     assert.match(gate, /ra_edit/);
-    assert.match(gate, /EditorUnlock/);
+    assert.match(gate, /import\("@\/components\/editor-unlock"\)/);
     assert.doesNotMatch(gate, /sessionStorage.setItem\("ra_debug"/);
     assert.doesNotMatch(gate, /ra_admin/);
+    assert.doesNotMatch(gate, /from "@\/components\/editor-unlock"/);
     const footer = readFileSync(new URL("../components/site-footer.tsx", import.meta.url), "utf8");
     assert.match(footer, /EditorEntry/);
     const entry = readFileSync(new URL("../components/editor-entry.tsx", import.meta.url), "utf8");

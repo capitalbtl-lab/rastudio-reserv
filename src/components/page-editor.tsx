@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { EditorUnlock } from "@/components/editor-entry";
+import { useEffect, useState, type ComponentType } from "react";
 import { HomeEditorChrome, HomeEditorProvider } from "@/components/home-editor";
+
+type Unlock = ComponentType<{ onIn?: () => void; onCancel?: () => void }>;
 
 function editToken() {
   try {
@@ -15,15 +16,16 @@ function editToken() {
 /** Редактор на школе/курсе. Главная уже в HomeCanvas. */
 export function PageEditorBoot() {
   const [on, setOn] = useState(false);
-  const [ask, setAsk] = useState(false);
+  const [Unlock, setUnlock] = useState<Unlock | null>(null);
   useEffect(() => {
     if ((location.pathname || "/") === "/") return;
-    const door = /(?:\?|&)edit=1(?:&|$)/.test(location.search);
     if (editToken()) {
       setOn(true);
       return;
     }
-    if (door) setAsk(true);
+    if (/(?:\?|&)edit=1(?:&|$)/.test(location.search)) {
+      void import("@/components/editor-unlock").then((m) => setUnlock(() => m.EditorUnlock));
+    }
   }, []);
   if (on) {
     return (
@@ -32,11 +34,11 @@ export function PageEditorBoot() {
       </HomeEditorProvider>
     );
   }
-  if (!ask) return null;
+  if (!Unlock) return null;
   return (
-    <EditorUnlock
+    <Unlock
       onIn={() => {
-        setAsk(false);
+        setUnlock(null);
         setOn(true);
       }}
       onCancel={() => {

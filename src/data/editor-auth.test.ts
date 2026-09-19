@@ -10,21 +10,25 @@ describe("вход в редактор", () => {
     assert.ok(defaultEditorLogin().length >= 2);
   });
 
-  it("форма просит логин и пароль, cookie кабинета не открывает редактор", () => {
+  it("форма просит логин и пароль, гость не тянет серверный fn", () => {
+    const unlock = readFileSync(new URL("../components/editor-unlock.tsx", import.meta.url), "utf8");
+    assert.match(unlock, /Логин/);
+    assert.match(unlock, /Пароль/);
+    assert.match(unlock, /import\("@\/data\/editor-auth-fn"\)/);
+    assert.doesNotMatch(unlock, /from "@\/data\/editor-auth-fn"/);
+    assert.doesNotMatch(unlock, /ra_admin/);
     const entry = readFileSync(new URL("../components/editor-entry.tsx", import.meta.url), "utf8");
-    assert.match(entry, /Логин/);
-    assert.match(entry, /Пароль/);
-    assert.match(entry, /editorLogin/);
-    assert.match(entry, /autoComplete="username"/);
-    assert.doesNotMatch(entry, /unlockDebug/);
+    assert.match(entry, /Редактор/);
+    assert.match(entry, /\?edit=1/);
+    assert.doesNotMatch(entry, /editor-auth-fn/);
     assert.doesNotMatch(entry, /ra_admin/);
     const gate = readFileSync(new URL("../components/home-editor-gate.tsx", import.meta.url), "utf8");
     assert.match(gate, /ra_edit/);
-    assert.match(gate, /EditorUnlock/);
-    assert.doesNotMatch(gate, /ra_admin/);
-    assert.doesNotMatch(gate, /unlockDebug/);
-    const editor = readFileSync(new URL("../components/home-editor.tsx", import.meta.url), "utf8");
-    assert.match(editor, /ra_edit/);
-    assert.doesNotMatch(editor, /localStorage.getItem\("ra_admin"\)/);
+    assert.match(gate, /import\("@\/components\/editor-unlock"\)/);
+    assert.doesNotMatch(gate, /from "@\/components\/editor-unlock"/);
+    assert.doesNotMatch(gate, /editor-auth-fn/);
+    const footer = readFileSync(new URL("../components/site-footer.tsx", import.meta.url), "utf8");
+    assert.match(footer, /EditorEntry/);
+    assert.doesNotMatch(footer, /editor-auth-fn/);
   });
 });

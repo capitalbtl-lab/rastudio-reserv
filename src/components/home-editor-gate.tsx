@@ -2,9 +2,9 @@
 
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { HomeReadProvider } from "@/components/home-read";
-import { EditorUnlock } from "@/components/editor-entry";
 
 type Prov = ComponentType<{ initial?: unknown; children: ReactNode }>;
+type Unlock = ComponentType<{ onIn?: () => void; onCancel?: () => void }>;
 
 const EDIT_KEY = "ra_edit";
 
@@ -44,13 +44,13 @@ export function HomeEditorGate({
   children: ReactNode;
 }) {
   const [Prov, setProv] = useState<Prov | null>(null);
+  const [Unlock, setUnlock] = useState<Unlock | null>(null);
   const [preview, setPreview] = useState<unknown>(null);
-  const [unlock, setUnlock] = useState(false);
   useEffect(() => {
     const boot = () => {
       if (wantsPreview()) {
         setProv(null);
-        setUnlock(false);
+        setUnlock(null);
         const token = editToken();
         void import("@/data/page-layout-fn").then(({ loadPageDocFn }) =>
           loadPageDocFn({ data: { token, path: location.pathname || "/", which: "draft" } }).then((res) => {
@@ -60,16 +60,16 @@ export function HomeEditorGate({
         return;
       }
       if (wantsUnlock()) {
-        setUnlock(true);
         setProv(null);
+        void import("@/components/editor-unlock").then((m) => setUnlock(() => m.EditorUnlock));
         return;
       }
       if (!wantsEdit()) {
-        setUnlock(false);
+        setUnlock(null);
         setProv(null);
         return;
       }
-      setUnlock(false);
+      setUnlock(null);
       void import("@/components/home-editor").then((m) => setProv(() => m.HomeEditorProvider));
     };
     boot();
@@ -77,13 +77,13 @@ export function HomeEditorGate({
     return () => window.removeEventListener("ra-edit-session", boot);
   }, []);
   if (preview) return <HomeReadProvider initial={preview}>{children}</HomeReadProvider>;
-  if (unlock) {
+  if (Unlock) {
     return (
       <HomeReadProvider initial={initial}>
         {children}
-        <EditorUnlock
+        <Unlock
           onIn={() => {
-            setUnlock(false);
+            setUnlock(null);
             window.dispatchEvent(new Event("ra-edit-session"));
           }}
           onCancel={() => {
