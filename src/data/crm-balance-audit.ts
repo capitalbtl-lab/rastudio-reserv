@@ -1,6 +1,6 @@
 /** Шаг 5: сверка остатка с шапкой. А = payFill.full шага 4. Кассу не качает.
  * Не stampDossierAlfaBalance (extras.balance) и не stampCustomerSync — только extras.header.
- * diskAlfaRole не зовём. Пустая лента при А — нули, шапку зовём. Нет А — не сверяем.
+ * diskAlfaRole не зовём. Лид в Альфе: шапки клиента нет — снято. Пустая лента при А — нули, шапку зовём.
  */
 
 import { uniqueBranches, lessonWriteoffAmount } from "./crm-ledger-core";
@@ -29,6 +29,7 @@ import {
   step5RemovedNum,
   step5Ymd,
   step5RemainderFormula,
+  step5ReviveEmptySkip,
 } from "./crm-step5-canon";
 import { step5CompleteAdd, step5SessionStopped, step5WaitOrStop } from "./crm-step5-session";
 
@@ -832,8 +833,29 @@ export async function auditOne(cid: number, branchId: number) {
   };
 }
 
+export function reviveAuditHit(hit: AuditHit): AuditHit {
+  if (!step5ReviveEmptySkip(hit)) return hit;
+  const zero = (n: number) => (Number.isFinite(n) ? n : 0);
+  return {
+    ...hit,
+    clients: zero(hit.clients),
+    cash: zero(hit.cash),
+    alfa: zero(hit.alfa),
+    headerStamped: zero(Number(hit.headerStamped)),
+    codes: ["ok"],
+    extra: "пустая лента, 0=0=0",
+  };
+}
+
+export function reviveAuditReport(rep: AuditReport | null | undefined): AuditReport | null {
+  if (!rep) return null;
+  const rows = (rep.rows || []).map(reviveAuditHit);
+  const ok = rows.filter((r) => auditOnRight(r.codes)).length;
+  return { ...rep, rows, ok };
+}
+
 export function mergeAudit(prev: AuditReport | null | undefined, hit: AuditHit, idx: number): AuditReport {
-  const rows = [hit, ...(prev?.rows || []).filter((r) => r.cid !== hit.cid)].slice(0, 400);
+  const rows = [reviveAuditHit(hit), ...(prev?.rows || []).filter((r) => r.cid !== hit.cid).map(reviveAuditHit)].slice(0, 400);
   const ok = rows.filter((r) => auditOnRight(r.codes)).length;
   const fail = rows.filter((r) => r.codes.includes("нет ответа")).length;
   const show = rows.filter((r) => r.codes.some((c) => SHOW_CODES.includes(c)) && !auditOnRight(r.codes)).length;

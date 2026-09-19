@@ -21,6 +21,7 @@ import { loadRosterPolicy } from "./crm-roster";
 import { loadPlanLog } from "./crm-sync-plan-log";
 import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowStaleLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady, journalGroupNow, groupJournalGreen, lessonsSetGap, type GroupPeriodHit, type GroupWhollyHit } from "./crm-inbound-core";
 import { diskIsArchive, dossierAuditRole } from "./crm-person-role";
+import { reviveAuditReport } from "./crm-balance-audit";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -176,7 +177,7 @@ function loadStore(): PullStore {
       lastStudents: raw.lastStudents && typeof raw.lastStudents === "object" ? (raw.lastStudents as StudentsReport) : null,
       lastArchivePolicy: raw.lastArchivePolicy && typeof raw.lastArchivePolicy === "object" ? (raw.lastArchivePolicy as ArchiveCountReport) : null,
       lastArchiveCatalog: raw.lastArchiveCatalog && typeof raw.lastArchiveCatalog === "object" ? (raw.lastArchiveCatalog as PullStore["lastArchiveCatalog"]) : null,
-      lastAudit: raw.lastAudit && typeof raw.lastAudit === "object" ? (raw.lastAudit as PullStore["lastAudit"]) : null,
+      lastAudit: raw.lastAudit && typeof raw.lastAudit === "object" ? reviveAuditReport(raw.lastAudit as PullStore["lastAudit"]) : null,
       fill: raw.fill && typeof raw.fill === "object" ? (raw.fill as Record<string, FillHit>) : {},
     };
     storeMem = { mtime, data };

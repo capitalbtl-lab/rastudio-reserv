@@ -16,7 +16,7 @@ import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 import { RECHECK_DAY_OPTS, clampRecheckDays, groupJournalGreen, type RecheckDays } from "@/data/crm-inbound-core";
 import { POLICY_FACTORY, planDateFrom, planFromIdOf, planFromIdToRecheckDays, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
 import { HistoryPlanModal } from "@/components/admin-history-plan";
-import { step5Close } from "@/data/crm-step5-canon";
+import { step5Close, step5ReviveEmptySkip } from "@/data/crm-step5-canon";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
   let n = from?.parentElement || null;
@@ -1223,6 +1223,7 @@ type AuditSegIn = {
 };
 
 function rowMatched(r: AuditSegIn) {
+  if (step5ReviveEmptySkip({ codes: r.codes, extra: r.extra, clients: r.clients, cash: r.cash })) return true;
   if (!r.seen || auditFail(r.codes)) return false;
   const codes = r.codes || [];
   if (codes.includes("нет id") || codes.includes("нет роли") || codes.includes("нет сверки") || codes.includes("нет balance")) return false;
@@ -2075,19 +2076,22 @@ function asAuditRow(
   cashRefundSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
   h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; alfaWoSum?: number; alfaWoN?: number; alfaWoOk?: boolean; woSum?: number; woN?: number; headerStamped?: number; unitScale?: number },
 ): AuditUiRow {
-  const codes = h?.codes;
+  const rawCodes = h?.codes;
+  const revived = step5ReviveEmptySkip({ codes: rawCodes, extra: h?.extra, clients: h?.clients, cash: h?.cash });
+  const codes = revived ? (["ok"] as string[]) : rawCodes;
   const k = Number(h?.unitScale) === 100 ? 100 : 1;
   const rub = (n?: number) => (n == null || !Number.isFinite(Number(n)) ? n : Number(n) / k);
+  const money0 = (n?: number) => (revived && !Number.isFinite(Number(n)) ? 0 : n);
   return {
     cid: r.cid,
     branchId: r.branchId,
     name: r.name,
     groups: r.groups || [],
-    clients: h?.clients,
-    alfaMoney: h?.alfa,
-    cash: h?.cash,
+    clients: money0(h?.clients),
+    alfaMoney: money0(h?.alfa),
+    cash: money0(h?.cash),
     codes,
-    extra: h?.extra,
+    extra: revived ? "пустая лента, 0=0=0" : h?.extra,
     at: h?.at,
     seen: Boolean(h),
     cashPaysN: r.cashPaysN,

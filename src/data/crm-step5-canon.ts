@@ -150,6 +150,14 @@ export function step5SkipNote(p: {
   return "";
 }
 
+/** Старый затвор «кассы нет, не сверяем» при нулях — уже загружена пустая лента. */
+export function step5ReviveEmptySkip(p: { codes?: string[]; extra?: string; clients?: number; cash?: number }) {
+  if (!(p.codes || []).includes("нет сверки")) return false;
+  if (!/кассы нет, не сверяем/.test(String(p.extra || ""))) return false;
+  const z = (n: unknown) => !Number.isFinite(Number(n)) || Math.abs(Number(n)) <= 1;
+  return z(p.clients) && z(p.cash);
+}
+
 export function step5AuditGapMs(opts: { recheck?: boolean; staleHeader?: boolean; periodDays?: number }) {
   if (opts.recheck && opts.staleHeader) {
     const n = Number(opts.periodDays) || 0;

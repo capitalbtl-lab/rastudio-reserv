@@ -16,6 +16,7 @@ import {
   step5RemainderFormula,
   step5Close,
   step5UnitScale,
+  step5ReviveEmptySkip,
 } from "./crm-step5-canon.ts";
 
 describe("шаг 5 канон", () => {
@@ -84,6 +85,12 @@ describe("шаг 5 канон", () => {
     assert.equal(step5SkipNote({ livePays: 0, isStudy: 0, removed: 0, inArchiveSet: false, payFilled: true }), "");
     assert.equal(step5SkipNote({ livePays: 0, isStudy: 0, removed: 0, inArchiveSet: false, payFilled: false }), "кассы нет / нет А");
     assert.equal(step5CanSverka({ ...base, livePays: 0, payFilled: false }), false);
+  });
+
+  it("старый чип «кассы нет, не сверяем» при нулях — совпало", () => {
+    assert.equal(step5ReviveEmptySkip({ codes: ["нет сверки"], extra: "кассы нет, не сверяем", clients: 0, cash: 0 }), true);
+    assert.equal(step5ReviveEmptySkip({ codes: ["нет сверки"], extra: "кассы нет / нет А", clients: 0, cash: 0 }), false);
+    assert.equal(step5ReviveEmptySkip({ codes: ["нет сверки"], extra: "кассы нет, не сверяем", clients: 2000, cash: 2000 }), false);
   });
 
   it("клиент архива вне набора шага 2 не сверка", () => {
