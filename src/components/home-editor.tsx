@@ -572,8 +572,8 @@ function PagesTree({ pages, path, goPage }: { pages: EditorPageItem[]; path: str
         const kids = tree.coursesOf(s.path);
         const expanded = Boolean(open[s.path]);
         return (
-          <div key={s.path}>
-            <div className="flex items-center gap-0.5">
+          <div key={s.path} className="mb-1">
+            <div className="flex items-start gap-0.5">
               {kids.length ? (
                 <button
                   type="button"
