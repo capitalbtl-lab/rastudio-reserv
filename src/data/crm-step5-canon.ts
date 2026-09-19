@@ -97,9 +97,9 @@ export function step5RemovedNum(raw: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Остаток сайта для сверки с шапкой: лента без товара − списания. Товар не вычитаем. */
-export function step5RemainderFormula(cashLessons: number, writeoff: number) {
-  return (Number(cashLessons) || 0) - (Number(writeoff) || 0);
+/** Остаток к шапке: платежи+корректировки − списания − товар. Товар в ленте есть, в Customer.balance уходит в минус. */
+export function step5RemainderFormula(cashLessons: number, writeoff: number, goods = 0) {
+  return (Number(cashLessons) || 0) - (Number(writeoff) || 0) - Math.abs(Number(goods) || 0);
 }
 
 /** ±1 ₽ или диск в копейках к рублям шапки (×100). 10000 против 100 — не то. */

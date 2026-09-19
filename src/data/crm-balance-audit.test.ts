@@ -302,9 +302,9 @@ describe("шаг 5 сверка остатка", () => {
 
   it("карточка шага 5: товар не в формуле, живые списания, чипы пропуска", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
-    assert.match(ui, /не влияет на остаток клиента/);
-    assert.match(ui, /Товар в ленте, в шапку Alfa не входит/);
-    assert.match(ui, /const n = pay \+ corr - wo;/);
+    assert.match(ui, /const n = pay \+ corr - wo - goods;/);
+    assert.match(ui, /Товар в ленте вычитается из остатка/);
+    assert.match(ui, /Товар вычтен из остатка/);
     assert.match(ui, /alfaWoOk/);
     assert.match(ui, /id: "no-id"/);
     assert.match(ui, /id: "no-role"/);
@@ -318,7 +318,7 @@ describe("шаг 5 сверка остатка", () => {
     assert.match(ui, /cashGoodsN/);
     assert.doesNotMatch(ui, /Number\(r\.cash\) \|\| 0/);
     assert.doesNotMatch(ui, /includes\("лид"\) && !\(r\.codes \|\| \[\]\)\.includes\("ok"\)/);
-    assert.match(ui, /Товар в ленте, в остаток Alfa не входит/);
+    assert.match(ui, /Товар вычтен из остатка, как в шапке Alfa/);
     assert.doesNotMatch(ui, /Продажа товара вычитает из остатка/);
     assert.doesNotMatch(ui, /платежи − списания − товар/);
   });

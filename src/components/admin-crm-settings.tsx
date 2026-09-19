@@ -1292,7 +1292,7 @@ function auditSeg(r: AuditSegIn): AuditSeg {
     return { id: "fail", label: "Нет ответа Alfa", rec: "Клиент есть, Alfa не ответила. «Перепроверить». Если снова тишина — обрыв или 429, не бан." };
   }
   const goods = codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods");
-  const goodsNote = goods ? " Товар в ленте, в остаток Alfa не входит." : "";
+  const goodsNote = goods ? " Товар вычтен из остатка, как в шапке Alfa." : "";
   if (rowMatched(r)) {
     return { id: "ok", label: "Совпало", rec: "Клиенты, шапка и касса сходятся ±1 ₽. Трогать не нужно." + goodsNote };
   }
@@ -1423,10 +1423,12 @@ function alfaFormulaCalc(row: {
   const pay = Number(row.alfaPaysSum) || 0;
   const corr = Number(row.alfaCorrSum) || 0;
   const wo = Number(row.alfaWoSum) || 0;
-  const n = pay + corr - wo;
+  const goods = Math.abs(Number(row.alfaGoodsSum) || 0);
+  const n = pay + corr - wo - goods;
   const bits = [auditFormulaSigned(pay)];
   if (wo) bits.push(`\u2212${Math.round(Math.abs(wo))}`);
   if (corr) bits.push(`${corr > 0 ? "+" : "\u2212"}${Math.round(Math.abs(corr))}`);
+  if (goods) bits.push(`\u2212${Math.round(goods)}`);
   return `${bits.join(" ")} = ${auditFormulaSigned(n)} \u20BD`;
 }
 
@@ -2327,7 +2329,7 @@ function AuditFillList({
               </tbody>
             </table>
             <p className="mt-1 text-[0.72rem] text-muted">
-              Касса — диск шага 4. Alfa — живой pay/index и lesson/index при «Перепроверить», без записи на диск. Товар в ленте, в шапку Alfa не входит. Платёж «Продажа товара» не влияет на остаток клиента. Шапка — Customer.balance.
+              Касса — диск шага 4. Alfa — живой pay/index и lesson/index при «Перепроверить», без записи на диск. Товар в ленте вычитается из остатка. Шапка — Customer.balance.
               {row.extra ? ` ${row.extra}.` : ""}
             </p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">

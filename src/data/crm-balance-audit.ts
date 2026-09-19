@@ -208,7 +208,7 @@ export async function diskAudit(cid: number, branchId: number) {
   const wo = writeoffCanon(cal as { lessonId?: unknown; status?: unknown; amount?: unknown }[], lessonsDisk, jready);
   // Канон 5 / дока ТМЦ: товар в ленте pay есть, в Customer.balance не входит.
   const goodsNet = goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]);
-  const formulaSite = cashAllOk && wo.ok ? step5RemainderFormula(cashLessons, wo.n) : Number.NaN;
+  const formulaSite = cashAllOk && wo.ok ? step5RemainderFormula(cashLessons, wo.n, goodsNet) : Number.NaN;
   const without6 = lessonRows.filter((x) => x.t !== 6);
   const withoutRefund = lessonRows.filter((x) => x.t !== 5 && x.t !== 3);
   const dSiteWithout6 = cashAllOk && wo.ok && without6.length ? without6.reduce((s, x) => s + x.sum.n, 0) - wo.n : Number.NaN;

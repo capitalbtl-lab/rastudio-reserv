@@ -125,9 +125,10 @@ describe("шаг 5 канон", () => {
     assert.equal(step5Newer("2026-09-18", "2026-09-17"), true);
   });
 
-  it("формула остатка без товара", () => {
+  it("формула остатка минус товар", () => {
     assert.equal(step5RemainderFormula(148779, 146354), 2425);
-    assert.equal(step5RemainderFormula(148779, 146354) - 2500, -75);
+    assert.equal(step5RemainderFormula(129487.5, 127487.5, 2000), 0);
+    assert.equal(step5RemainderFormula(148779, 146354, 2500), -75);
     assert.equal(step5Close(2425, 2425), true);
     assert.equal(step5Close(2425, 24.25), true);
     assert.equal(step5Close(24.25, 2425), true);
