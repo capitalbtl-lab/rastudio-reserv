@@ -73,7 +73,41 @@ export type PageDoc = {
   updatedAt: string;
 };
 
-export type EditorPageItem = { path: string; title: string; kind: PageKind };
+export type EditorPageItem = { path: string; title: string; kind: PageKind; parent?: string };
+
+export const EDITOR_MENU_LINKS = [
+  { path: "/allcourses", title: "Курсы" },
+  { path: "/schedule", title: "Расписание" },
+  { path: "/team", title: "Педагоги" },
+  { path: "/master-class", title: "Мастер-классы" },
+] as const;
+
+export const EDITOR_MENU_MORE = [
+  { path: "/o-nas", title: "О нас" },
+  { path: "/contacts", title: "Контакты" },
+] as const;
+
+export function editorMenuTree(pages: EditorPageItem[]) {
+  const byPath = new Map(pages.map((p) => [p.path, p]));
+  const home = pages.find((p) => p.path === "/") || pages.find((p) => p.kind === "home");
+  const schools = pages.filter((p) => p.kind === "school");
+  const courses = pages.filter((p) => p.kind === "course");
+  const schoolPaths = new Set(schools.map((s) => s.path));
+  const coursesOf = (schoolPath: string) => courses.filter((c) => c.parent === schoolPath);
+  const orphanCourses = courses.filter((c) => !c.parent || !schoolPaths.has(c.parent));
+  const pick = (list: readonly { path: string }[]) => list.map((x) => byPath.get(x.path)).filter((p): p is EditorPageItem => Boolean(p));
+  const menu = pick(EDITOR_MENU_LINKS);
+  const more = pick(EDITOR_MENU_MORE);
+  const used = new Set<string>([
+    home?.path || "/",
+    ...schools.map((s) => s.path),
+    ...courses.map((c) => c.path),
+    ...EDITOR_MENU_LINKS.map((x) => x.path),
+    ...EDITOR_MENU_MORE.map((x) => x.path),
+  ]);
+  const rest = pages.filter((p) => !used.has(p.path));
+  return { home, schools, coursesOf, orphanCourses, menu, more, rest };
+}
 
 function asBg(v: unknown): HomeBg {
   return v === "surface" || v === "ink" || v === "paper" ? v : "inherit";

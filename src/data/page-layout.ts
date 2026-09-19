@@ -32,7 +32,15 @@ function treeIds() {
       courses: tree.courses.map((c) => c.id),
       items: [
         ...tree.schools.map((s) => ({ path: s.href || s.id, title: s.label, kind: "school" as PageKind })),
-        ...tree.courses.map((c) => ({ path: c.href || c.id, title: c.label, kind: "course" as PageKind })),
+        ...tree.courses.map((c) => {
+          const school = tree.schools.find((s) => s.id === c.schoolId);
+          return {
+            path: c.href || c.id,
+            title: c.label,
+            kind: "course" as PageKind,
+            parent: school ? school.href || school.id : c.schoolId,
+          };
+        }),
       ],
     };
   } catch {
@@ -123,7 +131,12 @@ export function listEditorPages(): EditorPageItem[] {
   for (const item of [...EDITOR_STATIC_PAGES, ...tree.items]) {
     if (!item.path || seen.has(item.path)) continue;
     seen.add(item.path);
-    out.push({ path: item.path, title: item.title, kind: item.kind || pageKindOf(item.path, tree.schools, tree.courses) });
+    out.push({
+      path: item.path,
+      title: item.title,
+      kind: item.kind || pageKindOf(item.path, tree.schools, tree.courses),
+      parent: "parent" in item ? item.parent : undefined,
+    });
   }
   return out;
 }

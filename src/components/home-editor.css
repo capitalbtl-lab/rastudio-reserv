@@ -159,3 +159,7 @@ html.home-editing[data-home-device="phone"] [class*="md:grid-cols"] {
 html.home-editing[data-home-device="phone"] [class*="lg:min-h"] {
   min-height: 0 !important;
 }
+
+html.home-editing [data-ve-frame] {
+  scroll-margin-top: 5.5rem;
+}

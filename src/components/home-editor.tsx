@@ -43,7 +43,7 @@ import {
 } from "@/data/home-layout-core";
 import { StudioPanel } from "@/components/home-studio";
 import { HomeEditorCtx, useHomeEditor, type HomeEditorCtxValue } from "@/components/home-read";
-import type { EditorPageItem } from "@/data/page-layout-core";
+import { editorMenuTree, type EditorPageItem } from "@/data/page-layout-core";
 import { cn } from "@/lib/utils";
 import "./home-editor.css";
 
@@ -79,6 +79,11 @@ function currentPath() {
 
 function editUrl(path: string) {
   return path === "/" ? "/?edit=1" : `${path}?edit=1`;
+}
+
+function revealBlock(id: string) {
+  const el = document.querySelector(`[data-ve-frame="${CSS.escape(id)}"]`) as HTMLElement | null;
+  el?.scrollIntoView({ behavior: "auto", block: "start" });
 }
 
 function previewUrl(path: string) {
@@ -462,7 +467,10 @@ export function HomeEditorChrome() {
                   selected={selected}
                   select={(id) => {
                     select(id);
-                    if (id) setSheetTab("block");
+                    if (id) {
+                      revealBlock(id);
+                      setSheetTab("block");
+                    }
                   }}
                   setDoc={setDoc}
                   tone="light"
@@ -501,18 +509,6 @@ function PagePicker({
   pages: EditorPageItem[];
   goPage: (path: string) => void;
 }) {
-  const groups = useMemo(() => {
-    const home = pages.filter((p) => p.kind === "home");
-    const schools = pages.filter((p) => p.kind === "school");
-    const courses = pages.filter((p) => p.kind === "course");
-    const rest = pages.filter((p) => !["home", "school", "course"].includes(p.kind));
-    return [
-      { label: "Главная", items: home },
-      { label: "Школы", items: schools },
-      { label: "Курсы", items: courses },
-      { label: "Ещё", items: rest },
-    ].filter((g) => g.items.length);
-  }, [pages]);
   return (
     <div className="relative min-w-0">
       <button
@@ -524,25 +520,15 @@ function PagePicker({
         <ChevronDown className="size-3.5 shrink-0 opacity-50" />
       </button>
       {open ? (
-        <div className="absolute left-0 top-9 z-20 max-h-[min(70dvh,28rem)] w-72 overflow-auto rounded-xl bg-white p-2 shadow-[0_16px_40px_-16px_rgba(0,0,0,.35)] ring-1 ring-black/10">
-          {groups.map((g) => (
-            <div key={g.label} className="mb-2">
-              <p className="px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-black/40">{g.label}</p>
-              {g.items.map((p) => (
-                <button
-                  key={p.path}
-                  type="button"
-                  className={cn("flex min-h-9 w-full items-center rounded-lg px-2 text-left text-[0.8rem]", p.path === path ? "bg-primary text-primary-foreground" : "hover:bg-black/5")}
-                  onClick={() => {
-                    setOpen(false);
-                    if (p.path !== path) goPage(p.path);
-                  }}
-                >
-                  {p.title}
-                </button>
-              ))}
-            </div>
-          ))}
+        <div className="absolute left-0 top-9 z-20 max-h-[min(70dvh,28rem)] w-80 overflow-auto rounded-xl bg-white p-2 shadow-[0_16px_40px_-16px_rgba(0,0,0,.35)] ring-1 ring-black/10">
+          <PagesTree
+            pages={pages}
+            path={path}
+            goPage={(p) => {
+              setOpen(false);
+              if (p !== path) goPage(p);
+            }}
+          />
         </div>
       ) : null}
     </div>
@@ -553,19 +539,83 @@ function PagesList({ pages, path, goPage }: { pages: EditorPageItem[]; path: str
   return (
     <div>
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">Страницы и меню</p>
-      <ul className="mt-2 space-y-0.5">
-        {pages.map((p) => (
-          <li key={p.path}>
-            <button
-              type="button"
-              className={cn("flex min-h-9 w-full items-center rounded-xl px-2 text-left text-[0.8rem] font-medium", p.path === path ? "bg-primary text-primary-foreground" : "hover:bg-black/5")}
-              onClick={() => goPage(p.path)}
-            >
-              {p.title}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <div className="mt-2">
+        <PagesTree pages={pages} path={path} goPage={goPage} />
+      </div>
+    </div>
+  );
+}
+
+function PagesTree({ pages, path, goPage }: { pages: EditorPageItem[]; path: string; goPage: (p: string) => void }) {
+  const tree = useMemo(() => editorMenuTree(pages), [pages]);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    const hit = tree.schools.find((s) => s.path === path || tree.coursesOf(s.path).some((c) => c.path === path));
+    if (hit) setOpen((m) => ({ ...m, [hit.path]: true }));
+  }, [path, tree]);
+  const row = (p: EditorPageItem, cls?: string) => (
+    <button
+      type="button"
+      className={cn("flex min-h-9 w-full items-center rounded-xl px-2 text-left text-[0.8rem] font-medium", p.path === path ? "bg-primary text-primary-foreground" : "hover:bg-black/5", cls)}
+      onClick={() => goPage(p.path)}
+    >
+      {p.title}
+    </button>
+  );
+  const cap = (label: string) => <p className="px-2 pb-0.5 pt-2 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-black/40">{label}</p>;
+  return (
+    <div>
+      {tree.home ? row(tree.home) : null}
+      {cap("Меню")}
+      {cap("Школы")}
+      {tree.schools.map((s) => {
+        const kids = tree.coursesOf(s.path);
+        const expanded = Boolean(open[s.path]);
+        return (
+          <div key={s.path}>
+            <div className="flex items-center gap-0.5">
+              {kids.length ? (
+                <button
+                  type="button"
+                  aria-label={expanded ? "Свернуть курсы" : "Показать курсы школы"}
+                  className="grid size-8 shrink-0 place-items-center rounded-lg hover:bg-black/5"
+                  onClick={() => setOpen((m) => ({ ...m, [s.path]: !expanded }))}
+                >
+                  <ChevronDown className={cn("size-3.5 opacity-60 transition-transform", !expanded && "-rotate-90")} />
+                </button>
+              ) : (
+                <span className="size-8 shrink-0" />
+              )}
+              {row(s, "flex-1")}
+            </div>
+            {expanded
+              ? kids.map((c) => (
+                  <div key={c.path} className="pl-8">
+                    {row(c, "text-[0.75rem] font-normal")}
+                  </div>
+                ))
+              : null}
+          </div>
+        );
+      })}
+      {tree.orphanCourses.length
+        ? tree.orphanCourses.map((c) => (
+            <div key={c.path} className="pl-8">
+              {row(c, "text-[0.75rem] font-normal")}
+            </div>
+          ))
+        : null}
+      {tree.menu.map((p) => (
+        <div key={p.path}>{row(p)}</div>
+      ))}
+      {tree.more.length ? cap("Ещё") : null}
+      {tree.more.map((p) => (
+        <div key={p.path}>{row(p)}</div>
+      ))}
+      {tree.rest.length ? cap("Прочее") : null}
+      {tree.rest.map((p) => (
+        <div key={p.path}>{row(p)}</div>
+      ))}
     </div>
   );
 }
@@ -639,7 +689,7 @@ function LayersList({
                 if (from && from !== id) setDoc({ ...doc, order: placeHomeBlock(doc.order, from, id) });
               }}
             >
-              <button type="button" className="min-h-9 min-w-0 flex-1 truncate text-left font-medium" onClick={() => select(id)}>
+              <button type="button" className="min-h-9 min-w-0 flex-1 truncate text-left font-medium" onClick={() => { select(id); revealBlock(id); }}>
                 {homeBlockLabel(id, doc.customs)}
               </button>
               <button

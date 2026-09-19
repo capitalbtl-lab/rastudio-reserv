@@ -14,6 +14,7 @@ import {
   normalizePageDoc,
   phoneIssues,
   seedLayout,
+  editorMenuTree,
 } from "./page-layout-core.ts";
 import { defaultHomeOrder, normalizeHomeLayout } from "./home-layout-core.ts";
 
@@ -142,6 +143,10 @@ describe("библиотека и документ страницы", () => {
     assert.match(editor, /Сохранить/);
     assert.match(editor, /Поставить этот блок/);
     assert.match(editor, /fromPath/);
+    assert.match(editor, /revealBlock/);
+    assert.match(editor, /scrollIntoView/);
+    assert.match(editor, /PagesTree/);
+    assert.match(editor, /Показать курсы школы/);
     assert.match(editor, /path === "\/"/);
     assert.match(editor, /TextToolbar/);
     assert.match(editor, /courseId/);
@@ -152,6 +157,7 @@ describe("библиотека и документ страницы", () => {
     const css = readFileSync(new URL("../components/home-editor.css", import.meta.url), "utf8");
     assert.match(css, /ve-textbar/);
     assert.match(css, /5\.25rem/);
+    assert.match(css, /scroll-margin-top/);
     const cms = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
     assert.match(cms, /import\("@\/components\/page-editor"\)/);
     assert.doesNotMatch(cms, /from "@\/components\/page-editor"/);
@@ -174,5 +180,31 @@ describe("библиотека и документ страницы", () => {
     const pub = readFileSync(new URL("./page-extras-fn.ts", import.meta.url), "utf8");
     assert.match(pub, /publicPageExtrasFn/);
     assert.doesNotMatch(pub, /admin-auth/);
+  });
+
+  it("меню редактора: курсы внутри школы, пункты как в шапке", () => {
+    const tree = editorMenuTree([
+      { path: "/", title: "Главная", kind: "home" },
+      { path: "/allcourses", title: "Курсы", kind: "catalog" },
+      { path: "/schedule", title: "Расписание", kind: "plain" },
+      { path: "/team", title: "Педагоги", kind: "team" },
+      { path: "/master-class", title: "Мастер-классы", kind: "master" },
+      { path: "/o-nas", title: "О нас", kind: "plain" },
+      { path: "/contacts", title: "Контакты", kind: "contacts" },
+      { path: "/art-studio", title: "Художественная школа", kind: "school" },
+      { path: "/robototehnika-v-kolomne", title: "Школа робототехники", kind: "school" },
+      { path: "/art-1", title: "Академический рисунок", kind: "course", parent: "/art-studio" },
+      { path: "/rob-1", title: "Робототехника 9-13", kind: "course", parent: "/robototehnika-v-kolomne" },
+      { path: "/extra", title: "Лишняя", kind: "plain" },
+    ]);
+    assert.equal(tree.home?.path, "/");
+    assert.equal(tree.schools.length, 2);
+    assert.equal(tree.coursesOf("/art-studio").map((c) => c.path).join(), "/art-1");
+    assert.equal(tree.coursesOf("/robototehnika-v-kolomne").map((c) => c.path).join(), "/rob-1");
+    assert.deepEqual(tree.menu.map((p) => p.path), ["/allcourses", "/schedule", "/team", "/master-class"]);
+    assert.deepEqual(tree.more.map((p) => p.path), ["/o-nas", "/contacts"]);
+    assert.equal(tree.rest.map((p) => p.path).join(), "/extra");
+    const src = readFileSync(new URL("./page-layout.ts", import.meta.url), "utf8");
+    assert.match(src, /parent: school/);
   });
 });
