@@ -12,7 +12,7 @@ export function safeSitePath(raw: string) {
   let p = String(raw || "/").trim();
   if (p.startsWith("#")) return p === "#trial" ? "#trial" : "";
   if (!p.startsWith("/")) p = `/${p}`;
-  if (p.includes("..") || /^\/admin(?:\/|$)/i.test(p) || /^\/api(?:\/|$)/i.test(p)) return "";
+  if (p.includes("..") || /^\/admin(?:\/|$)/i.test(p) || /^\/edit(?:\/|$)/i.test(p) || /^\/api(?:\/|$)/i.test(p)) return "";
   if (!/^\/[a-zA-Z0-9а-яА-ЯёЁ_./%+@\-]*$/.test(p)) return "";
   return (p.replace(/\/+$/, "") || "/").slice(0, 180);
 }

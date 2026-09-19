@@ -666,3 +666,77 @@ function HomeSlotFrame({
   );
 }
 
+export function HomeEditorPage({ initial }: { initial?: unknown }) {
+  return (
+    <HomeEditorProvider initial={initial}>
+      <HomeEditorShell />
+    </HomeEditorProvider>
+  );
+}
+
+function HomeEditorShell() {
+  const ctx = useHomeEditor();
+  const [tick, setTick] = useState(0);
+  const published = ctx?.dirty === "на сайте";
+  useEffect(() => {
+    if (published) setTick((n) => n + 1);
+  }, [published]);
+  const phone = Boolean(ctx?.editing && ctx.device === "phone");
+  const tablet = Boolean(ctx?.editing && ctx.device === "tablet");
+  return (
+    <div className={cn(ctx?.editing && "home-layout-on")}>
+      {ctx?.editing ? <HomeEditorChrome /> : null}
+      <div className={cn(ctx?.editing && "md:pl-[15.25rem] lg:pr-[23.25rem] md:py-6")}>
+        <iframe
+          key={tick}
+          title="Сайт"
+          src="/"
+          className={cn(
+            "min-h-[80dvh] w-full border-0 bg-bg",
+            phone && "home-device-phone mx-auto overflow-x-clip",
+            tablet && "home-device-tablet mx-auto overflow-x-clip",
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+
+export function HomeEditorPage({ initial }: { initial?: unknown }) {
+  return (
+    <HomeEditorProvider initial={initial}>
+      <HomeEditorShell />
+    </HomeEditorProvider>
+  );
+}
+
+function HomeEditorShell() {
+  const ctx = useHomeEditor();
+  const [tick, setTick] = useState(0);
+  const published = ctx?.dirty === "на сайте";
+  useEffect(() => {
+    if (published) setTick((n) => n + 1);
+  }, [published]);
+  const phone = Boolean(ctx?.editing && ctx.device === "phone");
+  const tablet = Boolean(ctx?.editing && ctx.device === "tablet");
+  return (
+    <div className={cn(ctx?.editing && "home-layout-on")}>
+      {ctx?.editing ? <HomeEditorChrome /> : null}
+      <div className={cn(ctx?.editing && "md:pl-[15.25rem] lg:pr-[23.25rem] md:py-6")}>
+        <iframe
+          key={tick}
+          title="Сайт"
+          src="/"
+          className={cn(
+            "min-h-[80dvh] w-full border-0 bg-bg",
+            phone && "home-device-phone mx-auto overflow-x-clip",
+            tablet && "home-device-tablet mx-auto overflow-x-clip",
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+

@@ -77,6 +77,7 @@ describe("макет главной", () => {
     assert.match(editor, /Панель/);
     assert.match(editor, /"Готово"/);
     assert.match(editor, /persist\(hist\.current\[histAt\.current\]/);
+    assert.match(editor, /HomeEditorPage/);
     assert.match(editor, /HomeEditorSession/);
     assert.match(editor, /home-device-phone/);
     assert.match(editor, /md:pl-\[15\.25rem\]/);
@@ -85,11 +86,16 @@ describe("макет главной", () => {
     const read = readFileSync(new URL("../components/home-read.tsx", import.meta.url), "utf8");
     assert.match(read, /contentEditable/);
     const blocks = readFileSync(new URL("../components/home-blocks.tsx", import.meta.url), "utf8");
-    assert.match(blocks, /import\("@\/components\/home-editor"\)/);
-    assert.match(blocks, /wantsEdit/);
-    assert.doesNotMatch(blocks, /from "@\/components\/home-editor"/);
+    assert.doesNotMatch(blocks, /home-editor/);
+    assert.doesNotMatch(blocks, /wantsEdit/);
     assert.doesNotMatch(blocks, /from "lucide-react"/);
     assert.doesNotMatch(blocks, /media-drag/);
+    assert.match(blocks, /location\.replace\("\/edit"\)/);
+    const editRoute = readFileSync(new URL("../routes/edit.tsx", import.meta.url), "utf8");
+    assert.match(editRoute, /HomeEditorPage/);
+    assert.match(editRoute, /ssr: false/);
+    assert.match(editRoute, /noindex: true/);
+    assert.doesNotMatch(editRoute, /SiteShell/);
     const boot = readFileSync(new URL("../components/home-edit-boot.ts", import.meta.url), "utf8");
     assert.match(boot, /edit=1/);
     assert.match(boot, /ra_admin/);
