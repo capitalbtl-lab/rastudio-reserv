@@ -1,0 +1,33 @@
+name: Stop Beget build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  stop:
+    name: Stop vite
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: SSH stop
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.BEGET_HOST }}
+          username: root
+          key: ${{ secrets.BEGET_SSH_KEY }}
+          script_stop: true
+          command_timeout: 2m
+          script: |
+            set +e
+            pm2 stop rastudio-deploy
+            touch /tmp/rastudio-deploy.lock
+            pkill -f "scripts/beget-deploy.sh" || true
+            pkill -f "/var/www/rastudio/.build-stage" || true
+            pkill -f "npm run build:beget" || true
+            sleep 1
+            pkill -9 -f "scripts/beget-deploy.sh" || true
+            pkill -9 -f "/var/www/rastudio/.build-stage" || true
+            rm -rf /var/www/rastudio/.build-stage
+            echo "[stop] vite killed, rastudio-deploy stopped, live :3000 not touched"
+            ss -ltnp | grep 3000 || true
+            pm2 list

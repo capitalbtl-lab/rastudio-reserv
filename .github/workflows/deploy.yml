@@ -12,6 +12,7 @@ concurrency:
 jobs:
   beget:
     name: Beget VPS
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip deploy]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -42,6 +43,7 @@ jobs:
 
   production:
     name: Vercel production
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip deploy]')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
