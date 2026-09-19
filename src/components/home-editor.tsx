@@ -15,7 +15,6 @@ import {
   Tablet,
   Undo2,
 } from "lucide-react";
-import { debugSession } from "@/data/debug-fn";
 import { debugEmit } from "@/data/debug-client";
 import { loadPageDocFn, placeBlockFn, publishPageFn, savePageDraftFn } from "@/data/page-layout-fn";
 import { BLOCK_LIBRARY } from "@/data/block-library-core";
@@ -45,19 +44,7 @@ const KEY = "ra_edit";
 
 function debugToken() {
   try {
-    const s = sessionStorage.getItem(KEY);
-    if (s) return s;
-  } catch {
-    /* */
-  }
-  try {
-    const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
-    if (m) return decodeURIComponent(m[1]);
-  } catch {
-    /* */
-  }
-  try {
-    return localStorage.getItem("ra_admin") || "";
+    return sessionStorage.getItem(KEY) || "";
   } catch {
     return "";
   }
@@ -105,17 +92,7 @@ export function HomeEditorProvider({
   }, [initial]);
 
   useEffect(() => {
-    const check = () => {
-      const t = debugToken();
-      if (!t) {
-        setEditing(false);
-        return;
-      }
-      void debugSession({ data: { token: t } }).then((res) => {
-        const door = /(?:\?|&)edit=1(?:&|$)/.test(location.search) || Boolean(sessionStorage.getItem(KEY));
-        setEditing(Boolean(res.ok && door));
-      });
-    };
+    const check = () => setEditing(Boolean(debugToken()));
     check();
     window.addEventListener("ra-edit-session", check);
     return () => window.removeEventListener("ra-edit-session", check);
