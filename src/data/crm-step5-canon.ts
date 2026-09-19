@@ -102,6 +102,16 @@ export function step5RemainderFormula(cashLessons: number, writeoff: number) {
   return (Number(cashLessons) || 0) - (Number(writeoff) || 0);
 }
 
+/** ±1 ₽ или одно число в копейках (ровно ×100) к рублям шапки. */
+export function step5Close(a: number, b: number) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  if (Math.abs(a - b) <= 1) return true;
+  const hi = Math.max(Math.abs(a), Math.abs(b));
+  const lo = Math.min(Math.abs(a), Math.abs(b));
+  if (lo < 0.005) return false;
+  return Math.abs(hi / lo - 100) <= 0.02;
+}
+
 export function step5CanSverka(p: {
   hasDossier: boolean;
   payFilled: boolean;
@@ -224,22 +234,24 @@ export function step5Reasons(p: {
   const dCash = cashL - header;
   const cashNewer = step5Newer(p.cashDate, p.headerAt);
   const goodsOn = Number.isFinite(cashA) && Number.isFinite(cashL) && Math.abs(cashA - cashL) > 1;
-  const c = !p.orphan && !p.alien && Math.abs(dSite) <= 1;
+  const close = step5Close(site, header);
+  const c = !p.orphan && !p.alien && close;
   if (c && !cashNewer) return { main: "", tail: goodsOn ? (["product"] as Step5Reason[]) : [], c: true };
   const extraN = Number(p.extraN) || 0;
   const holeN = Number(p.holeN) || 0;
+  const gap = !close;
   const flags: { k: Step5Reason; on: boolean }[] = [
     { k: "header-stale", on: cashNewer },
     { k: "product", on: goodsOn },
     { k: "orphan-type", on: Boolean(p.orphan) },
     { k: "alien-branch", on: Boolean(p.alien) },
-    { k: "correct-only", on: Math.abs(dSite) > 1 && Number.isFinite(p.dSiteWithout6) && Math.abs(Number(p.dSiteWithout6)) <= 1 },
-    { k: "refund", on: Math.abs(dSite) > 1 && Number.isFinite(p.dSiteWithoutRefund) && Math.abs(Number(p.dSiteWithoutRefund)) <= 1 },
-    { k: "extra-lessons", on: extraN > 0 && dSite < -1 },
-    { k: "missing-income", on: extraN === 0 && dCash < -1 && dSite < -1 },
-    { k: "thin-writeoff", on: extraN === 0 && holeN === 0 && dCash > 1 && dSite > 1 },
-    { k: "writeoff-gap", on: extraN === 0 && holeN === 0 && Math.abs(dCash) <= 1 && Math.abs(dSite) > 1 },
-    { k: "mismatch", on: Math.abs(dSite) > 1 },
+    { k: "correct-only", on: gap && Number.isFinite(p.dSiteWithout6) && Math.abs(Number(p.dSiteWithout6)) <= 1 },
+    { k: "refund", on: gap && Number.isFinite(p.dSiteWithoutRefund) && Math.abs(Number(p.dSiteWithoutRefund)) <= 1 },
+    { k: "extra-lessons", on: gap && extraN > 0 && dSite < -1 },
+    { k: "missing-income", on: gap && extraN === 0 && dCash < -1 && dSite < -1 },
+    { k: "thin-writeoff", on: gap && extraN === 0 && holeN === 0 && dCash > 1 && dSite > 1 },
+    { k: "writeoff-gap", on: gap && extraN === 0 && holeN === 0 && Math.abs(dCash) <= 1 },
+    { k: "mismatch", on: gap },
   ];
   const on = flags.filter((x) => x.on).map((x) => x.k);
   if (on.includes("mismatch") && on.some((k) => k !== "mismatch")) {

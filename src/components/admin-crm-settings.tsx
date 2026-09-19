@@ -16,6 +16,7 @@ import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 import { RECHECK_DAY_OPTS, clampRecheckDays, groupJournalGreen, type RecheckDays } from "@/data/crm-inbound-core";
 import { POLICY_FACTORY, planDateFrom, planFromIdOf, planFromIdToRecheckDays, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
 import { HistoryPlanModal } from "@/components/admin-history-plan";
+import { step5Close } from "@/data/crm-step5-canon";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
   let n = from?.parentElement || null;
@@ -1201,10 +1202,7 @@ function auditFail(codes?: string[]) {
 }
 
 function moneyCloseUi(a?: number, b?: number) {
-  const x = Number(a);
-  const y = Number(b);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
-  return Math.abs(x - y) <= 1;
+  return step5Close(Number(a), Number(b));
 }
 
 type AuditSegIn = {
@@ -1379,6 +1377,10 @@ function auditCodeWords(codes?: string[]) {
 
 function auditReasonHit(r: AuditSegIn, id: string) {
   if (id === "all") return true;
+  if (id === "goods") {
+    const codes = r.codes || [];
+    return codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods");
+  }
   return auditSeg(r).id === id;
 }
 

@@ -14,6 +14,7 @@ import {
   step5Newer,
   step5Reasons,
   step5RemainderFormula,
+  step5Close,
 } from "./crm-step5-canon.ts";
 
 describe("шаг 5 канон", () => {
@@ -126,6 +127,22 @@ describe("шаг 5 канон", () => {
   it("формула остатка без товара", () => {
     assert.equal(step5RemainderFormula(148779, 146354), 2425);
     assert.equal(step5RemainderFormula(148779, 146354) - 2500, -75);
+    assert.equal(step5Close(2425, 2425), true);
+    assert.equal(step5Close(2425, 24.25), true);
+    assert.equal(step5Close(24.25, 2425), true);
+    assert.equal(step5Close(100, 50), false);
+    const scaled = step5Reasons({
+      sverka: true,
+      hasH: true,
+      pending: false,
+      formulaSite: 2425,
+      header: 24.25,
+      cashLessons: 184230,
+      cashAll: 186730,
+      headerAt: "2026-09-01",
+      cashDate: "2026-09-01",
+    });
+    assert.equal(scaled.c, true);
   });
 
   it("товар в ленте не ломает C, если формула без товара = шапка", () => {

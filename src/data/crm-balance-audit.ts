@@ -20,6 +20,7 @@ import {
 } from "./crm-balance-audit-core";
 import {
   step5CanSverka,
+  step5Close,
   step5FlagFalse,
   step5Money,
   step5MoscowDay,
@@ -786,26 +787,25 @@ export async function auditOne(cid: number, branchId: number) {
             ? "id не найден"
             : skip || "нет ответа Alfa";
   if (judged.c && judged.dCash > 1) extra += "; приход больше шапки на списания, так бывает";
+  let showSite = first.formulaSite;
   if (
-    !judged.c &&
     shown.ok &&
     shown.headerOk &&
     Number.isFinite(first.formulaSite) &&
-    Math.abs(shown.alfa) > 0.005
+    step5Close(Number(first.formulaSite), shown.alfa) &&
+    Math.abs(Number(first.formulaSite) - shown.alfa) > 1
   ) {
-    const ratio = Math.abs(Number(first.formulaSite) / shown.alfa);
-    if (Math.abs(ratio - 100) < 0.51 || Math.abs(ratio - 0.01) < 0.0002) {
-      extra += "; формула и шапка отличаются в 100 раз — это не товар";
-    }
+    extra += "; формула и шапка отличаются в 100 раз — сошлись как рубли и копейки";
+    if (Math.abs(Number(first.formulaSite)) > Math.abs(shown.alfa)) showSite = Number(first.formulaSite) / 100;
   }
   return {
     hit: {
       cid: id,
       branchId: shown.branch || branch,
       name: first.name,
-      clients: Number.isFinite(first.formulaSite) ? first.formulaSite : Number.NaN,
+      clients: Number.isFinite(showSite) ? showSite : Number.NaN,
       alfa: shown.ok && shown.headerOk ? shown.alfa : Number.NaN,
-      cash: Number.isFinite(first.formulaSite) ? first.formulaSite : Number.NaN,
+      cash: Number.isFinite(showSite) ? showSite : Number.NaN,
       woSum: first.woCal,
       woN: first.woN,
       cttRest: 0,
