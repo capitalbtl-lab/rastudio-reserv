@@ -301,7 +301,7 @@ function HomeSlotFrame({
       style={{
         paddingTop: style?.padTop || undefined,
         paddingBottom: style?.padBottom || undefined,
-        minHeight: style?.h || undefined,
+        height: style?.h || undefined,
         textAlign: style?.align,
       }}
       onClick={(e) => {
@@ -357,35 +357,14 @@ function HomeSlotFrame({
           {style?.hidden ? <span className="pr-2 opacity-80">скрыт</span> : null}
         </div>
       </div>
-      <button
-        type="button"
-        aria-label="Зазор сверху"
-        className="absolute inset-x-10 top-10 z-10 h-2 cursor-ns-resize bg-primary/0 hover:bg-primary/40"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const startY = e.clientY;
-          const start = style?.padTop || 0;
-          const base = ctx?.doc;
-          if (!base || !ctx) return;
-          let last = base;
-          const move = (ev: MouseEvent) => {
-            last = patchHomeStyle(base, id, { padTop: start + (ev.clientY - startY) });
-            ctx.setDoc(last, false);
-          };
-          const up = () => {
-            window.removeEventListener("mousemove", move);
-            window.removeEventListener("mouseup", up);
-            ctx.setDoc(last, true);
-          };
-          window.addEventListener("mousemove", move);
-          window.addEventListener("mouseup", up);
-        }}
-      />
+      {children}
       <button
         type="button"
         aria-label="Высота секции"
-        className="absolute inset-x-16 bottom-0 z-10 h-2 cursor-ns-resize bg-primary/0 hover:bg-primary/50"
+        className={cn(
+          "absolute inset-x-[10%] -bottom-1 z-30 flex h-4 cursor-ns-resize items-center justify-center",
+          selected ? "opacity-100" : "opacity-0 hover:opacity-100",
+        )}
         onMouseDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -407,8 +386,9 @@ function HomeSlotFrame({
           window.addEventListener("mousemove", move);
           window.addEventListener("mouseup", up);
         }}
-      />
-      {children}
+      >
+        <span className={cn("h-1.5 w-14 rounded-full", selected ? "bg-primary" : "bg-primary/50")} />
+      </button>
     </div>
   );
 }
