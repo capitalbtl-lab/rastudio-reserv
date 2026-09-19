@@ -70,8 +70,9 @@ export function loadPageDoc(path: string): PageDoc {
     /* seed */
   }
   if (meta.path === "/" && !existsSync(fileOf("/"))) {
+    const source = loadHomeLayoutFile();
     doc = migrateHomeIfNeeded(doc);
-    savePageDoc(doc);
+    if (source) savePageDoc(doc);
   }
   return doc;
 }

@@ -13,12 +13,14 @@ import {
 } from "./home-layout-core.ts";
 
 describe("макет главной", () => {
-  it("неизвестный id отбрасывается, новые блоки дописываются", () => {
+  it("неизвестный id отбрасывается, inst_ и слот школы остаются", () => {
     const order = normalizeHomeOrder(["about", "ghost", "hero", "about"]);
     assert.equal(order[0], "about");
     assert.equal(order[1], "hero");
     assert.ok(!order.includes("ghost" as typeof order[number]));
     assert.deepEqual(new Set(order), new Set(defaultHomeOrder()));
+    const withInst = normalizeHomeOrder(["course-hero", "inst_ab12cd"], ["course-hero", "inst_ab12cd"], false);
+    assert.deepEqual(withInst, ["course-hero", "inst_ab12cd"]);
   });
 
   it("сдвиг вверх-вниз и перестановка перед блоком", () => {

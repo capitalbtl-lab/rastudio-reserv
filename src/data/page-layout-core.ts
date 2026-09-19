@@ -312,7 +312,7 @@ export function layoutToHome(layout: LayoutDoc): HomeLayoutDoc {
       });
     }
   }
-  return normalizeHomeLayout({ order: layout.order, styles, texts, customs, media });
+  return normalizeHomeLayout({ order: layout.order, styles, texts, customs, media }, false);
 }
 
 export function applyHomeToPage(page: PageDoc, home: HomeLayoutDoc): PageDoc {

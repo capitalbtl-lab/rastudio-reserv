@@ -75,6 +75,22 @@ describe("библиотека и документ страницы", () => {
     assert.notEqual(c.id, a.id);
   });
 
+  it("roundtrip inst_ и школы не подмешивает слоты главной", () => {
+    const art = emptyPageDoc("/art-studio", "Художка", "school");
+    const withCol = addInstance(art.draft, "two-col", null, { title: "Колонка", image: "/media/schools/art/a.jpg" });
+    const inst = Object.values(withCol.blocks).find((b) => b.typeId === "two-col")!;
+    assert.match(inst.id, /^inst_/);
+    const shaped = layoutToHome(withCol);
+    assert.ok(shaped.order.includes("course-hero"), "шапка школы жива");
+    assert.ok(shaped.order.includes(inst.id), "атом не выкинут");
+    assert.ok(!shaped.order.includes("ticker"), "бегущая строка главной не приехала");
+    const back = homeToLayout(shaped);
+    assert.equal(back.blocks[inst.id]?.content.title, "Колонка");
+    assert.equal(back.blocks[inst.id]?.content.image, "/media/schools/art/a.jpg");
+    assert.ok(back.order.includes("course-hero"));
+    assert.ok(!back.order.includes("ticker"));
+  });
+
   it("черновик не равен опубликованному до publish; телефон ругает ширину", () => {
     let doc = emptyPageDoc("/", "Главная", "home");
     assert.equal(layoutsEqual(doc.draft, doc.published), true);

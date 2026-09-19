@@ -128,7 +128,7 @@ export function HomeEditorProvider({
     setPath(here);
     void loadPageDocFn({ data: { token, path: here } }).then((res) => {
       if (!res.ok) return;
-      const next = normalizeHomeLayout(res.layout);
+      const next = normalizeHomeLayout(res.layout, here === "/");
       setDocState(next);
       hist.current = [next];
       histAt.current = 0;
@@ -157,7 +157,8 @@ export function HomeEditorProvider({
 
   const setDoc = useCallback(
     (next: HomeLayoutDoc, write = true) => {
-      const norm = normalizeHomeLayout(next);
+      const fill = currentPath() === "/";
+      const norm = normalizeHomeLayout(next, fill);
       setDocState(norm);
       if (write) {
         const cut = hist.current.slice(0, histAt.current + 1);

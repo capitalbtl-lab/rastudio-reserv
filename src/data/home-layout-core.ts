@@ -48,7 +48,13 @@ export type HomeLayoutDoc = {
 const KNOWN = new Set(HOME_BLOCKS.map((b) => b.id));
 
 export function isCustomBlockId(id: string) {
-  return /^c_[a-z0-9]+$/i.test(id);
+  return /^c_[a-z0-9]+$/i.test(id) || /^inst_[a-z0-9]+$/i.test(id);
+}
+
+export function isLooseSlotId(id: string) {
+  if (!id || KNOWN.has(id as HomeBlockId)) return false;
+  if (isCustomBlockId(id)) return true;
+  return /^[a-z0-9:-]{2,48}$/i.test(id);
 }
 
 export function newCustomBlockId() {
@@ -73,8 +79,8 @@ export function clampPad(n: unknown) {
   return Math.max(0, Math.min(160, Math.round(x)));
 }
 
-export function normalizeHomeOrder(raw?: unknown, extraIds: string[] = []): HomeSlotId[] {
-  const extra = extraIds.filter(isCustomBlockId);
+export function normalizeHomeOrder(raw?: unknown, extraIds: string[] = [], fillMissing = true): HomeSlotId[] {
+  const extra = extraIds.filter((id) => isLooseSlotId(String(id)));
   const allow = new Set<string>([...KNOWN, ...extra]);
   const seen = new Set<string>();
   const out: HomeSlotId[] = [];
@@ -86,8 +92,10 @@ export function normalizeHomeOrder(raw?: unknown, extraIds: string[] = []): Home
       seen.add(id);
     }
   }
-  for (const b of HOME_BLOCKS) {
-    if (!seen.has(b.id)) out.push(b.id);
+  if (fillMissing) {
+    for (const b of HOME_BLOCKS) {
+      if (!seen.has(b.id)) out.push(b.id);
+    }
   }
   for (const id of extra) {
     if (!seen.has(id)) out.push(id);
@@ -102,7 +110,8 @@ function asBg(v: unknown): HomeBg {
 function asCustom(raw: unknown): HomeCustomBlock | null {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Record<string, unknown>;
-  const id = isCustomBlockId(String(c.id || "")) ? String(c.id) : "";
+  const idRaw = String(c.id || "");
+  const id = isLooseSlotId(idRaw) || isCustomBlockId(idRaw) ? idRaw : "";
   const title = String(c.title || "").trim().slice(0, 120);
   if (!id || !title) return null;
   return {
@@ -118,8 +127,8 @@ function asCustom(raw: unknown): HomeCustomBlock | null {
   };
 }
 
-export function normalizeHomeLayout(raw?: unknown): HomeLayoutDoc {
-  if (Array.isArray(raw)) return { ...emptyHomeLayout(), order: normalizeHomeOrder(raw) };
+export function normalizeHomeLayout(raw?: unknown, fillMissing = true): HomeLayoutDoc {
+  if (Array.isArray(raw)) return { ...emptyHomeLayout(), order: normalizeHomeOrder(raw, [], fillMissing) };
   const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const customs = Array.isArray(src.customs) ? src.customs.map(asCustom).filter(Boolean) as HomeCustomBlock[] : [];
   const extra = customs.map((c) => c.id);
@@ -149,10 +158,10 @@ export function normalizeHomeLayout(raw?: unknown): HomeLayoutDoc {
   if (src.media && typeof src.media === "object") {
     for (const [k, v] of Object.entries(src.media as Record<string, unknown>)) {
       const srcPath = String(v || "").trim();
-      if (k && srcPath.startsWith("/") && !srcPath.includes("..")) media[k.slice(0, 40)] = srcPath.slice(0, 200);
+      if (k && srcPath.startsWith("/") && !srcPath.includes("..")) media[k.slice(0, 48)] = srcPath.slice(0, 200);
     }
   }
-  return { order: normalizeHomeOrder(src.order, extra), styles, texts, customs, media };
+  return { order: normalizeHomeOrder(src.order, extra, fillMissing), styles, texts, customs, media };
 }
 
 export function moveHomeBlock(order: HomeSlotId[], id: HomeSlotId, dir: -1 | 1): HomeSlotId[] {

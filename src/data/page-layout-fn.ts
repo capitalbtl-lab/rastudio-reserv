@@ -40,7 +40,8 @@ export const savePageDraftFn = createServerFn({ method: "POST" })
     if (!guard(data.token)) return { ok: false as const, error: "Нужен режим отладки." };
     const path = String(data.path || "/");
     const cur = loadPageDoc(path);
-    const draft = data.pageDraft || homeToLayout(normalizeHomeLayout(data.layout));
+    const fillHome = path === "/" || path === "";
+    const draft = data.pageDraft || homeToLayout(normalizeHomeLayout(data.layout, fillHome));
     const doc = savePageDraft(path, draft);
     return {
       ok: true as const,
@@ -57,7 +58,7 @@ export const publishPageFn = createServerFn({ method: "POST" })
     if (!guard(data.token)) return { ok: false as const, error: "Нужен режим отладки." };
     const path = String(data.path || "/");
     if (data.pageDraft) savePageDraft(path, data.pageDraft);
-    else if (data.layout) savePageDraft(path, homeToLayout(normalizeHomeLayout(data.layout)));
+    else if (data.layout) savePageDraft(path, homeToLayout(normalizeHomeLayout(data.layout, path === "/" || path === "")));
     const issues = phoneIssues(loadPageDoc(path).draft);
     if (issues.length) return { ok: false as const, error: `На телефоне едет: ${issues[0]}`, phoneIssues: issues };
     const doc = publishPage(path);
