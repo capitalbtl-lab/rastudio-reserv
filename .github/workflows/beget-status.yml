@@ -48,6 +48,40 @@ jobs:
             echo "=== local ==="
             curl -sS -o /tmp/local.html -w "local:%{http_code}\n" --max-time 8 http://127.0.0.1:3000/ || echo localfail
             head -c 300 /tmp/local.html 2>/dev/null; echo
+            echo "=== probe ==="
+            cd /var/www/rastudio
+            cat > /tmp/ra-probe.mjs <<'NODE'
+            async function check(name, fn) {
+              try {
+                const v = await fn();
+                console.log(name, "ok", v || "");
+              } catch (e) {
+                console.error(name, "FAIL", e && e.stack ? e.stack : e);
+              }
+            }
+            await check("layout", async () => {
+              const { loadHomeLayout } = await import("/var/www/rastudio/src/data/home-layout.ts");
+              const l = loadHomeLayout();
+              return String(l.order?.length) + " " + String(l.order?.[0] || "");
+            });
+            await check("edits", async () => {
+              const { ensureLiveEdits } = await import("/var/www/rastudio/src/data/edits.ts");
+              ensureLiveEdits();
+            });
+            await check("prices", async () => {
+              const { ensureLivePrices } = await import("/var/www/rastudio/src/data/prices.ts");
+              ensureLivePrices();
+            });
+            await check("signup", async () => {
+              const { loadSiteSignup } = await import("/var/www/rastudio/src/data/site-signup.ts");
+              loadSiteSignup();
+            });
+            NODE
+            node --experimental-strip-types --import ./scripts/ts-ext-register.mjs /tmp/ra-probe.mjs
+            echo "=== out log ==="
+            ls /root/.pm2/logs/ | head
+            tail -n 80 /root/.pm2/logs/rastudio-out-8.log 2>/dev/null
+            tail -n 80 /root/.pm2/logs/rastudio-error-8.log 2>/dev/null
             echo "=== port ==="
             ss -ltnp | grep 3000 || echo no-3000
             exit 0
