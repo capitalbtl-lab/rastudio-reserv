@@ -437,6 +437,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /export async function inboundMissingUntilSeated/);
     assert.match(inbound, /export async function inboundRefreshSeatedLessons/);
     assert.match(inbound, /refresh: true/);
+    assert.match(inbound, /packedBy/);
+    assert.match(inbound, /export function landPackedCustomerLessons/);
+    assert.match(pull, /landPackedCustomerLessons/);
+    assert.match(pull, /havePacked/);
+    assert.match(pull, /windowNewLessonIds\(census\.ids, haveAfter\)/);
     const refAt = inbound.indexOf("export async function inboundRefreshSeatedLessons");
     const refFn = inbound.slice(refAt, inbound.indexOf("export async function inboundJournalChunk", refAt));
     assert.match(refFn, /for \(let i = 0; i < all\.length; i \+= take\)/);
@@ -492,7 +497,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /iceWindowOrNow\(true, from, dateTo, recheckDays\)/);
     assert.doesNotMatch(inbound, /if \(!wasLessonGreen\(sync\)\) return \{ from: ""/);
     assert.match(rec, /windowNewLessonIds/);
-    assert.match(rec, /refreshStaleOf\(census.ids\)/);
+    assert.match(rec, /refreshStaleOf\(census.ids, packedIds\)/);
     assert.match(one, /refreshStaleOf/);
     assert.match(one, /windowStaleLessonIds/);
     assert.match(one, /windowSeatedLessonIds/);
@@ -502,7 +507,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /windowAlfaLive/);
     assert.match(rec, /recheckWindowFull\(windowFrom\)/);
     assert.match(rec, /seatRounds = fullWin \? 80 : 20/);
-    assert.match(rec, /const новые = windowFrom \? windowNewLessonIds/);
+    assert.match(rec, /const новые = windowNewLessonIds\(census.ids, haveAfter\)/);
     assert.match(rec, /windowAlfaKeep/);
     assert.match(rec, /seatedNew/);
     assert.match(rec, /mark\(disk, Number\(customerSyncOf\(cid\)\.lessonsAlfa\) \|\| liveAlfa, true\)/);

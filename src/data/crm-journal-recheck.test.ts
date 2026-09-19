@@ -167,6 +167,10 @@ describe("перепроверка журнала", () => {
     assert.doesNotMatch(inbound, /homeOnly\) \|\| Number\(opts\?\.take\)/);
     assert.match(inbound, /export async function probeCustomerLessons/);
     assert.match(inbound, /export async function censusCustomerLessonIds/);
+    assert.match(inbound, /packedBy/);
+    assert.match(inbound, /landPackedCustomerLessons/);
+    assert.match(pullLock, /landPackedCustomerLessons/);
+    assert.match(pullLock, /refreshStaleOf\(census\.ids, packedIds\)/);
     assert.match(inbound, /studentCardBranches/);
     assert.match(inbound, /add\(Number\(l.branchId\)/);
     assert.match(inbound, /loadCustomerCalendar\(cid\)/);

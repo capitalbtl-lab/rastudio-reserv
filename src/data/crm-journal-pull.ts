@@ -2,7 +2,7 @@
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { SCHOOL_ORDER, lessonNeedsHomework, pupilNameOk } from "./crm-slots-core";
+import { SCHOOL_ORDER, lessonNeedsHomework, pupilNameOk, type GroupCalLesson } from "./crm-slots-core";
 import { isCampStatus } from "./group-status";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { loadCachePolicy } from "./crm-cache-policy";
@@ -1250,7 +1250,7 @@ async function pullOneGroup(
 export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32, dateTo = "") {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, inboundRefreshSeatedLessons, studentProtectLessonIds, studentIndexBranches } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, inboundRefreshSeatedLessons, studentProtectLessonIds, studentIndexBranches, landPackedCustomerLessons } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const reset0 = String(customerSyncOf(cid).lessonsResetAt || "");
@@ -1302,9 +1302,11 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     });
     return { short, extra, closed };
   };
-  const refreshStaleOf = async (ids: Iterable<number>) => {
+  const refreshStaleOf = async (ids: Iterable<number>, packedIds?: Iterable<number>) => {
     const cal = loadCustomerCalendar(cid) || [];
-    const want = recheck ? windowSeatedLessonIds(ids, cal) : windowStaleLessonIds(ids, cal);
+    const havePacked = new Set([...packedIds || []].map(Number).filter((n) => n > 0));
+    let want = recheck ? windowSeatedLessonIds(ids, cal) : windowStaleLessonIds(ids, cal);
+    if (havePacked.size) want = want.filter((n) => !havePacked.has(n));
     if (!want.length) return false;
     const ref = await inboundRefreshSeatedLessons(branchId, cid, want, { take: 50, resetAt: reset0 }).catch(() => ({ skipped: undefined as string | undefined }));
     if (abortedByReset() || (ref as { skipped?: string }).skipped === "reset") return true;
@@ -1481,7 +1483,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       censusOpts.token = t;
       censusOpts.branches = await studentIndexBranches(branchId, cid, t);
     }
-    const census = await censusCustomerLessonIds(branchId, cid, censusOpts).catch(() => ({ ids: [] as number[], ok: false as const, error: "Alfa не ответила" }));
+    const census = await censusCustomerLessonIds(branchId, cid, censusOpts).catch(() => ({ ids: [] as number[], packed: [] as GroupCalLesson[], ok: false as const, pages: 0, error: "Alfa не ответила" }));
+    const packed = Array.isArray(census.packed) ? census.packed : [];
+    const packedIds = uniquePositiveIds(packed.map((l) => Number(l.lessonId) || 0));
     disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
     if (!census.ok) {
@@ -1513,8 +1517,12 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       };
     } else if (holeApproved) {
       censusClosed = true;
+      if (packed.length) {
+        landPackedCustomerLessons(cid, packed, { refresh: true });
+        disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
+      }
       mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || 0, true);
-      if (await refreshStaleOf(census.ids)) return resetStop();
+      if (await refreshStaleOf(census.ids, packedIds)) return resetStop();
     } else {
       const haveBefore = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
       const applied = applyCustomerLessonCensus(cid, census.ids, true, fullWin ? "" : windowFrom, fullWin ? "" : windowTo);
@@ -1523,6 +1531,10 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       } else {
       censusClosed = true;
       disk = applied.disk;
+      if (packed.length) {
+        landPackedCustomerLessons(cid, packed, { refresh: true });
+        disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
+      }
       const haveAfter = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
       const gone = windowFrom ? windowGoneLessonIds(haveBefore, haveAfter) : [];
       const keep0 = Number(customerSyncOf(cid).lessonsAlfa) || 0;
@@ -1531,7 +1543,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         liveAlfa = fullWin ? windowAlfaLive(keep0, census.ids.length, 0, gone.length, true) : windowAlfaKeep(keep0, 0, gone.length);
         stampCustomerSync(cid, { lessonsAlfa: liveAlfa, lessonsAlfaAt: atOf() });
       }
-      const новые = windowFrom ? windowNewLessonIds(census.ids, haveBefore) : [];
+      const новые = windowNewLessonIds(census.ids, haveAfter);
       if (новые.length) {
         const gap = await inboundMissingUntilSeated(branchId, cid, новые, { take: 50, rounds: seatRounds, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
         if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
@@ -1570,7 +1582,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       liveAlfa = Number(customerSyncOf(cid).lessonsAlfa) || alfaN;
       }
       mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || liveAlfa, true);
-      if (await refreshStaleOf(census.ids)) return resetStop();
+      if (await refreshStaleOf(census.ids, packedIds)) return resetStop();
       }
     }
     } finally {

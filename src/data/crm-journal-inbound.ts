@@ -511,25 +511,29 @@ export async function studentIndexBranches(home: number, cid: number, token: str
   return studentIndexBranchIds(homeN, id, crmUnwrapIndex(json).items as Record<string, unknown>[]);
 }
 
-/** Сколько занятий у ученика в Alfa: перепись уникальных номеров. Пустой catch ≠ конец. Полная страница на потолке — не закрыта. */
+/** Сколько занятий у ученика в Alfa: перепись уникальных номеров. Тела с тех же страниц — не второй круг по id. Пустой catch ≠ конец. Полная страница на потолке — не закрыта. */
 export async function censusCustomerLessonIds(
   branch: number,
   customerId: number,
   opts?: { dateFrom?: string; dateTo?: string; token?: string; branches?: number[] },
 ) {
   const id = Number(customerId) || 0;
-  if (id <= 0) return { ids: [] as number[], ok: false as const, pages: 0, error: "нет id" };
+  if (id <= 0) return { ids: [] as number[], packed: [] as GroupCalLesson[], ok: false as const, pages: 0, error: "нет id" };
   const { token } = await import("./alfacrm");
   const t = opts?.token || (await token());
+  const { listAdminSlots } = await import("./alfacrm-schedule");
+  const slots = listAdminSlots();
   const dateFrom = ymd(opts?.dateFrom) || "2015-01-01";
   const dateTo = ymd(opts?.dateTo) || ymd(ruShift(90));
   const branches = opts?.branches?.length ? opts.branches : uniqueBranches(branch);
   const ids = new Set<number>();
+  const packedBy = new Map<number, GroupCalLesson>();
   const noDate: number[] = [];
   let pages = 0;
   let aborted = false;
   const pageSize = 500;
   const pageCap = 12;
+  const fail = (error: string) => ({ ids: uniquePositiveIds(ids), packed: [...packedBy.values()], ok: false as const, pages, error });
   for (const bid of branches) {
     for (const status of LESSON_STATUSES) {
       let received = 0;
@@ -540,14 +544,36 @@ export async function censusCustomerLessonIds(
           t,
         );
         pages += 1;
-        if (!live.ok) return { ids: uniquePositiveIds(ids), ok: false as const, pages, error: live.error };
+        if (!live.ok) return fail(live.error);
         for (const item of live.items) {
           const lid = censusSeatLessonId(item);
           if (lid) ids.add(lid);
           else {
             const raw = Number((item as { id?: number }).id) || 0;
             if (raw > 0) noDate.push(raw);
+            continue;
           }
+          if (packedBy.has(lid)) continue;
+          const rec = item as Record<string, unknown>;
+          const day = ymd(item.date) || ymd((item as { lesson_date?: string }).lesson_date);
+          if (!day) continue;
+          const gid = Number((item.group_ids || [])[0] || 0);
+          const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
+          const packed = packLight(
+            { ...item, date: day, customer_ids: uniquePositiveIds([...lessonCustomerIds(rec), id]) },
+            {
+              groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
+              from: hm(item.time_from) || "",
+              to: hm(item.time_to) || "",
+              teacher: slot?.teacher || "",
+              subject: slot?.subject || "",
+            },
+            id,
+          );
+          if (!packed) continue;
+          packed.date = ymd(packed.date) || day;
+          if (!packed.customerIds?.length) packed.customerIds = [id];
+          packedBy.set(lid, withPupilNames({ ...packed, branchId: bid || packed.branchId }));
         }
         received += live.items.length;
         if (live.total > 0) {
@@ -564,7 +590,28 @@ export async function censusCustomerLessonIds(
     }
   }
   if (noDate.length) console.warn(`census cid=${id} dropped no-date: ${uniquePositiveIds(noDate).slice(0, 40).join(",")}`);
-  return { ids: uniquePositiveIds(ids), ok: canCloseLessonCensus({ live: true, aborted }), pages };
+  return { ids: uniquePositiveIds(ids), packed: [...packedBy.values()], ok: canCloseLessonCensus({ live: true, aborted }), pages };
+}
+
+/** Тела с переписи на диск. Синяя: 1:1, без второго круга lesson/index по каждому id. */
+export function landPackedCustomerLessons(customerId: number, packed: GroupCalLesson[], opts?: { refresh?: boolean }) {
+  const id = Number(customerId) || 0;
+  const pulled = (packed || []).filter((l) => (Number(l.lessonId) || 0) > 0);
+  if (id <= 0 || !pulled.length) return { count: 0 };
+  const prevCal = loadCustomerCalendar(id);
+  const hold = pendingExportIds(["lesson.update", "lesson.create"]);
+  const next = mergeLocalCalendar(pulled, prevCal, hold, "union");
+  replaceCustomerCalendar(id, next);
+  if (opts?.refresh) fanOutLessonWriteoffs(pulled);
+  for (const row of pulled) {
+    const gid = Number((row.groupIds || [])[0] || 0);
+    const bid = Number(row.branchId || 0);
+    if (gid && bid) upsertGroupCalendar(bid, gid, row);
+  }
+  const before = new Set((prevCal || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+  const landed = pulled.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0 && !before.has(n));
+  noteAlfaLessonsLanded(id, countAlfaLessonUniq(next), landed);
+  return { count: pulled.length };
 }
 
 function lessonIdsOnStudentGroups(cid: number) {
