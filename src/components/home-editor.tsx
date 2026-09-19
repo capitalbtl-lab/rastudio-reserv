@@ -1,10 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Eye, EyeOff, Monitor, Redo2, Smartphone, Tablet, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Files,
+  Image as ImageIcon,
+  LayoutTemplate,
+  Monitor,
+  Plus,
+  Redo2,
+  Smartphone,
+  Tablet,
+  Undo2,
+} from "lucide-react";
 import { debugSession } from "@/data/debug-fn";
 import { debugEmit } from "@/data/debug-client";
-import { saveHomeLayoutFn } from "@/data/home-layout-fn";
+import { loadPageDocFn, placeBlockFn, publishPageFn, savePageDraftFn } from "@/data/page-layout-fn";
+import { BLOCK_LIBRARY } from "@/data/block-library-core";
 import {
   emptyHomeLayout,
   homeBlockLabel,
@@ -21,7 +35,9 @@ import {
 } from "@/data/home-layout-core";
 import { StudioPanel } from "@/components/home-studio";
 import { HomeEditorCtx, useHomeEditor, type HomeEditorCtxValue } from "@/components/home-read";
+import type { EditorPageItem } from "@/data/page-layout-core";
 import { cn } from "@/lib/utils";
+import "./home-editor.css";
 
 export { EditText, useHomeEditor } from "@/components/home-read";
 
@@ -35,6 +51,21 @@ function debugToken() {
   }
 }
 
+function currentPath() {
+  if (typeof window === "undefined") return "/";
+  const page = new URLSearchParams(location.search).get("page");
+  if (page?.startsWith("/")) return page;
+  return location.pathname || "/";
+}
+
+function editUrl(path: string) {
+  return path === "/" ? "/?edit=1" : `${path}?edit=1`;
+}
+
+function previewUrl(path: string) {
+  return path === "/" ? "/?preview=1" : `${path}?preview=1`;
+}
+
 export function HomeEditorProvider({
   initial,
   children,
@@ -46,7 +77,11 @@ export function HomeEditorProvider({
   const [selected, setSelected] = useState<string | null>(null);
   const [doc, setDocState] = useState(() => normalizeHomeLayout(initial));
   const [device, setDevice] = useState<HomeDevice>("desktop");
-  const [dirty, setDirty] = useState("готово");
+  const [dirty, setDirty] = useState("на сайте");
+  const [path, setPath] = useState(currentPath);
+  const [pages, setPages] = useState<EditorPageItem[]>([]);
+  const [phoneIssues, setPhoneIssues] = useState<string[]>([]);
+  const [rail, setRail] = useState<HomeEditorCtxValue["rail"]>(null);
   const hist = useRef<HomeLayoutDoc[]>([normalizeHomeLayout(initial)]);
   const histAt = useRef(0);
   const timer = useRef<number>(0);
@@ -85,18 +120,40 @@ export function HomeEditorProvider({
     };
   }, [editing, device]);
 
-  const persist = useCallback((next: HomeLayoutDoc) => {
+  useEffect(() => {
+    if (!editing) return;
     const token = debugToken();
     if (!token) return;
-    window.clearTimeout(timer.current);
-    setDirty("сохраняем…");
-    timer.current = window.setTimeout(() => {
-      void saveHomeLayoutFn({ data: { token, layout: next } }).then((res) => {
-        setDirty(res.ok ? "сохранено" : res.error || "ошибка");
-        debugEmit("layout", { ok: res.ok, error: res.ok ? "" : res.error });
-      });
-    }, 280);
-  }, []);
+    const here = currentPath();
+    setPath(here);
+    void loadPageDocFn({ data: { token, path: here } }).then((res) => {
+      if (!res.ok) return;
+      const next = normalizeHomeLayout(res.layout);
+      setDocState(next);
+      hist.current = [next];
+      histAt.current = 0;
+      setPages(res.pages || []);
+      setPhoneIssues(res.phoneIssues || []);
+      setDirty(res.differ ? "есть правки" : "на сайте");
+    });
+  }, [editing]);
+
+  const persist = useCallback(
+    (next: HomeLayoutDoc) => {
+      const token = debugToken();
+      if (!token) return;
+      window.clearTimeout(timer.current);
+      setDirty("сохраняем…");
+      timer.current = window.setTimeout(() => {
+        void savePageDraftFn({ data: { token, path: currentPath(), layout: next } }).then((res) => {
+          setDirty(res.ok ? "сохранено" : res.error || "ошибка");
+          if (res.ok && "phoneIssues" in res) setPhoneIssues(res.phoneIssues || []);
+          debugEmit("layout", { ok: res.ok, error: res.ok ? "" : res.error });
+        });
+      }, 800);
+    },
+    [],
+  );
 
   const setDoc = useCallback(
     (next: HomeLayoutDoc, write = true) => {
@@ -129,18 +186,59 @@ export function HomeEditorProvider({
     persist(next);
   }, [persist]);
 
+  const saveNow = useCallback(() => {
+    const token = debugToken();
+    if (!token) return;
+    window.clearTimeout(timer.current);
+    setDirty("сохраняем…");
+    void savePageDraftFn({ data: { token, path: currentPath(), layout: doc } }).then((res) => {
+      setDirty(res.ok ? "сохранено" : res.error || "ошибка");
+      if (res.ok && "phoneIssues" in res) setPhoneIssues(res.phoneIssues || []);
+    });
+  }, [doc]);
+
+  const publish = useCallback(() => {
+    const token = debugToken();
+    if (!token) return;
+    void publishPageFn({ data: { token, path: currentPath() } }).then((res) => {
+      if (!res.ok) {
+        setDirty(res.error || "ошибка");
+        if ("phoneIssues" in res) setPhoneIssues(res.phoneIssues || []);
+        return;
+      }
+      setDirty("на сайте");
+      setPhoneIssues([]);
+    });
+  }, []);
+
+  const preview = useCallback(() => {
+    window.open(previewUrl(currentPath()), "_blank", "noopener");
+  }, []);
+
+  const goPage = useCallback((next: string) => {
+    window.location.href = editUrl(next);
+  }, []);
+
   useEffect(() => {
     if (!editing) return;
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       const typing = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement | null)?.isContentEditable;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        saveNow();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) redo();
         else undo();
         return;
       }
-      if (e.key === "Escape") setSelected(null);
+      if (e.key === "Escape") {
+        setSelected(null);
+        setRail(null);
+      }
       if (typing) return;
       if (!selected) return;
       if (e.key === "ArrowUp") {
@@ -158,7 +256,9 @@ export function HomeEditorProvider({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, selected, doc, setDoc, undo, redo]);
+  }, [editing, selected, doc, setDoc, undo, redo, saveNow]);
+
+  const canPublish = phoneIssues.length === 0 && dirty !== "на сайте" && dirty !== "сохраняем…";
 
   const value: HomeEditorCtxValue = {
     editing,
@@ -175,6 +275,16 @@ export function HomeEditorProvider({
     canUndo: histAt.current > 0,
     canRedo: histAt.current < hist.current.length - 1,
     dirty,
+    path,
+    pages,
+    goPage,
+    saveNow,
+    publish,
+    preview,
+    canPublish,
+    phoneIssues,
+    rail,
+    setRail,
   };
 
   return <HomeEditorCtx.Provider value={value}>{children}</HomeEditorCtx.Provider>;
@@ -184,21 +294,27 @@ export function HomeEditorChrome() {
   const ctx = useHomeEditor();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetTab, setSheetTab] = useState<"layers" | "block" | "studio">("layers");
+  const [pageOpen, setPageOpen] = useState(false);
   if (!ctx?.editing) return null;
-  const { doc, selected, select, setDoc, device, setDevice, undo, redo, canUndo, canRedo, dirty } = ctx;
+  const { doc, selected, select, setDoc, device, setDevice, undo, redo, canUndo, canRedo, dirty, rail, setRail } = ctx;
   const style = selected ? doc.styles[selected] || {} : {};
+  const pageTitle = ctx.pages.find((p) => p.path === ctx.path)?.title || ctx.path;
 
   function openSheet(tab: "layers" | "block" | "studio") {
     setSheetTab(tab);
     setSheetOpen(true);
   }
 
+  function toggleRail(id: NonNullable<HomeEditorCtxValue["rail"]>) {
+    setRail(rail === id ? null : id);
+  }
+
   return (
     <>
-      <div className="ve-ui sticky top-[3.75rem] z-40 sm:top-[4.75rem] md:top-[5.25rem]">
-        <div className="flex h-12 items-center gap-1.5 overflow-x-auto bg-header px-2 text-header-fg shadow-[0_12px_28px_-16px_rgba(0,0,0,.5)] sm:gap-2 sm:px-3">
-          <p className="mr-1 hidden shrink-0 text-sm font-semibold lg:block">Редактор главной</p>
-          <div className="flex shrink-0 rounded-full bg-white/10 p-0.5">
+      <div className="ve-ui ve-chrome">
+        <div className="ve-topbar">
+          <PagePicker open={pageOpen} setOpen={setPageOpen} title={pageTitle} path={ctx.path} pages={ctx.pages} goPage={ctx.goPage} />
+          <div className="flex shrink-0 rounded-full bg-black/5 p-0.5">
             {(
               [
                 ["desktop", Monitor, "Компьютер"],
@@ -210,64 +326,88 @@ export function HomeEditorChrome() {
                 key={id}
                 type="button"
                 title={label}
-                className={cn("grid size-8 place-items-center rounded-full", device === id ? "bg-white text-primary" : "text-header-fg/70 hover:bg-white/10")}
+                className={cn("grid size-8 place-items-center rounded-full", device === id ? "bg-white text-primary shadow-sm" : "text-black/50 hover:bg-white")}
                 onClick={() => setDevice(id)}
               >
                 <Icon className="size-3.5" />
               </button>
             ))}
           </div>
-          <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-white/10 disabled:opacity-30" disabled={!canUndo} onClick={undo} title="Отменить">
+          <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-black/5 disabled:opacity-30" disabled={!canUndo} onClick={undo} title="Отменить">
             <Undo2 className="size-3.5" />
           </button>
-          <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-white/10 disabled:opacity-30" disabled={!canRedo} onClick={redo} title="Повторить">
+          <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-black/5 disabled:opacity-30" disabled={!canRedo} onClick={redo} title="Повторить">
             <Redo2 className="size-3.5" />
           </button>
-          <span className="ml-auto hidden shrink-0 text-[0.72rem] text-header-fg/55 sm:inline">{dirty}</span>
-          <span className="ml-auto sm:hidden" />
-          <button
-            type="button"
-            className="h-8 shrink-0 rounded-full bg-white/10 px-3 text-[0.72rem] font-semibold hover:bg-white/15 lg:hidden"
-            onClick={() => openSheet(selected ? "block" : "layers")}
-          >
+          <span className="ml-auto hidden text-[0.72rem] text-black/45 sm:inline">{dirty}</span>
+          <button type="button" className="h-8 shrink-0 rounded-full px-3 text-[0.72rem] font-semibold hover:bg-black/5 lg:hidden" onClick={() => openSheet(selected ? "block" : "layers")}>
             Панель
           </button>
+          <button type="button" className="h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold hover:bg-black/5" onClick={ctx.saveNow}>
+            Сохранить
+          </button>
+          <button type="button" className="h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold hover:bg-black/5" onClick={ctx.preview}>
+            Предпросмотр
+          </button>
           <button
             type="button"
-            className="h-8 shrink-0 rounded-full bg-white/10 px-3 text-[0.72rem] font-semibold hover:bg-white/15"
-            onClick={() => {
-              if (window.confirm("Вернуть заводской порядок, тексты и отступы?")) setDoc(emptyHomeLayout());
-            }}
+            className="h-8 shrink-0 rounded-full bg-primary px-3.5 text-[0.78rem] font-semibold text-primary-foreground disabled:opacity-40"
+            disabled={!ctx.canPublish}
+            title={ctx.phoneIssues[0] || "Опубликовать на сайт"}
+            onClick={ctx.publish}
           >
-            Сброс
+            Опубликовать
           </button>
         </div>
+
+        <aside className="ve-rail hidden md:block">
+          <button type="button" className={cn("ve-icon", rail === "elements" && "is-on")} title="Добавить элементы" onClick={() => toggleRail("elements")}>
+            <Plus className="size-4" />
+          </button>
+          <button type="button" className={cn("ve-icon", rail === "sections" && "is-on")} title="Слои и секции" onClick={() => toggleRail("sections")}>
+            <LayoutTemplate className="size-4" />
+          </button>
+          <button type="button" className={cn("ve-icon", rail === "pages" && "is-on")} title="Страницы и меню" onClick={() => toggleRail("pages")}>
+            <Files className="size-4" />
+          </button>
+          <button type="button" className={cn("ve-icon", rail === "media" && "is-on")} title="Медиа" onClick={() => toggleRail("media")}>
+            <ImageIcon className="size-4" />
+          </button>
+        </aside>
+
+        {rail ? (
+          <div className="ve-fly hidden md:block">
+            <div className="p-4">
+              {rail === "elements" ? <ElementsList path={ctx.path} onLayout={(layout) => ctx.setDoc(layout)} /> : null}
+              {rail === "sections" ? (
+                <>
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">Слои</p>
+                  <LayersList doc={doc} selected={selected} select={select} setDoc={setDoc} tone="light" />
+                </>
+              ) : null}
+              {rail === "pages" ? <PagesList pages={ctx.pages} path={ctx.path} goPage={ctx.goPage} /> : null}
+              {rail === "media" ? (
+                <StudioPanel
+                  slot={selected}
+                  onLayout={(layout) => setDoc(layout)}
+                  onPickMedia={(src) => {
+                    if (selected) setDoc(setHomeMedia(doc, selected, src));
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        <aside className="ve-inspector hidden lg:block">
+          <div className="p-4">
+            <InspectorFields selected={selected} doc={doc} style={style} setDoc={setDoc} light />
+            {ctx.phoneIssues.length ? (
+              <p className="mt-4 text-[0.72rem] leading-relaxed text-red-600">На телефоне едет: {ctx.phoneIssues[0]}</p>
+            ) : null}
+          </div>
+        </aside>
       </div>
-
-      <aside className="ve-ui fixed bottom-4 left-3 top-[6.75rem] z-40 hidden w-56 overflow-auto rounded-2xl bg-header p-3 text-header-fg shadow-[0_16px_40px_-18px_rgba(0,0,0,.55)] sm:top-[7.75rem] md:top-[8.25rem] md:block">
-        <p className="px-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-header-fg/45">Слои</p>
-        <LayersList doc={doc} selected={selected} select={select} setDoc={setDoc} tone="dark" />
-      </aside>
-
-      <aside className="ve-ui fixed bottom-4 right-3 top-[6.75rem] z-40 hidden w-[22rem] overflow-auto rounded-2xl bg-header p-4 text-header-fg shadow-[0_16px_40px_-18px_rgba(0,0,0,.55)] sm:top-[7.75rem] md:top-[8.25rem] lg:block">
-        <InspectorFields selected={selected} doc={doc} style={style} setDoc={setDoc} />
-        <div className="mt-6 rounded-2xl bg-surface p-3 text-fg">
-          <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">Медиа и ИИ</p>
-          <p className="mb-3 text-[0.75rem] leading-relaxed text-muted">
-            Клик по файлу ставит его в выбранный блок. DeepSeek подписывает фото для Ольги.
-          </p>
-          <StudioPanel
-            slot={selected}
-            onLayout={(layout) => setDoc(layout)}
-            onPickMedia={(src) => {
-              if (selected) setDoc(setHomeMedia(doc, selected, src));
-            }}
-          />
-        </div>
-        <p className="mt-6 text-[0.72rem] leading-relaxed text-header-fg/40">
-          Изменения сразу на сайте, как публикация в Тильде. Ctrl+Z — шаг назад.
-        </p>
-      </aside>
 
       {sheetOpen ? (
         <div className="ve-ui fixed inset-0 z-50 lg:hidden">
@@ -325,6 +465,118 @@ export function HomeEditorChrome() {
         </div>
       ) : null}
     </>
+  );
+}
+
+function PagePicker({
+  open,
+  setOpen,
+  title,
+  path,
+  pages,
+  goPage,
+}: {
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  title: string;
+  path: string;
+  pages: EditorPageItem[];
+  goPage: (path: string) => void;
+}) {
+  const groups = useMemo(() => {
+    const home = pages.filter((p) => p.kind === "home");
+    const schools = pages.filter((p) => p.kind === "school");
+    const courses = pages.filter((p) => p.kind === "course");
+    const rest = pages.filter((p) => !["home", "school", "course"].includes(p.kind));
+    return [
+      { label: "Главная", items: home },
+      { label: "Школы", items: schools },
+      { label: "Курсы", items: courses },
+      { label: "Ещё", items: rest },
+    ].filter((g) => g.items.length);
+  }, [pages]);
+  return (
+    <div className="relative min-w-0">
+      <button
+        type="button"
+        className="flex h-8 max-w-[14rem] items-center gap-1 rounded-lg px-2 text-left text-[0.8rem] font-semibold hover:bg-black/5"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="truncate">{title || "Страница"}</span>
+        <ChevronDown className="size-3.5 shrink-0 opacity-50" />
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-9 z-20 max-h-[min(70dvh,28rem)] w-72 overflow-auto rounded-xl bg-white p-2 shadow-[0_16px_40px_-16px_rgba(0,0,0,.35)] ring-1 ring-black/10">
+          {groups.map((g) => (
+            <div key={g.label} className="mb-2">
+              <p className="px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-black/40">{g.label}</p>
+              {g.items.map((p) => (
+                <button
+                  key={p.path}
+                  type="button"
+                  className={cn("flex min-h-9 w-full items-center rounded-lg px-2 text-left text-[0.8rem]", p.path === path ? "bg-primary text-primary-foreground" : "hover:bg-black/5")}
+                  onClick={() => {
+                    setOpen(false);
+                    if (p.path !== path) goPage(p.path);
+                  }}
+                >
+                  {p.title}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PagesList({ pages, path, goPage }: { pages: EditorPageItem[]; path: string; goPage: (p: string) => void }) {
+  return (
+    <div>
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">Страницы и меню</p>
+      <ul className="mt-2 space-y-0.5">
+        {pages.map((p) => (
+          <li key={p.path}>
+            <button
+              type="button"
+              className={cn("flex min-h-9 w-full items-center rounded-xl px-2 text-left text-[0.8rem] font-medium", p.path === path ? "bg-primary text-primary-foreground" : "hover:bg-black/5")}
+              onClick={() => goPage(p.path)}
+            >
+              {p.title}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ElementsList({ path, onLayout }: { path: string; onLayout: (layout: HomeLayoutDoc) => void }) {
+  const [msg, setMsg] = useState("");
+  async function add(typeId: string) {
+    const token = debugToken();
+    if (!token) return;
+    const res = await placeBlockFn({ data: { token, path, typeId } });
+    if (res.ok && "layout" in res) {
+      onLayout(res.layout);
+      setMsg(`Добавлен «${BLOCK_LIBRARY.find((b) => b.typeId === typeId)?.label || typeId}»`);
+    } else setMsg(res.ok ? "" : res.error);
+  }
+  return (
+    <div>
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">Добавить элементы</p>
+      <ul className="mt-2 space-y-0.5">
+        {BLOCK_LIBRARY.filter((b) => !b.locked).map((b) => (
+          <li key={b.typeId}>
+            <button type="button" className="flex min-h-9 w-full items-center rounded-xl px-2 text-left text-[0.8rem] font-medium hover:bg-black/5" onClick={() => void add(b.typeId)}>
+              {b.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {msg ? <p className="mt-2 text-[0.72rem] text-primary">{msg}</p> : null}
+    </div>
   );
 }
 
@@ -476,6 +728,15 @@ function InspectorFields({
           Ниже
         </button>
       </div>
+      <button
+        type="button"
+        className={cn("mt-3 min-h-11 w-full rounded-xl text-[0.78rem] font-semibold", chipOff)}
+        onClick={() => {
+          if (window.confirm("Вернуть заводской порядок, тексты и отступы?")) setDoc(emptyHomeLayout());
+        }}
+      >
+        Сброс
+      </button>
     </>
   );
 }

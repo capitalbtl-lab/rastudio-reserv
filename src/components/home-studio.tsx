@@ -343,14 +343,14 @@ export function StudioPanel({
                       if (res.ok && "layout" in res && res.layout) onLayout?.(res.layout);
                     }}
                   >
-                    Поставить на главную
+                    Поставить на страницу
                   </Button>
                 </li>
               ))}
             </ul>
           ) : (
             <p className="text-[0.78rem] leading-relaxed text-muted">
-              Кнопка предлагает три блока по трендам 2026. «Сгенерировать» сразу ставит один на главную.
+              Кнопка предлагает три блока по трендам 2026. «Сгенерировать» сразу ставит один на эту страницу.
             </p>
           )}
           <div className="rounded-2xl bg-surface-2 p-3">

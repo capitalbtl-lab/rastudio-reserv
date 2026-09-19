@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { HomeReadProvider } from "@/components/home-read";
+import { loadPageDocFn } from "@/data/page-layout-fn";
 
 type Prov = ComponentType<{ initial?: unknown; children: ReactNode }>;
 
@@ -36,6 +37,14 @@ function wantsEdit() {
   }
 }
 
+function wantsPreview() {
+  try {
+    return /(?:\?|&)preview=1(?:&|$)/.test(location.search) && Boolean(staffToken() || sessionStorage.getItem("ra_debug"));
+  } catch {
+    return false;
+  }
+}
+
 export function HomeEditorGate({
   initial,
   children,
@@ -44,8 +53,17 @@ export function HomeEditorGate({
   children: ReactNode;
 }) {
   const [Prov, setProv] = useState<Prov | null>(null);
+  const [preview, setPreview] = useState<unknown>(null);
   useEffect(() => {
     const boot = () => {
+      if (wantsPreview()) {
+        setProv(null);
+        const token = staffToken() || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("ra_debug") : "") || "";
+        void loadPageDocFn({ data: { token, path: location.pathname || "/", which: "draft" } }).then((res) => {
+          if (res.ok && "layout" in res) setPreview(res.layout);
+        });
+        return;
+      }
       if (!wantsEdit()) {
         setProv(null);
         return;
@@ -56,6 +74,7 @@ export function HomeEditorGate({
     window.addEventListener("ra-debug-session", boot);
     return () => window.removeEventListener("ra-debug-session", boot);
   }, []);
+  if (preview) return <HomeReadProvider initial={preview}>{children}</HomeReadProvider>;
   if (!Prov) return <HomeReadProvider initial={initial}>{children}</HomeReadProvider>;
   return <Prov initial={initial}>{children}</Prov>;
 }

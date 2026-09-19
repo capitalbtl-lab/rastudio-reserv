@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { normalizeHomeLayout, type HomeDevice, type HomeLayoutDoc } from "@/data/home-layout-core";
+import type { EditorPageItem } from "@/data/page-layout-core";
 import { cn } from "@/lib/utils";
 
 export type HomeEditorCtxValue = {
@@ -19,6 +20,16 @@ export type HomeEditorCtxValue = {
   canUndo: boolean;
   canRedo: boolean;
   dirty: string;
+  path: string;
+  pages: EditorPageItem[];
+  goPage: (path: string) => void;
+  saveNow: () => void;
+  publish: () => void;
+  preview: () => void;
+  canPublish: boolean;
+  phoneIssues: string[];
+  rail: "elements" | "sections" | "pages" | "media" | null;
+  setRail: (r: HomeEditorCtxValue["rail"]) => void;
 };
 
 export const HomeEditorCtx = createContext<HomeEditorCtxValue | null>(null);
@@ -53,6 +64,16 @@ export function HomeReadProvider({
       canUndo: false,
       canRedo: false,
       dirty: "готово",
+      path: "/",
+      pages: [],
+      goPage: noop,
+      saveNow: noop,
+      publish: noop,
+      preview: noop,
+      canPublish: false,
+      phoneIssues: [],
+      rail: null,
+      setRail: noop,
     }),
     [doc],
   );

@@ -1,0 +1,139 @@
+.ve-chrome {
+  font-family: inherit;
+  color: #1b1f2a;
+}
+
+.ve-topbar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 70;
+  display: flex;
+  height: 3rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.6rem;
+  background: #fff;
+  border-bottom: 1px solid rgb(15 23 42 / 0.08);
+  box-shadow: 0 8px 24px -18px rgb(15 23 42 / 0.35);
+}
+
+.ve-rail {
+  position: fixed;
+  top: 3rem;
+  bottom: 0;
+  z-index: 65;
+  width: 3.5rem;
+  background: #fff;
+  border-right: 1px solid rgb(15 23 42 / 0.08);
+}
+
+.ve-fly {
+  position: fixed;
+  top: 3rem;
+  bottom: 0;
+  left: 3.5rem;
+  z-index: 64;
+  width: 20rem;
+  overflow: auto;
+  background: #fff;
+  border-right: 1px solid rgb(15 23 42 / 0.08);
+  box-shadow: 12px 0 32px -24px rgb(15 23 42 / 0.35);
+}
+
+.ve-inspector {
+  position: fixed;
+  top: 3rem;
+  right: 0;
+  bottom: 0;
+  z-index: 65;
+  width: 18.5rem;
+  overflow: auto;
+  background: #fff;
+  border-left: 1px solid rgb(15 23 42 / 0.08);
+}
+
+.ve-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  margin: 0.2rem auto;
+  border-radius: 0.7rem;
+  color: #445;
+}
+
+.ve-icon:hover,
+.ve-icon.is-on {
+  background: #eef2ff;
+  color: #1d4ed8;
+}
+
+html.home-editing {
+  overflow-x: hidden;
+}
+
+html.home-editing body {
+  padding-top: 3rem;
+}
+
+html.home-editing header {
+  top: 3rem !important;
+  z-index: 45;
+}
+
+@media (min-width: 768px) {
+  html.home-editing header {
+    left: 3.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  html.home-editing header {
+    right: 18.5rem;
+  }
+}
+
+.home-device-phone,
+.home-device-tablet {
+  background: var(--color-bg);
+  border-radius: 1.75rem;
+  box-shadow: 0 24px 60px -28px rgb(0 0 0 / 0.45);
+  outline: 1px solid rgb(0 0 0 / 0.08);
+}
+
+.home-device-phone {
+  width: min(390px, 100%);
+}
+
+.home-device-tablet {
+  width: min(768px, 100%);
+}
+
+.home-device-phone .page-wrap,
+.home-device-tablet .page-wrap {
+  width: calc(100% - 1.5rem);
+}
+
+.home-device-phone [class*="lg:grid-cols"],
+.home-device-phone [class*="md:grid-cols"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.home-device-phone [class*="lg:min-h"] {
+  min-height: 0 !important;
+}
+
+html.home-editing[data-home-device="phone"] #content {
+  width: min(390px, 100%);
+  margin-inline: auto;
+  overflow-x: clip;
+}
+
+html.home-editing[data-home-device="phone"] [class*="lg:grid-cols"],
+html.home-editing[data-home-device="phone"] [class*="md:grid-cols"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html.home-editing[data-home-device="phone"] [class*="lg:min-h"] {
+  min-height: 0 !important;
+}

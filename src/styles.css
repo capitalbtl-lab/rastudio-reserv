@@ -1067,6 +1067,12 @@ html.home-editing .mobile-dock {
   display: none !important;
 }
 
+@media (max-width: 639px) {
+  html {
+    overflow-x: clip;
+  }
+}
+
 html.home-editing main {
   padding-bottom: 0;
 }

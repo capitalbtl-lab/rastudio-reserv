@@ -34,6 +34,7 @@ export type HomeCustomBlock = {
   ctaLabel?: string;
   ctaHref?: string;
   why?: string;
+  typeId?: string;
 };
 
 export type HomeLayoutDoc = {
@@ -113,6 +114,7 @@ function asCustom(raw: unknown): HomeCustomBlock | null {
     ctaLabel: String(c.ctaLabel || "").trim().slice(0, 40) || undefined,
     ctaHref: String(c.ctaHref || "").trim().slice(0, 180) || undefined,
     why: String(c.why || "").trim().slice(0, 240) || undefined,
+    typeId: String(c.typeId || "").trim().slice(0, 80) || undefined,
   };
 }
 

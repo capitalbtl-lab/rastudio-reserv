@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { ArrowUpRight, Check, ChevronDown } from "lucide-react";
 import type { CmsImage, CmsTrajectoryStep } from "@/data/cms";
 import type { CourseCard } from "@/data/catalog";
@@ -156,6 +156,20 @@ export function ProseBlocks({ text, className }: { text: string; className?: str
 
 type HeroShot = { src: string; filename?: string; alt?: string; href?: string };
 
+function PageEditorLazy() {
+  const [Boot, setBoot] = useState<ComponentType | null>(null);
+  useEffect(() => {
+    try {
+      if (!sessionStorage.getItem("ra_debug") && !/(?:\?|&)edit=1(?:&|$)/.test(location.search)) return;
+    } catch {
+      return;
+    }
+    void import("@/components/page-editor").then((m) => setBoot(() => m.PageEditorBoot));
+  }, []);
+  if (!Boot) return null;
+  return <Boot />;
+}
+
 export function CoursePageHero({
   kicker,
   age,
@@ -198,6 +212,7 @@ export function CoursePageHero({
 
   return (
     <>
+    <PageEditorLazy />
     <section className="ink relative isolate overflow-hidden text-header-fg">
       <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
         <div className="relative z-10 max-w-xl">

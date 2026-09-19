@@ -1,23 +1,37 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { emptyHomeLayout, normalizeHomeLayout, type HomeLayoutDoc } from "./home-layout-core";
-
-function fileOf() {
-  return join(process.cwd(), "storage", "home-layout.json");
-}
+import { emptyHomeLayout, normalizeHomeLayout, type HomeLayoutDoc } from "./home-layout-core.ts";
+import { emptyOrFile } from "./home-layout-file.ts";
+import { draftHomeLayout, loadPageDoc, publishedHomeLayout, savePageDraft } from "./page-layout.ts";
+import { applyHomeToPage, layoutToHome } from "./page-layout-core.ts";
 
 export function loadHomeLayout(): HomeLayoutDoc {
   try {
-    if (!existsSync(fileOf())) return emptyHomeLayout();
-    return normalizeHomeLayout(JSON.parse(readFileSync(fileOf(), "utf8")));
+    return publishedHomeLayout();
   } catch {
-    return emptyHomeLayout();
+    return emptyOrFile();
   }
 }
 
+export function loadHomeDraft(): HomeLayoutDoc {
+  try {
+    return draftHomeLayout();
+  } catch {
+    return loadHomeLayout();
+  }
+}
+
+/** Пишет черновик главной. Гость читает published. */
 export function saveHomeLayout(raw: unknown): HomeLayoutDoc {
   const next = normalizeHomeLayout(raw);
-  mkdirSync(dirname(fileOf()), { recursive: true });
-  writeFileSync(fileOf(), JSON.stringify(next, null, 2), "utf8");
-  return next;
+  try {
+    const page = applyHomeToPage(loadPageDoc("/"), next);
+    savePageDraft("/", page.draft);
+    return layoutToHome(loadPageDoc("/").draft);
+  } catch {
+    saveHomeLayoutFile(next);
+    return next;
+  }
+}
+
+export function resetHomeLayout(): HomeLayoutDoc {
+  return saveHomeLayout(emptyHomeLayout());
 }

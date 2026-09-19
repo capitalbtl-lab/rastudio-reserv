@@ -75,13 +75,16 @@ describe("макет главной", () => {
     assert.match(editor, /edit=1/);
     assert.match(editor, /\["layers", "Слои"\]/);
     assert.match(editor, /Панель/);
+    assert.match(editor, /Опубликовать/);
+    assert.match(editor, /Предпросмотр/);
+    assert.match(editor, /Сохранить/);
     assert.doesNotMatch(editor, /max-w-\[390px\]/);
     const read = readFileSync(new URL("../components/home-read.tsx", import.meta.url), "utf8");
     assert.match(read, /contentEditable/);
     const blocks = readFileSync(new URL("../components/home-blocks.tsx", import.meta.url), "utf8");
     assert.match(blocks, /HomeEditorGate/);
     assert.match(blocks, /home-device-phone/);
-    assert.match(blocks, /md:pl-\[15\.25rem\]/);
+    assert.match(blocks, /md:pl-14/);
     assert.doesNotMatch(blocks, /from "@\/components\/home-editor"/);
     const gate = readFileSync(new URL("../components/home-editor-gate.tsx", import.meta.url), "utf8");
     assert.match(gate, /edit=1/);
