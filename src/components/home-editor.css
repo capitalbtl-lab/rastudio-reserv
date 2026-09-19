@@ -307,8 +307,15 @@ html.home-editing [data-ve-stub] {
 }
 
 .ve-mini-canvas {
-  transform-origin: 0 0;
-  transform: scale(calc(100cqi / var(--ve-src-w, 1280px)));
+  width: var(--ve-src-w, 960px);
+  zoom: calc(100cqi / var(--ve-src-w, 960px));
+}
+
+@supports not (zoom: 1) {
+  .ve-mini-canvas {
+    transform-origin: 0 0;
+    transform: scale(calc(100cqi / var(--ve-src-w, 960px)));
+  }
 }
 
 .ve-mini-canvas .photo-stack .shot,

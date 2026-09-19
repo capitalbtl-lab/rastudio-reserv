@@ -14,7 +14,7 @@ const SCIENCE = "/media/home/shot-science.jpg";
 const MC = "/media/home/shot-mc.jpg";
 const TEACHER = "/media/home/shot-teacher.jpg";
 const FACE = ["/media/courses/team/01.jpg", "/media/courses/team/02.jpg", "/media/courses/team/03.jpg", "/media/courses/team/04.jpg"];
-const SRC = 1280;
+const SRC = 960;
 
 function Pic({ src, className, imgClass }: { src: string; className?: string; imgClass?: string }) {
   return (
@@ -24,12 +24,10 @@ function Pic({ src, className, imgClass }: { src: string; className?: string; im
   );
 }
 
-function Mini({ h, w = SRC, children }: { h: number; w?: number; children: ReactNode }) {
+function Mini({ children }: { children: ReactNode }) {
   return (
-    <div className="ve-mini" style={{ aspectRatio: `${w} / ${h}`, ["--ve-src-w"]: `${w}px` } as CSSProperties} aria-hidden>
-      <div className="ve-mini-canvas pointer-events-none select-none" style={{ width: w, height: h }}>
-        {children}
-      </div>
+    <div className="ve-mini" style={{ ["--ve-src-w"]: `${SRC}px` } as CSSProperties} aria-hidden>
+      <div className="ve-mini-canvas pointer-events-none select-none">{children}</div>
     </div>
   );
 }
@@ -65,8 +63,8 @@ function Collage({ shots }: { shots: [string, string, string] }) {
 
 function Hero({ kicker, title, shots }: { kicker: string; title: string; shots: [string, string, string] }) {
   return (
-    <section className="ink relative isolate h-full overflow-hidden text-header-fg">
-      <div className="page-wrap grid h-full grid-cols-[1.05fr_0.95fr] items-center gap-8 py-8">
+    <section className="ink relative isolate overflow-hidden text-header-fg">
+      <div className="page-wrap grid grid-cols-[1.05fr_0.95fr] items-center gap-8 py-8">
         <div className="relative z-10 max-w-xl">
           <p className="kicker text-header-fg/55">{kicker}</p>
           <h1 className="mt-5 text-[clamp(2.1rem,1.2rem+3vw,3.8rem)] leading-[1.05]">{title}</h1>
@@ -96,7 +94,7 @@ function Hero({ kicker, title, shots }: { kicker: string; title: string; shots: 
 
 function Play({ src, className }: { src: string; className?: string }) {
   return (
-    <div className={cn("relative overflow-hidden rounded-3xl bg-header", className)}>
+    <div className={cn("relative aspect-video overflow-hidden rounded-3xl bg-header", className)}>
       <img src={src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
       <span className="absolute inset-0 grid place-items-center bg-black/15">
         <span className="grid size-14 place-items-center rounded-full bg-white/92">
@@ -111,13 +109,13 @@ function inner(typeId: string) {
   switch (typeId) {
     case "hero":
       return (
-        <Mini h={640}>
+        <Mini>
           <Hero kicker="Сеть школ · Коломна · Луховицы" title="Ребёнок не просто учится — он мыслит, растёт и создаёт будущее" shots={[ART, SCULPT, ROBOT]} />
         </Mini>
       );
     case "course-hero":
       return (
-        <Mini h={640}>
+        <Mini>
           <Hero kicker="Школа робототехники · 5–14 лет" title="Робототехника в Коломне" shots={[ROBOT, ART, CODE]} />
         </Mini>
       );
@@ -136,10 +134,10 @@ function inner(typeId: string) {
       );
     case "robot":
       return (
-        <Mini h={420}>
-          <div className="flex h-full items-center bg-bg px-8 py-8">
-            <div className="grid h-full w-full grid-cols-[0.92fr_1.08fr] overflow-hidden rounded-[2rem] bg-ink text-header-fg shadow-[var(--shadow-border)]">
-              <div className="flex flex-col justify-center px-10">
+        <Mini>
+          <div className="bg-bg px-8 py-8">
+            <div className="grid w-full grid-cols-[0.92fr_1.08fr] overflow-hidden rounded-[2rem] bg-ink text-header-fg shadow-[var(--shadow-border)]">
+              <div className="flex flex-col justify-center px-10 py-10">
                 <p className="kicker text-header-fg/50">Билингвальный курс</p>
                 <h2 className="section-title mt-4 text-header-fg">Робототехника на английском</h2>
                 <p className="mt-4 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
@@ -154,7 +152,7 @@ function inner(typeId: string) {
                 </p>
               </div>
               <div className="p-6">
-                <Play src={ROBOT} className="h-full" />
+                <Play src={ROBOT} />
               </div>
             </div>
           </div>
@@ -163,16 +161,16 @@ function inner(typeId: string) {
     case "video-grid":
     case "video":
       return (
-        <Mini h={400}>
-          <div className="flex h-full items-center bg-bg px-10 py-8">
-            <Play src={typeId === "video" ? CODE : ROBOT} className="h-full w-full" />
+        <Mini>
+          <div className="bg-bg px-10 py-8">
+            <Play src={typeId === "video" ? CODE : ROBOT} className="w-full" />
           </div>
         </Mini>
       );
     case "ages":
       return (
-        <Mini h={280}>
-          <section className="page-wrap flex h-full flex-col justify-center py-8">
+        <Mini>
+          <section className="page-wrap py-8">
             <p className="kicker text-primary">Подбор за 10 секунд</p>
             <h2 className="section-title mt-3">Сколько лет ребёнку?</h2>
             <p className="mt-3 max-w-xl text-muted">Нажмите возраст — откроются курсы с ценой, филиалом и записью на пробное.</p>
@@ -197,7 +195,7 @@ function inner(typeId: string) {
       );
     case "schools":
       return (
-        <Mini h={700}>
+        <Mini>
           <section className="page-wrap py-8">
             <div className="flex items-end justify-between gap-4">
               <div>
@@ -229,7 +227,7 @@ function inner(typeId: string) {
       );
     case "catalog":
       return (
-        <Mini h={560}>
+        <Mini>
           <section className="page-wrap py-8">
             <div className="flex items-end justify-between gap-4">
               <div>
@@ -254,7 +252,7 @@ function inner(typeId: string) {
       );
     case "related":
       return (
-        <Mini h={420}>
+        <Mini>
           <div className="page-wrap py-8">
             <h2 className="display text-3xl">Курсы для детей 7–9 лет</h2>
             <ul className="mt-6 grid grid-cols-2 gap-4">
@@ -275,8 +273,8 @@ function inner(typeId: string) {
     case "two-col":
     case "custom":
       return (
-        <Mini h={440}>
-          <section className="page-wrap flex h-full items-center py-8">
+        <Mini>
+          <section className="page-wrap py-8">
             <div className="grid w-full grid-cols-2 items-center gap-12 overflow-hidden rounded-[2rem] bg-surface p-10 shadow-[var(--shadow-border)]">
               <div>
                 <p className="kicker text-primary">{typeId === "about" ? "О студии" : "Блок"}</p>
@@ -292,7 +290,7 @@ function inner(typeId: string) {
       );
     case "teachers":
       return (
-        <Mini h={520}>
+        <Mini>
           <section className="page-wrap py-8">
             <p className="kicker text-primary">Педагоги</p>
             <h2 className="section-title mt-3">Команда сильной сети школ</h2>
@@ -313,8 +311,8 @@ function inner(typeId: string) {
     case "reviews":
     case "page-reviews":
       return (
-        <Mini h={320}>
-          <section className="page-wrap flex h-full flex-col justify-center py-8">
+        <Mini>
+          <section className="page-wrap py-8">
             <p className="kicker text-primary">Отзывы родителей</p>
             <article className="mt-6 overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border)]">
               <div className="grid grid-cols-[10.5rem_minmax(0,1fr)]">
@@ -341,7 +339,7 @@ function inner(typeId: string) {
       );
     case "stories":
       return (
-        <Mini h={440}>
+        <Mini>
           <section className="page-wrap py-8">
             <p className="kicker text-primary">Жизнь студии</p>
             <h2 className="section-title mt-3">Проекты и события</h2>
@@ -365,8 +363,8 @@ function inner(typeId: string) {
       );
     case "branches":
       return (
-        <Mini h={420}>
-          <section className="ink h-full overflow-hidden py-12 text-header-fg">
+        <Mini>
+          <section className="ink overflow-hidden py-12 text-header-fg">
             <div className="page-wrap">
               <p className="kicker text-header-fg/45">Три студии</p>
               <h2 className="section-title mt-3">Сеть в Коломне и Луховицах</h2>
@@ -387,8 +385,8 @@ function inner(typeId: string) {
     case "trial":
     case "trial-form":
       return (
-        <Mini h={360}>
-          <section className="page-wrap flex h-full items-center py-8">
+        <Mini>
+          <section className="page-wrap py-8">
             <div className="w-full rounded-[1.75rem] bg-surface px-10 py-10 shadow-[var(--shadow-border)]">
               <p className="kicker text-primary">Пробное занятие</p>
               <h2 className="display mt-3 max-w-lg text-4xl">Приведите ребёнка на первое занятие</h2>
@@ -412,8 +410,8 @@ function inner(typeId: string) {
       );
     case "convert-band":
       return (
-        <Mini h={260}>
-          <section className="page-wrap flex h-full items-center py-6">
+        <Mini>
+          <section className="page-wrap py-6">
             <div className="w-full overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border)]">
               <div className="px-6 py-3.5">
                 <p className="kicker text-primary">Ближайшие группы</p>
@@ -441,8 +439,8 @@ function inner(typeId: string) {
       );
     case "convert-aside":
       return (
-        <Mini h={380}>
-          <div className="flex h-full items-center justify-center bg-bg px-8">
+        <Mini>
+          <div className="bg-bg px-8 py-8">
             <aside className="w-[22rem] rounded-[1.75rem] bg-surface p-5 shadow-[var(--shadow-border)]">
               <p className="kicker text-primary">Запись</p>
               <p className="display mt-2 text-2xl">Группа</p>
@@ -461,8 +459,8 @@ function inner(typeId: string) {
     case "heading":
     case "rich-text":
       return (
-        <Mini h={280}>
-          <section className="page-wrap flex h-full flex-col justify-center py-8">
+        <Mini>
+          <section className="page-wrap py-8">
             {typeId !== "heading" ? <p className="kicker">О курсе</p> : null}
             <h2 className="display section-title mt-3 max-w-3xl">
               {typeId === "heading" ? "Заголовок блока" : "Ребёнок собирает, программирует и думает руками"}
@@ -478,7 +476,7 @@ function inner(typeId: string) {
     case "why":
     case "sell-why":
       return (
-        <Mini h={360}>
+        <Mini>
           <section className="page-wrap py-8">
             <h2 className="display section-title max-w-3xl">
               {typeId === "sell-why" ? "Через 3 месяца ребёнок умеет" : "Что получит ребёнок — и зачем это сейчас"}
@@ -496,7 +494,7 @@ function inner(typeId: string) {
       );
     case "program":
       return (
-        <Mini h={360}>
+        <Mini>
           <section className="page-wrap py-8">
             <p className="kicker">Программа</p>
             <h2 className="display section-title mt-2">Что внутри — по шагам</h2>
@@ -513,11 +511,11 @@ function inner(typeId: string) {
       );
     case "gallery":
       return (
-        <Mini h={340}>
+        <Mini>
           <section className="page-wrap py-8">
-            <div className="grid h-full grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {[ART, SCULPT, ROBOT].map((src) => (
-                <Pic key={src} src={src} className="h-full overflow-hidden rounded-3xl" />
+                <Pic key={src} src={src} className="aspect-[4/3] overflow-hidden rounded-3xl" />
               ))}
             </div>
           </section>
@@ -525,15 +523,15 @@ function inner(typeId: string) {
       );
     case "image":
       return (
-        <Mini h={380}>
-          <section className="page-wrap flex h-full items-center py-8">
+        <Mini>
+          <section className="page-wrap py-8">
             <Pic src={ART} className="aspect-[4/3] w-full overflow-hidden rounded-3xl" />
           </section>
         </Mini>
       );
     case "school-courses":
       return (
-        <Mini h={360}>
+        <Mini>
           <div className="page-wrap py-8">
             <h2 className="display text-2xl">Программы этого направления</h2>
             <ul className="mt-5 overflow-hidden rounded-[1.35rem] bg-surface shadow-[var(--shadow-border)]">
@@ -552,7 +550,7 @@ function inner(typeId: string) {
       );
     case "trajectory":
       return (
-        <Mini h={400}>
+        <Mini>
           <section className="page-wrap py-8">
             <p className="kicker">Траектория</p>
             <h2 className="display mt-2 text-3xl">Ребёнок последовательно проходит путь</h2>
@@ -573,7 +571,7 @@ function inner(typeId: string) {
       );
     case "schedule":
       return (
-        <Mini h={360}>
+        <Mini>
           <section className="page-wrap py-8">
             <p className="kicker">Расписание</p>
             <h2 className="display mt-2 text-2xl">Группы этого курса</h2>
@@ -604,7 +602,7 @@ function inner(typeId: string) {
       );
     case "sell-program":
       return (
-        <Mini h={320}>
+        <Mini>
           <section className="page-wrap py-8">
             <p className="kicker">Педагог курса</p>
             <h2 className="display section-title mt-2">Кто ведёт — и кому доверяют родители</h2>
@@ -621,7 +619,7 @@ function inner(typeId: string) {
       );
     default:
       return (
-        <Mini h={640}>
+        <Mini>
           <Hero kicker="Сеть школ" title="Развивайся" shots={[ART, SCULPT, ROBOT]} />
         </Mini>
       );

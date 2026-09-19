@@ -222,11 +222,13 @@ describe("библиотека и документ страницы", () => {
     assert.match(preview, /shot-art/);
     assert.match(preview, /ve-mini/);
     assert.match(preview, /photo-stack/);
+    assert.match(preview, /960/);
     assert.match(preview, /Выберите направление/);
     assert.match(preview, /Ближайшие группы/);
     assert.doesNotMatch(preview, /from "@\/components\/home-editor"/);
     const editorCss = readFileSync(new URL("../components/home-editor.css", import.meta.url), "utf8");
     assert.match(editorCss, /ve-mini-canvas/);
+    assert.match(editorCss, /zoom:/);
     assert.match(editor, /data-ve-stub/);
     assert.doesNotMatch(editor, /aliases/);
     assert.match(editor, /function VeSync/);
