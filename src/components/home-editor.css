@@ -194,7 +194,8 @@ html.home-editing [data-ve-frame] {
 }
 
 .ve-nav-course {
-  display: block;
+  display: flex;
+  align-items: flex-start;
   padding: 0.4rem 0.45rem;
   border-radius: 0.5rem;
   font-size: 0.78rem;
@@ -202,6 +203,19 @@ html.home-editing [data-ve-frame] {
   line-height: 1.4;
   color: #3b4252;
   white-space: normal;
+}
+
+.ve-nav-course::before,
+.ve-fly .pl-8 > button::before,
+.ve-topbar .pl-8 > button::before {
+  content: "";
+  flex-shrink: 0;
+  width: 0.35rem;
+  height: 0.35rem;
+  margin: 0.5em 0.5rem 0 0;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.5;
 }
 
 .ve-nav-course:hover {
@@ -231,7 +245,8 @@ html.home-editing [data-ve-frame] {
 
 .ve-fly .pl-8 > button,
 .ve-topbar .pl-8 > button {
-  display: block;
+  display: flex;
+  align-items: flex-start;
   min-height: 0;
   padding: 0.4rem 0.45rem;
   border-radius: 0.5rem;
