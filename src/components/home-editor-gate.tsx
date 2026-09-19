@@ -2,7 +2,6 @@
 
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { HomeReadProvider } from "@/components/home-read";
-import { loadPageDocFn } from "@/data/page-layout-fn";
 
 type Prov = ComponentType<{ initial?: unknown; children: ReactNode }>;
 
@@ -59,9 +58,11 @@ export function HomeEditorGate({
       if (wantsPreview()) {
         setProv(null);
         const token = staffToken() || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("ra_debug") : "") || "";
-        void loadPageDocFn({ data: { token, path: location.pathname || "/", which: "draft" } }).then((res) => {
-          if (res.ok && "layout" in res) setPreview(res.layout);
-        });
+        void import("@/data/page-layout-fn").then(({ loadPageDocFn }) =>
+          loadPageDocFn({ data: { token, path: location.pathname || "/", which: "draft" } }).then((res) => {
+            if (res.ok && "layout" in res) setPreview(res.layout);
+          }),
+        );
         return;
       }
       if (!wantsEdit()) {

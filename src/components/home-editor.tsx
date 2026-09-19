@@ -200,7 +200,9 @@ export function HomeEditorProvider({
   const publish = useCallback(() => {
     const token = debugToken();
     if (!token) return;
-    void publishPageFn({ data: { token, path: currentPath() } }).then((res) => {
+    window.clearTimeout(timer.current);
+    setDirty("публикуем…");
+    void publishPageFn({ data: { token, path: currentPath(), layout: doc } }).then((res) => {
       if (!res.ok) {
         setDirty(res.error || "ошибка");
         if ("phoneIssues" in res) setPhoneIssues(res.phoneIssues || []);
@@ -209,7 +211,7 @@ export function HomeEditorProvider({
       setDirty("на сайте");
       setPhoneIssues([]);
     });
-  }, []);
+  }, [doc]);
 
   const preview = useCallback(() => {
     window.open(previewUrl(currentPath()), "_blank", "noopener");

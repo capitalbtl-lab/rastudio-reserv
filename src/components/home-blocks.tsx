@@ -156,7 +156,7 @@ function HomeCanvasInner({ children }: { children: ReactNode }) {
   return (
     <div className={cn(ctx.editing && "home-layout-on")}>
       {Chrome ? <Chrome /> : null}
-      <div className={cn(ctx.editing && "md:pl-14 lg:pr-[18.5rem]")}>
+      <div className={cn(ctx.editing && "ve-canvas")}>
         <div
           className={cn(
             "min-w-0",

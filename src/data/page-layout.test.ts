@@ -109,6 +109,8 @@ describe("библиотека и документ страницы", () => {
     const cms = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
     assert.match(cms, /import\("@\/components\/page-editor"\)/);
     assert.doesNotMatch(cms, /from "@\/components\/page-editor"/);
-    assert.match(cms, /HeroCollage/);
+    const fn = readFileSync(new URL("./page-layout-fn.ts", import.meta.url), "utf8");
+    assert.match(fn, /savePageDraft\(path, homeToLayout/);
+    assert.match(fn, /publishPage\(path\)/);
   });
 });

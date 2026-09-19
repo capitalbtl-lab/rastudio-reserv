@@ -42,8 +42,10 @@ function treeIds() {
 
 function fallbackMeta(path: string): { path: string; title: string; kind: PageKind; courseId?: string } {
   const p = path.replace(/\/+$/, "") || "/";
+  const known = EDITOR_STATIC_PAGES.find((x) => x.path === p);
+  if (known) return { path: p, title: known.title, kind: known.kind };
   const tree = treeIds();
-  const hit = [...EDITOR_STATIC_PAGES, ...tree.items].find((x) => x.path === p);
+  const hit = tree.items.find((x) => x.path === p);
   const kind = hit?.kind || inferKind(p, tree.schools, tree.courses);
   const courseId = kind === "course" ? p : "";
   return { path: p, title: hit?.title || p, kind, courseId };

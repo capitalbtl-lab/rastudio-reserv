@@ -85,11 +85,17 @@ html.home-editing header {
   html.home-editing header {
     left: 3.5rem;
   }
+  html.home-editing main {
+    padding-left: 3.5rem;
+  }
 }
 
 @media (min-width: 1024px) {
   html.home-editing header {
     right: 18.5rem;
+  }
+  html.home-editing main {
+    padding-right: 18.5rem;
   }
 }
 

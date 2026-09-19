@@ -52,10 +52,12 @@ export const savePageDraftFn = createServerFn({ method: "POST" })
   });
 
 export const publishPageFn = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { token?: string; path?: string })
+  .validator((data: unknown) => data as { token?: string; path?: string; layout?: unknown; pageDraft?: unknown })
   .handler(async ({ data }) => {
     if (!guard(data.token)) return { ok: false as const, error: "Нужен режим отладки." };
     const path = String(data.path || "/");
+    if (data.pageDraft) savePageDraft(path, data.pageDraft);
+    else if (data.layout) savePageDraft(path, homeToLayout(normalizeHomeLayout(data.layout)));
     const issues = phoneIssues(loadPageDoc(path).draft);
     if (issues.length) return { ok: false as const, error: `На телефоне едет: ${issues[0]}`, phoneIssues: issues };
     const doc = publishPage(path);

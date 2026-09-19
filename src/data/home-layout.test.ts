@@ -84,12 +84,17 @@ describe("макет главной", () => {
     const blocks = readFileSync(new URL("../components/home-blocks.tsx", import.meta.url), "utf8");
     assert.match(blocks, /HomeEditorGate/);
     assert.match(blocks, /home-device-phone/);
-    assert.match(blocks, /md:pl-14/);
+    assert.match(blocks, /ve-canvas/);
     assert.doesNotMatch(blocks, /from "@\/components\/home-editor"/);
     const gate = readFileSync(new URL("../components/home-editor-gate.tsx", import.meta.url), "utf8");
     assert.match(gate, /edit=1/);
     assert.match(gate, /ra_admin/);
     assert.match(gate, /localStorage/);
+    assert.doesNotMatch(gate, /from "@\/data\/page-layout-fn"/);
+    assert.match(gate, /import\("@\/data\/page-layout-fn"\)/);
+    const editorCss = readFileSync(new URL("../components/home-editor.css", import.meta.url), "utf8");
+    assert.match(editorCss, /html\.home-editing main/);
+    assert.match(editorCss, /18\.5rem/);
     const pub = readFileSync(new URL("../components/admin-public-site.tsx", import.meta.url), "utf8");
     assert.match(pub, /\/\?edit=1/);
     assert.match(pub, /Редактор главной/);
