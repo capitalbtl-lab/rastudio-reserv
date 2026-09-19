@@ -430,6 +430,8 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pull, /res\.walked && lessonsCountShort\(disk, alfaGate, true\)/);
     assert.match(inbound, /export async function inboundMissingCustomerLessons/);
     assert.match(inbound, /export async function inboundMissingUntilSeated/);
+    assert.match(inbound, /export async function inboundRefreshSeatedLessons/);
+    assert.match(inbound, /refresh: true/);
     assert.match(pull, /inboundMissingUntilSeated/);
     assert.doesNotMatch(pull, /inboundMissingCustomerLessons/);
     assert.match(pull, /missing\.length/);
@@ -479,6 +481,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /iceWindowOrNow\(true, from, dateTo, recheckDays\)/);
     assert.doesNotMatch(inbound, /if \(!wasLessonGreen\(sync\)\) return \{ from: ""/);
     assert.match(rec, /windowNewLessonIds/);
+    assert.match(rec, /windowStaleLessonIds/);
+    assert.match(rec, /inboundRefreshSeatedLessons/);
     assert.match(rec, /windowAlfaLive/);
     assert.match(rec, /recheckWindowFull\(windowFrom\)/);
     assert.match(rec, /seatRounds = fullWin \? 80 : 20/);

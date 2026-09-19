@@ -950,7 +950,7 @@ export async function inboundMissingCustomerLessons(
   branch: number,
   customerId: number,
   lessonIds: number[],
-  opts?: { force?: boolean; take?: number },
+  opts?: { force?: boolean; take?: number; refresh?: boolean },
 ) {
   const id = Number(customerId) || 0;
   const want = uniquePositiveIds(lessonIds).slice(0, Math.max(1, Math.min(50, Number(opts?.take) || 50)));
@@ -1057,10 +1057,12 @@ export async function inboundMissingCustomerLessons(
       .map((l) => Number(l.lessonId) || 0)
       .filter((n) => n > 0 && !haveNow.has(n));
     if (skippedHold.length) console.warn(`inbound missing cid=${id} hold-skip: ${skippedHold.slice(0, 20).join(",")}`);
-    pulled.length = 0;
-    for (const lid of landed) {
-      const row = next.find((l) => Number(l.lessonId) === lid);
-      if (row) pulled.push(row);
+    if (!opts?.refresh) {
+      pulled.length = 0;
+      for (const lid of landed) {
+        const row = next.find((l) => Number(l.lessonId) === lid);
+        if (row) pulled.push(row);
+      }
     }
   }
   const seen0 = uniquePositiveIds(customerSyncOf(id).lessonsSeenIds || []);
@@ -1069,7 +1071,7 @@ export async function inboundMissingCustomerLessons(
   const have = uniquePositiveIds((loadCustomerCalendar(id) || []).map((l) => Number(l.lessonId) || 0));
   const gap = stampLessonSetGap({ ...customerSyncOf(id), lessonsSeenIds: seenNext }, have, studentProtectLessonIds(id));
   stampCustomerSync(id, {
-    lessonsFull: false,
+    ...(opts?.refresh ? {} : { lessonsFull: false }),
     lessonsSeenIds: seenNext,
     ...gap,
   });
@@ -1108,6 +1110,22 @@ export async function inboundMissingUntilSeated(
     if (missing.length >= beforeN) break;
   }
   return { count, dropped: uniquePositiveIds(dropped), missing };
+}
+
+
+/** Уже на диске, status не 3: тот же index по id, пишем status и commission. Набор id не трогаем. */
+export async function inboundRefreshSeatedLessons(
+  branchId: number,
+  customerId: number,
+  ids: number[],
+  opts?: { take?: number; resetAt?: string },
+) {
+  const want = uniquePositiveIds(ids).slice(0, Math.max(1, Math.min(50, Number(opts?.take) || 50)));
+  if (!want.length) return { count: 0, dropped: [] as number[] };
+  if (opts?.resetAt != null && String(customerSyncOf(customerId).lessonsResetAt || "") !== String(opts.resetAt)) {
+    return { count: 0, dropped: [] as number[], skipped: "reset" as const };
+  }
+  return inboundMissingCustomerLessons(branchId, customerId, want, { force: true, take: want.length, refresh: true });
 }
 
 export async function inboundJournalChunk(offset = 0, _take = 1) {

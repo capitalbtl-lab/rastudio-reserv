@@ -258,6 +258,28 @@ export function iceWindowOrNow(
   return { from: from || "2015-01-01", to: "" };
 }
 
+/** Id переписи, которые уже на диске, но status не 3. Тело после teach не качали. */
+export function windowStaleLessonIds(
+  censusIds: Iterable<number>,
+  cal: { lessonId?: unknown; status?: unknown }[],
+): number[] {
+  const byId = new Map<number, number>();
+  for (const l of cal || []) {
+    const id = Number(l.lessonId) || 0;
+    if (id > 0 && !byId.has(id)) byId.set(id, Number(l.status) || 0);
+  }
+  const out: number[] = [];
+  const seen = new Set<number>();
+  for (const n of censusIds) {
+    const id = Number(n) || 0;
+    if (id <= 0 || seen.has(id) || !byId.has(id)) continue;
+    seen.add(id);
+    if (byId.get(id) === 3) continue;
+    out.push(id);
+  }
+  return out;
+}
+
 /** Id переписи окна, которых ещё нет на диске. */
 export function windowNewLessonIds(censusIds: Iterable<number>, have: Iterable<number>): number[] {
   const onDisk = new Set([...have].map(Number).filter((n) => n > 0));

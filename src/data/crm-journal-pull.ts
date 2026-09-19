@@ -19,7 +19,7 @@ import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote
 import { journalJobSnapshot, parseJobItems, historyWorkerBeat } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { loadPlanLog } from "./crm-sync-plan-log";
-import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady, journalGroupNow, groupJournalGreen, lessonsSetGap, type GroupPeriodHit, type GroupWhollyHit } from "./crm-inbound-core";
+import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowStaleLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady, journalGroupNow, groupJournalGreen, lessonsSetGap, type GroupPeriodHit, type GroupWhollyHit } from "./crm-inbound-core";
 import { diskIsArchive, dossierAuditRole } from "./crm-person-role";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset" | "paysReset";
@@ -1249,7 +1249,7 @@ async function pullOneGroup(
 export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32, dateTo = "") {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, studentProtectLessonIds, studentCardBranches } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, inboundRefreshSeatedLessons, studentProtectLessonIds, studentCardBranches } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const reset0 = String(customerSyncOf(cid).lessonsResetAt || "");
@@ -1552,6 +1552,12 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       liveAlfa = Number(customerSyncOf(cid).lessonsAlfa) || alfaN;
       }
       mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || liveAlfa, true);
+      const stale = windowStaleLessonIds(census.ids, loadCustomerCalendar(cid) || []);
+      if (stale.length) {
+        const ref = await inboundRefreshSeatedLessons(branchId, cid, stale, { take: 50, resetAt: reset0 }).catch(() => ({ count: 0, skipped: undefined as string | undefined }));
+        if (abortedByReset() || (ref as { skipped?: string }).skipped === "reset") return resetStop();
+        disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
+      }
       }
     }
     } finally {

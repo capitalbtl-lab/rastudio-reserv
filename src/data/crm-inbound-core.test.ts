@@ -20,6 +20,7 @@ import {
   recheckWindowYmd,
   iceWindowOrNow,
   windowNewLessonIds,
+  windowStaleLessonIds,
   windowGoneLessonIds,
   windowAlfaKeep,
   windowAlfaLive,
@@ -265,6 +266,20 @@ describe("inbound не сбрасывает курс сайта", () => {
     const m = mergeInboundSiteFields(alfa114, { ...disk, courseId: "", path: "" }, { hasAssign: true });
     assert.equal(m.keepSite, true);
     assert.equal(m.schoolId, "/robototehnika-v-kolomne");
+  });
+
+  it("синяя: id на диске со status не 3 — тело надо перечитать", () => {
+    assert.deepEqual(windowStaleLessonIds(
+      [10, 11, 12],
+      [
+        { lessonId: 10, status: 3 },
+        { lessonId: 11, status: 1 },
+        { lessonId: 12, status: 3 },
+      ],
+    ), [11]);
+    assert.deepEqual(windowStaleLessonIds([10], [{ lessonId: 10, status: 3 }]), []);
+    assert.deepEqual(windowStaleLessonIds([99], [{ lessonId: 10, status: 1 }]), []);
+    assert.deepEqual(windowStaleLessonIds([11, 11, 0], [{ lessonId: 11, status: 2 }]), [11]);
   });
 
   it("синяя: новые и ушедшие id, keep не из длины окна", () => {
