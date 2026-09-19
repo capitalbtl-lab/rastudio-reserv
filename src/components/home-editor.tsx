@@ -989,11 +989,11 @@ function BlocksRail({
                 {list.map((b) => (
                   <li key={b.typeId} className="rounded-xl px-1 py-1 hover:bg-black/[0.03]">
                     <p className="px-1 text-[0.8rem] font-medium">{b.label}</p>
-                    <div className="mt-1 grid grid-cols-2 gap-1">
-                      <button type="button" className="min-h-8 rounded-lg bg-black/5 px-2 text-[0.68rem] font-semibold hover:bg-black/10" onClick={() => void add(b.typeId, "empty")}>
+                    <div className="mt-0.5 grid grid-cols-2 gap-1">
+                      <button type="button" className="h-4 rounded-md bg-black/15 px-2 text-[0.62rem] font-semibold leading-none hover:bg-black/25" onClick={() => void add(b.typeId, "empty")}>
                         Новый блок
                       </button>
-                      <button type="button" className="min-h-8 rounded-lg bg-black/5 px-2 text-[0.68rem] font-semibold hover:bg-black/10" onClick={() => void add(b.typeId, "template")}>
+                      <button type="button" className="h-4 rounded-md bg-black/15 px-2 text-[0.62rem] font-semibold leading-none hover:bg-black/25" onClick={() => void add(b.typeId, "template")}>
                         Из шаблонов
                       </button>
                     </div>
