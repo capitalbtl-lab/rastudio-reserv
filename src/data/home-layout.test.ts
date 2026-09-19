@@ -60,6 +60,20 @@ describe("макет главной", () => {
     assert.equal(doc.media.about, "/media/home/hero.mp4");
   });
 
+  it("пустой title не выкидывает inst_ и хранит кегль", () => {
+    const emptyTitle = normalizeHomeLayout(
+      {
+        order: ["inst_ab12cd"],
+        customs: [{ id: "inst_ab12cd", typeId: "two-col", kicker: "", title: "", text: "x" }],
+        styles: { inst_ab12cd: { bold: true, fontSize: 48, align: "center" } },
+      },
+      false,
+    );
+    assert.equal(emptyTitle.customs[0]?.id, "inst_ab12cd");
+    assert.equal(emptyTitle.styles.inst_ab12cd?.bold, true);
+    assert.equal(emptyTitle.styles.inst_ab12cd?.fontSize, 48);
+  });
+
   it("главная оборачивает каждый блок и правит текст", () => {
     const src = readFileSync(new URL("../routes/index.tsx", import.meta.url), "utf8");
     for (const id of defaultHomeOrder()) {

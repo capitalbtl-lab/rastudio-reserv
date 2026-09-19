@@ -145,7 +145,11 @@ describe("библиотека и документ страницы", () => {
     assert.match(editor, /path === "\/"/);
     assert.match(editor, /TextToolbar/);
     assert.match(editor, /courseId/);
+    assert.match(editor, /flushCanvasText/);
     assert.match(editor, /кегль/);
+    const css = readFileSync(new URL("../components/home-editor.css", import.meta.url), "utf8");
+    assert.match(css, /ve-textbar/);
+    assert.match(css, /5\.25rem/);
     const cms = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
     assert.match(cms, /import\("@\/components\/page-editor"\)/);
     assert.doesNotMatch(cms, /from "@\/components\/page-editor"/);

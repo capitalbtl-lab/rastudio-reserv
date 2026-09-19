@@ -360,16 +360,23 @@ function HomeSlotFrame({
       <button
         type="button"
         aria-label="Зазор сверху"
-        className="absolute inset-x-8 top-0 z-10 h-2 cursor-ns-resize bg-primary/0 hover:bg-primary/40"
+        className="absolute inset-x-10 top-10 z-10 h-2 cursor-ns-resize bg-primary/0 hover:bg-primary/40"
         onMouseDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
           const startY = e.clientY;
           const start = style?.padTop || 0;
-          const move = (ev: MouseEvent) => ctx?.setDoc(patchHomeStyle(ctx.doc, id, { padTop: start + (ev.clientY - startY) }));
+          const base = ctx?.doc;
+          if (!base || !ctx) return;
+          let last = base;
+          const move = (ev: MouseEvent) => {
+            last = patchHomeStyle(base, id, { padTop: start + (ev.clientY - startY) });
+            ctx.setDoc(last, false);
+          };
           const up = () => {
             window.removeEventListener("mousemove", move);
             window.removeEventListener("mouseup", up);
+            ctx.setDoc(last, true);
           };
           window.addEventListener("mousemove", move);
           window.addEventListener("mouseup", up);
@@ -385,10 +392,17 @@ function HomeSlotFrame({
           const startY = e.clientY;
           const box = (e.currentTarget.parentElement as HTMLElement | null)?.getBoundingClientRect();
           const start = style?.h || Math.round(box?.height || 160);
-          const move = (ev: MouseEvent) => ctx?.setDoc(patchHomeStyle(ctx.doc, id, { h: start + (ev.clientY - startY) }));
+          const base = ctx?.doc;
+          if (!base || !ctx) return;
+          let last = base;
+          const move = (ev: MouseEvent) => {
+            last = patchHomeStyle(base, id, { h: start + (ev.clientY - startY) });
+            ctx.setDoc(last, false);
+          };
           const up = () => {
             window.removeEventListener("mousemove", move);
             window.removeEventListener("mouseup", up);
+            ctx.setDoc(last, true);
           };
           window.addEventListener("mousemove", move);
           window.addEventListener("mouseup", up);

@@ -19,7 +19,7 @@
 
 .ve-rail {
   position: fixed;
-  top: 3rem;
+  top: 5.25rem;
   left: 0;
   bottom: 0;
   z-index: 68;
@@ -30,7 +30,7 @@
 
 .ve-fly {
   position: fixed;
-  top: 3rem;
+  top: 5.25rem;
   bottom: 0;
   left: 3.5rem;
   z-index: 64;
@@ -69,16 +69,31 @@
   color: #1d4ed8;
 }
 
+.ve-textbar {
+  position: fixed;
+  top: 3rem;
+  left: 0;
+  right: 0;
+  z-index: 69;
+  display: flex;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  background: #fff;
+  border-bottom: 1px solid rgb(15 23 42 / 0.08);
+}
+
 html.home-editing {
   overflow-x: hidden;
 }
 
 html.home-editing body {
-  padding-top: 3rem;
+  padding-top: 5.25rem;
 }
 
 html.home-editing header {
-  top: 3rem !important;
+  top: 5.25rem !important;
   z-index: 45;
 }
 

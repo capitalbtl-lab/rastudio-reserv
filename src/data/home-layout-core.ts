@@ -152,8 +152,8 @@ function asCustom(raw: unknown): HomeCustomBlock | null {
   const c = raw as Record<string, unknown>;
   const idRaw = String(c.id || "");
   const id = isLooseSlotId(idRaw) || isCustomBlockId(idRaw) ? idRaw : "";
-  const title = String(c.title || "").trim().slice(0, 120);
-  if (!id || !title) return null;
+  const title = String(c.title || "").trim().slice(0, 120) || String(c.typeId || idRaw).slice(0, 120);
+  if (!id) return null;
   return {
     id,
     kicker: String(c.kicker || "").trim().slice(0, 80),

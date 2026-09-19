@@ -99,6 +99,7 @@ export function EditText({
   const st = ctx?.doc.styles[slot];
   return (
     <Tag
+      data-ve-key={id}
       data-ve-slot={slot}
       className={cn(className, editing && "ve-text")}
       contentEditable={editing}

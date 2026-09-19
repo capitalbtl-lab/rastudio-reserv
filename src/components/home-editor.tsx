@@ -58,6 +58,17 @@ function debugToken() {
   }
 }
 
+function flushCanvasText(doc: HomeLayoutDoc) {
+  if (typeof document === "undefined") return doc;
+  let next = doc;
+  for (const el of document.querySelectorAll<HTMLElement>("[data-ve-key]")) {
+    const key = el.getAttribute("data-ve-key") || "";
+    const text = (el.textContent || "").trim();
+    if (key && text) next = setHomeText(next, key, text);
+  }
+  return next;
+}
+
 function currentPath() {
   if (typeof window === "undefined") return "/";
   const page = new URLSearchParams(location.search).get("page");
@@ -187,9 +198,11 @@ export function HomeEditorProvider({
   const saveNow = useCallback(() => {
     const token = debugToken();
     if (!token) return;
+    const flushed = flushCanvasText(doc);
     window.clearTimeout(timer.current);
     setDirty("сохраняем…");
-    void savePageDraftFn({ data: { token, path: currentPath(), layout: doc } }).then((res) => {
+    if (flushed !== doc) setDocState(flushed);
+    void savePageDraftFn({ data: { token, path: currentPath(), layout: flushed } }).then((res) => {
       setDirty(res.ok ? "сохранено" : res.error || "ошибка");
       if (res.ok && "phoneIssues" in res) setPhoneIssues(res.phoneIssues || []);
     });
@@ -198,9 +211,11 @@ export function HomeEditorProvider({
   const publish = useCallback(() => {
     const token = debugToken();
     if (!token) return;
+    const flushed = flushCanvasText(doc);
     window.clearTimeout(timer.current);
     setDirty("публикуем…");
-    void publishPageFn({ data: { token, path: currentPath(), layout: doc } }).then((res) => {
+    if (flushed !== doc) setDocState(flushed);
+    void publishPageFn({ data: { token, path: currentPath(), layout: flushed } }).then((res) => {
       if (!res.ok) {
         setDirty(res.error || "ошибка");
         if ("phoneIssues" in res) setPhoneIssues(res.phoneIssues || []);
@@ -823,11 +838,12 @@ function CourseField({
 
 function TextToolbar() {
   const ctx = useHomeEditor();
-  if (!ctx?.editing || !ctx.selected) return null;
+  if (!ctx?.editing) return null;
+  if (!ctx.selected) return <div className="ve-textbar" />;
   const st = ctx.doc.styles[ctx.selected] || {};
   const btn = (on: boolean) => cn("grid size-8 place-items-center rounded-md", on ? "bg-primary text-primary-foreground" : "hover:bg-black/5");
   return (
-    <div className="pointer-events-auto fixed left-1/2 top-[3.35rem] z-[72] flex -translate-x-1/2 items-center gap-0.5 rounded-xl bg-white p-1 shadow-[0_12px_32px_-16px_rgba(0,0,0,.4)] ring-1 ring-black/10">
+    <div className="ve-textbar">
       <button type="button" className={btn(Boolean(st.bold))} title="Жирный" onClick={() => ctx.setDoc(patchHomeStyle(ctx.doc, ctx.selected!, { bold: !st.bold }))}>
         <Bold className="size-3.5" />
       </button>

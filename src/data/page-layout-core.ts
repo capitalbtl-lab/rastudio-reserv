@@ -393,6 +393,7 @@ export function phoneIssues(layout: LayoutDoc): string[] {
     const b = layout.blocks[id];
     if (!b || b.style.hidden || b.phone.hidden) continue;
     if ((b.style.w || 0) > 390) out.push(`${id}: ширина ${b.style.w}px`);
+    if ((b.style.fontSize || 0) > 40) out.push(`${id}: кегль ${b.style.fontSize}px`);
     if ((b.style.x || 0) > 24) out.push(`${id}: сдвиг X на телефоне`);
   }
   return out.slice(0, 8);
