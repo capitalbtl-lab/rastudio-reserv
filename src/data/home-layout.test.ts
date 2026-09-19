@@ -75,6 +75,9 @@ describe("макет главной", () => {
     assert.match(editor, /edit=1/);
     assert.match(editor, /\["layers", "Слои"\]/);
     assert.match(editor, /Панель/);
+    assert.match(editor, /"Готово"/);
+    assert.match(editor, /persist\(hist\.current\[histAt\.current\]/);
+    assert.doesNotMatch(editor, /sticky top-\[3\.75rem\]/);
     assert.doesNotMatch(editor, /max-w-\[390px\]/);
     const read = readFileSync(new URL("../components/home-read.tsx", import.meta.url), "utf8");
     assert.match(read, /contentEditable/);
