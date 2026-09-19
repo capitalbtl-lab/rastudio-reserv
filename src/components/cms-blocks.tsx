@@ -17,6 +17,7 @@ import { ageBadge, courseNameOnly } from "@/data/ages";
 import { cn } from "@/lib/utils";
 import { collageShotsFor, HeroCollage, type CollageShot } from "@/components/hero-collage";
 import { SiteVideo } from "@/components/site-video";
+import { PageExtras } from "@/components/page-extras";
 export { ScheduleBlock } from "@/components/schedule-block";
 
 export function Kicker({ children, className }: { children: string; className?: string }) {
@@ -156,8 +157,8 @@ export function ProseBlocks({ text, className }: { text: string; className?: str
 
 type HeroShot = { src: string; filename?: string; alt?: string; href?: string };
 
-function PageEditorLazy() {
-  const [Boot, setBoot] = useState<ComponentType | null>(null);
+function PageEditorLazy({ children }: { children: ReactNode }) {
+  const [Boot, setBoot] = useState<ComponentType<{ children?: ReactNode }> | null>(null);
   useEffect(() => {
     try {
       if (!sessionStorage.getItem("ra_edit") && !/(?:\?|&)edit=1(?:&|$)/.test(location.search)) return;
@@ -166,8 +167,8 @@ function PageEditorLazy() {
     }
     void import("@/components/page-editor").then((m) => setBoot(() => m.PageEditorBoot));
   }, []);
-  if (!Boot) return null;
-  return <Boot />;
+  if (!Boot) return <>{children}</>;
+  return <Boot>{children}</Boot>;
 }
 
 export function CoursePageHero({
@@ -211,8 +212,7 @@ export function CoursePageHero({
   );
 
   return (
-    <>
-    <PageEditorLazy />
+    <PageEditorLazy>
     <section className="ink relative isolate overflow-hidden text-header-fg">
       <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
         <div className="relative z-10 max-w-xl">
@@ -265,7 +265,8 @@ export function CoursePageHero({
         <SiteVideo src={video} title={title} className="aspect-video w-full overflow-hidden rounded-3xl" />
       </div>
     ) : null}
-    </>
+    <PageExtras />
+    </PageEditorLazy>
   );
 }
 

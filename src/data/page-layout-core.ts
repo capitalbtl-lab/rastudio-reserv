@@ -1,6 +1,7 @@
 import {
   type PageKind,
   isAtomType,
+  isCanvasExtra,
   isHomeType,
   kindOrder,
   libraryType,
@@ -372,6 +373,45 @@ export function phoneIssues(layout: LayoutDoc): string[] {
     if ((b.style.x || 0) > 24) out.push(`${id}: сдвиг X на телефоне`);
   }
   return out.slice(0, 8);
+}
+
+export type PageExtra = {
+  id: string;
+  typeId: string;
+  kicker?: string;
+  title?: string;
+  text?: string;
+  image?: string;
+  video?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  bg?: HomeBg;
+};
+
+export function extrasOf(layout: LayoutDoc): PageExtra[] {
+  const out: PageExtra[] = [];
+  for (const id of layout.order) {
+    const b = layout.blocks[id];
+    if (!b || b.style.hidden) continue;
+    if (!isCanvasExtra(b.typeId, b.id)) continue;
+    out.push({
+      id: b.id,
+      typeId: b.typeId,
+      kicker: b.content.kicker,
+      title: b.content.title,
+      text: b.content.text,
+      image: b.content.image,
+      video: b.content.video,
+      ctaLabel: b.content.ctaLabel,
+      ctaHref: b.content.ctaHref,
+      bg: b.style.bg,
+    });
+  }
+  return out;
+}
+
+export function extrasFromHome(home: HomeLayoutDoc): PageExtra[] {
+  return extrasOf(homeToLayout(home));
 }
 
 export function pageFileKey(path: string) {

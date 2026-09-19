@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { tokenOk } from "./admin-auth";
-import { addInstance, copyInstanceTo, homeToLayout, layoutToHome, phoneIssues } from "./page-layout-core.ts";
+import { addInstance, copyInstanceTo, extrasOf, homeToLayout, layoutToHome, phoneIssues } from "./page-layout-core.ts";
 import { listEditorPages, loadPageDoc, publishPage, savePageDraft, unpublishPage } from "./page-layout.ts";
 import { normalizeHomeLayout } from "./home-layout-core.ts";
 
@@ -89,4 +89,16 @@ export const placeBlockFn = createServerFn({ method: "POST" })
     }
     const saved = savePageDraft(path, draft);
     return { ok: true as const, layout: layoutToHome(saved.draft) };
+  });
+
+export const publicPageExtrasFn = createServerFn({ method: "GET" })
+  .validator((data: unknown) => data as { path?: string })
+  .handler(async ({ data }) => {
+    const path = String(data.path || "").replace(/\/+$/, "") || "/";
+    if (path === "/") return { ok: true as const, extras: [] as ReturnType<typeof extrasOf> };
+    try {
+      return { ok: true as const, extras: extrasOf(loadPageDoc(path).published) };
+    } catch {
+      return { ok: true as const, extras: [] };
+    }
   });

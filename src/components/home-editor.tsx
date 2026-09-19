@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { debugEmit } from "@/data/debug-client";
 import { loadPageDocFn, placeBlockFn, publishPageFn, savePageDraftFn } from "@/data/page-layout-fn";
-import { BLOCK_LIBRARY } from "@/data/block-library-core";
+import { BLOCK_LIBRARY, isAtomType } from "@/data/block-library-core";
 import {
   emptyHomeLayout,
   homeBlockLabel,
@@ -559,7 +559,7 @@ function ElementsList({ path, onLayout }: { path: string; onLayout: (layout: Hom
     <div>
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-black/40">Добавить элементы</p>
       <ul className="mt-2 space-y-0.5">
-        {BLOCK_LIBRARY.filter((b) => !b.locked).map((b) => (
+        {BLOCK_LIBRARY.filter((b) => !b.locked && (path === "/" || isAtomType(b.typeId) || b.typeId === "custom")).map((b) => (
           <li key={b.typeId}>
             <button type="button" className="flex min-h-9 w-full items-center rounded-xl px-2 text-left text-[0.8rem] font-medium hover:bg-black/5" onClick={() => void add(b.typeId)}>
               {b.label}

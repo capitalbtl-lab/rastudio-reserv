@@ -7,6 +7,7 @@ import {
   applyHomeToPage,
   copyInstanceTo,
   emptyPageDoc,
+  extrasOf,
   homeToLayout,
   layoutToHome,
   layoutsEqual,
@@ -69,10 +70,15 @@ describe("библиотека и документ страницы", () => {
     assert.notEqual(a.id, b.id);
     assert.equal(a.content.title, "На главной");
     assert.equal(b.content.title, "На художественной");
-    const copied = copyInstanceTo(art.draft, a);
-    const c = copied.blocks[copied.order[copied.order.length - 1]];
-    assert.equal(c.content.title, "На главной");
-    assert.notEqual(c.id, a.id);
+    const extras = extrasOf(withArt);
+    assert.equal(extras.length, 1);
+    assert.equal(extras[0].typeId, "two-col");
+    assert.equal(extras[0].title, "На художественной");
+    const homeExtras = extrasOf(withHome);
+    assert.equal(homeExtras[0].typeId, "two-col");
+    assert.notEqual(homeExtras[0].id, extras[0].id);
+    const school = seedLayout("school");
+    assert.equal(extrasOf(school).length, 0);
   });
 
   it("roundtrip inst_ и школы не подмешивает слоты главной", () => {
@@ -125,8 +131,14 @@ describe("библиотека и документ страницы", () => {
     const cms = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
     assert.match(cms, /import\("@\/components\/page-editor"\)/);
     assert.doesNotMatch(cms, /from "@\/components\/page-editor"/);
+    assert.match(cms, /PageExtras/);
+    assert.match(cms, /HeroCollage/);
+    const extras = readFileSync(new URL("../components/page-extras.tsx", import.meta.url), "utf8");
+    assert.match(extras, /md:grid-cols-2/);
+    assert.match(extras, /overflow-x-clip/);
     const fn = readFileSync(new URL("./page-layout-fn.ts", import.meta.url), "utf8");
     assert.match(fn, /savePageDraft\(path, homeToLayout/);
     assert.match(fn, /publishPage\(path\)/);
+    assert.match(fn, /publicPageExtrasFn/);
   });
 });

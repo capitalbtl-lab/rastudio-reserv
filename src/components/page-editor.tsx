@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { HomeEditorChrome, HomeEditorProvider } from "@/components/home-editor";
 
 type Unlock = ComponentType<{ onIn?: () => void; onCancel?: () => void }>;
@@ -14,7 +14,7 @@ function editToken() {
 }
 
 /** Редактор на школе/курсе. Главная уже в HomeCanvas. */
-export function PageEditorBoot() {
+export function PageEditorBoot({ children }: { children?: ReactNode }) {
   const [on, setOn] = useState(false);
   const [Unlock, setUnlock] = useState<Unlock | null>(null);
   useEffect(() => {
@@ -31,19 +31,24 @@ export function PageEditorBoot() {
     return (
       <HomeEditorProvider>
         <HomeEditorChrome />
+        {children}
       </HomeEditorProvider>
     );
   }
-  if (!Unlock) return null;
   return (
-    <Unlock
-      onIn={() => {
-        setUnlock(null);
-        setOn(true);
-      }}
-      onCancel={() => {
-        location.href = location.pathname || "/";
-      }}
-    />
+    <>
+      {children}
+      {Unlock ? (
+        <Unlock
+          onIn={() => {
+            setUnlock(null);
+            setOn(true);
+          }}
+          onCancel={() => {
+            location.href = location.pathname || "/";
+          }}
+        />
+      ) : null}
+    </>
   );
 }
