@@ -1,16 +1,18 @@
+import { libraryType } from "./block-library-core.ts";
+
 export const HOME_BLOCKS = [
-  { id: "hero", label: "Шапка" },
+  { id: "hero", label: "Первый экран" },
   { id: "ticker", label: "Бегущая строка" },
-  { id: "robot", label: "Робототехника на английском" },
+  { id: "robot", label: "Видео курса" },
   { id: "ages", label: "Подбор по возрасту" },
-  { id: "schools", label: "Семь школ" },
-  { id: "catalog", label: "Каталог курсов" },
-  { id: "about", label: "О студии" },
-  { id: "teachers", label: "Педагоги" },
-  { id: "reviews", label: "Отзывы" },
-  { id: "stories", label: "Проекты и события" },
-  { id: "branches", label: "Филиалы" },
-  { id: "trial", label: "Заявка на пробное" },
+  { id: "schools", label: "Карточки школ" },
+  { id: "catalog", label: "Сетка курсов" },
+  { id: "about", label: "Текст и фото" },
+  { id: "teachers", label: "Карточки педагогов" },
+  { id: "reviews", label: "Лента отзывов" },
+  { id: "stories", label: "Карточки событий" },
+  { id: "branches", label: "Карточки филиалов" },
+  { id: "trial", label: "Блок записи" },
 ] as const;
 
 export type HomeBlockId = (typeof HOME_BLOCKS)[number]["id"];
@@ -77,7 +79,10 @@ export function emptyHomeLayout(): HomeLayoutDoc {
 }
 
 export function homeBlockLabel(id: string, customs: HomeCustomBlock[] = []) {
-  return HOME_BLOCKS.find((b) => b.id === id)?.label || customs.find((c) => c.id === id)?.title || id;
+  const custom = customs.find((c) => c.id === id);
+  const titled = String(custom?.title || "").trim();
+  if (titled) return titled;
+  return libraryType(custom?.typeId || id)?.label || HOME_BLOCKS.find((b) => b.id === id)?.label || id;
 }
 
 export function clampPad(n: unknown) {
@@ -154,7 +159,7 @@ function asCustom(raw: unknown): HomeCustomBlock | null {
   const c = raw as Record<string, unknown>;
   const idRaw = String(c.id || "");
   const id = isLooseSlotId(idRaw) || isCustomBlockId(idRaw) ? idRaw : "";
-  const title = String(c.title || "").trim().slice(0, 120) || String(c.typeId || idRaw).slice(0, 120);
+  const title = String(c.title || "").trim().slice(0, 120);
   if (!id) return null;
   return {
     id,
