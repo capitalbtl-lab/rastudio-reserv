@@ -51,7 +51,7 @@ describe("page-media", () => {
     const robot = readFileSync(new URL("../components/robot-videos.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(robot, /autoPlay/);
     assert.match(robot, /SiteVideo/);
-    const home = readFileSync(new URL("../components/home-public.tsx", import.meta.url), "utf8");
+    const home = readFileSync(new URL("../components/home-blocks.tsx", import.meta.url), "utf8");
     assert.match(home, /SiteVideo/);
     const cms = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
     assert.match(cms, /SiteVideo/);
