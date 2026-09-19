@@ -1220,6 +1220,12 @@ type AuditSegIn = {
   headerStamped?: number;
   cashGoodsN?: number;
   alfaGoodsN?: number;
+  woN?: number;
+  woSum?: number;
+  alfaWoN?: number;
+  alfaWoSum?: number;
+  alfaWoOk?: boolean;
+  alfaSplitOk?: boolean;
 };
 
 function rowMatched(r: AuditSegIn) {
@@ -1302,6 +1308,9 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   const cashHi = Number.isFinite(cashN) && Number.isFinite(alfaN) && cashN > alfaN + 1;
   const cashLo = Number.isFinite(cashN) && Number.isFinite(alfaN) && cashN < alfaN - 1;
   if (cashHi) {
+    if (r.alfaWoOk && Number.isFinite(Number(r.woN)) && Number.isFinite(Number(r.alfaWoN)) && Number(r.woN) < Number(r.alfaWoN)) {
+      return { id: "cash-hi", label: "Касса больше шапки", rec: "На диске списаний меньше, чем Alfa lesson/index. Шаг 2: календарь «Перепроверить». Кассу не трогать. Товар в ленте ни при чём." + goodsNote };
+    }
     if (codes.includes("lessons") || codes.includes("wo") || codes.includes("status")) {
       return { id: "cash-hi", label: "Касса больше шапки", rec: "На диске мало списаний. Шаг 2: календарь этого человека «Перепроверить». Шапку не подгонять." + goodsNote };
     }
@@ -1311,6 +1320,14 @@ function auditSeg(r: AuditSegIn): AuditSeg {
     return { id: "cash-hi", label: "Касса больше шапки", rec: "На диске формула больше Customer.balance. Сначала шаг 2 (календарь), затем шаг 4 (касса). Шапку не трогать." + goodsNote };
   }
   if (cashLo) {
+    if (r.alfaWoOk && Number.isFinite(Number(r.woN)) && Number.isFinite(Number(r.alfaWoN)) && Number(r.woN) > Number(r.alfaWoN)) {
+      const extra = Number(r.woN) - Number(r.alfaWoN);
+      return {
+        id: "cash-lo",
+        label: "Касса меньше шапки",
+        rec: `На диске списаний больше, чем в Alfa (${extra} лишн.). Шаг 2: календарь «Перепроверить», кассу не трогать. Платежи и товар уже сошлись.` + goodsNote,
+      };
+    }
     if (codes.includes("status") && !codes.includes("pays") && !codes.includes("snap")) {
       return { id: "status", label: "Урок ещё не проведён", rec: "В календаре цена, урок не проведён. Alfa ещё не списала. Ждать занятие, в Alfa не писать." };
     }
