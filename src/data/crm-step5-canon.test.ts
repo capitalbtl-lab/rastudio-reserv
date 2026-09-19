@@ -15,6 +15,7 @@ import {
   step5Reasons,
   step5RemainderFormula,
   step5Close,
+  step5UnitScale,
 } from "./crm-step5-canon.ts";
 
 describe("шаг 5 канон", () => {
@@ -131,6 +132,9 @@ describe("шаг 5 канон", () => {
     assert.equal(step5Close(2425, 24.25), true);
     assert.equal(step5Close(24.25, 2425), true);
     assert.equal(step5Close(100, 50), false);
+    assert.equal(step5Close(10000, 100), false);
+    assert.equal(step5UnitScale(2425, 24.25), 100);
+    assert.equal(step5UnitScale(2425, 2425), 1);
     const scaled = step5Reasons({
       sverka: true,
       hasH: true,

@@ -102,14 +102,21 @@ export function step5RemainderFormula(cashLessons: number, writeoff: number) {
   return (Number(cashLessons) || 0) - (Number(writeoff) || 0);
 }
 
-/** ±1 ₽ или одно число в копейках (ровно ×100) к рублям шапки. */
+/** ±1 ₽ или диск в копейках к рублям шапки (×100). 10000 против 100 — не то. */
 export function step5Close(a: number, b: number) {
   if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
   if (Math.abs(a - b) <= 1) return true;
   const hi = Math.max(Math.abs(a), Math.abs(b));
   const lo = Math.min(Math.abs(a), Math.abs(b));
   if (lo < 0.005) return false;
-  return Math.abs(hi / lo - 100) <= 0.02;
+  if (Math.abs(hi / lo - 100) > 0.02) return false;
+  const frac = Math.abs(lo - Math.round(lo));
+  return frac > 0.001 || lo < 100;
+}
+
+export function step5UnitScale(disk: number, header: number) {
+  if (!step5Close(disk, header) || Math.abs(disk - header) <= 1) return 1;
+  return Math.abs(disk) > Math.abs(header) ? 100 : 1;
 }
 
 export function step5CanSverka(p: {

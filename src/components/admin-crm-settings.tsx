@@ -1218,6 +1218,8 @@ type AuditSegIn = {
   funnel?: string;
   leadStatus?: number;
   headerStamped?: number;
+  cashGoodsN?: number;
+  alfaGoodsN?: number;
 };
 
 function rowMatched(r: AuditSegIn) {
@@ -1379,7 +1381,8 @@ function auditReasonHit(r: AuditSegIn, id: string) {
   if (id === "all") return true;
   if (id === "goods") {
     const codes = r.codes || [];
-    return codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods");
+    return codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods")
+      || (Number(r.cashGoodsN) || 0) > 0 || (Number(r.alfaGoodsN) || 0) > 0;
   }
   return auditSeg(r).id === id;
 }
@@ -1387,9 +1390,13 @@ function auditReasonHit(r: AuditSegIn, id: string) {
 function rubAudit(n?: number) {
   const x = Number(n);
   if (!Number.isFinite(x)) return "не собрали";
-  const v = Math.round(x);
-  if (v > 0) return `+${v} ₽`;
-  return `${v} ₽`;
+  const v = Math.round(x * 100) / 100;
+  const body = Math.abs(v - Math.round(v)) < 0.005
+    ? String(Math.round(Math.abs(v)))
+    : Math.abs(v).toFixed(2).replace(".", ",");
+  if (v > 0) return `+${body} ₽`;
+  if (v < 0) return `\u2212${body} ₽`;
+  return `${body} ₽`;
 }
 
 function auditFormulaSigned(n: number) {
@@ -2064,9 +2071,11 @@ function asAuditRow(
   r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number; cashPaysN?: number;
   cashRefundN?: number; cashCorrN?: number; cashGoodsN?: number; cashPaysSum?: number;
   cashRefundSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
-  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; alfaWoSum?: number; alfaWoN?: number; alfaWoOk?: boolean; woSum?: number; woN?: number; headerStamped?: number },
+  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; alfaWoSum?: number; alfaWoN?: number; alfaWoOk?: boolean; woSum?: number; woN?: number; headerStamped?: number; unitScale?: number },
 ): AuditUiRow {
   const codes = h?.codes;
+  const k = Number(h?.unitScale) === 100 ? 100 : 1;
+  const rub = (n?: number) => (n == null || !Number.isFinite(Number(n)) ? n : Number(n) / k);
   return {
     cid: r.cid,
     branchId: r.branchId,
@@ -2083,10 +2092,10 @@ function asAuditRow(
     cashRefundN: r.cashRefundN,
     cashCorrN: r.cashCorrN,
     cashGoodsN: r.cashGoodsN,
-    cashPaysSum: r.cashPaysSum,
-    cashRefundSum: r.cashRefundSum,
-    cashCorrSum: r.cashCorrSum,
-    cashGoodsSum: r.cashGoodsSum,
+    cashPaysSum: rub(r.cashPaysSum),
+    cashRefundSum: rub(r.cashRefundSum),
+    cashCorrSum: rub(r.cashCorrSum),
+    cashGoodsSum: rub(r.cashGoodsSum),
     alfaPaysN: h?.alfaPaysN,
     alfaCorrN: h?.alfaCorrN,
     alfaGoodsN: h?.alfaGoodsN,
@@ -2097,7 +2106,7 @@ function asAuditRow(
     alfaWoSum: h?.alfaWoSum,
     alfaWoN: h?.alfaWoN,
     alfaWoOk: h?.alfaWoOk,
-    woSum: h?.woSum,
+    woSum: rub(h?.woSum),
     woN: h?.woN,
     headerStamped: h?.headerStamped,
     alfaRole: (codes || []).includes("лид") ? "лид" : (codes || []).includes("архив") ? "архив" : r.alfaRole,

@@ -20,7 +20,7 @@ import {
 } from "./crm-balance-audit-core";
 import {
   step5CanSverka,
-  step5Close,
+  step5UnitScale,
   step5FlagFalse,
   step5Money,
   step5MoscowDay,
@@ -70,6 +70,7 @@ export type AuditHit = {
   alfaWoN?: number;
   alfaWoOk?: boolean;
   headerStamped?: number;
+  unitScale?: number;
 };
 
 export type AuditReport = {
@@ -786,17 +787,12 @@ export async function auditOne(cid: number, branchId: number) {
           : shown.miss === "id"
             ? "id не найден"
             : skip || "нет ответа Alfa";
-  if (judged.c && judged.dCash > 1) extra += "; приход больше шапки на списания, так бывает";
+  if (judged.c && judged.dCash > 1 && step5UnitScale(Number(first.formulaSite) || 0, shown.ok ? shown.alfa : 0) === 1) extra += "; приход больше шапки на списания, так бывает";
   let showSite = first.formulaSite;
-  if (
-    shown.ok &&
-    shown.headerOk &&
-    Number.isFinite(first.formulaSite) &&
-    step5Close(Number(first.formulaSite), shown.alfa) &&
-    Math.abs(Number(first.formulaSite) - shown.alfa) > 1
-  ) {
+  const unitScale = shown.ok && shown.headerOk ? step5UnitScale(Number(first.formulaSite) || 0, shown.alfa) : 1;
+  if (unitScale === 100) {
     extra += "; формула и шапка отличаются в 100 раз — сошлись как рубли и копейки";
-    if (Math.abs(Number(first.formulaSite)) > Math.abs(shown.alfa)) showSite = Number(first.formulaSite) / 100;
+    showSite = Number(first.formulaSite) / 100;
   }
   return {
     hit: {
@@ -814,6 +810,7 @@ export async function auditOne(cid: number, branchId: number) {
       at,
       extra,
       headerStamped: shown.ok && shown.headerOk ? shown.alfa : first.headerStamped,
+      unitScale,
       ...(alfaSplit && alfaSplit.ok
         ? {
             alfaPaysN: alfaSplit.alfaPaysN,
