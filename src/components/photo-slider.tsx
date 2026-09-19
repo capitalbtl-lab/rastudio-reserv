@@ -22,7 +22,7 @@ export function PhotoSlider({ images }: { images: SiteImage[] }) {
   }
 
   return (
-    <section className="mt-12">
+    <section className="mt-12" data-ve-frame="gallery">
       <div className="flex items-end justify-between gap-4">
         <div>
           <p className="kicker">Студия в кадре</p>

@@ -243,7 +243,7 @@ export function CoursePageHero({
 
   return (
     <PageEditorLazy>
-    <section className="ink relative isolate overflow-hidden text-header-fg">
+    <section className="ink relative isolate overflow-hidden text-header-fg" data-ve-frame="course-hero">
       <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
         <div className="relative z-10 max-w-xl">
           <div className="hero-in kicker text-header-fg/55">{kicker}</div>
@@ -291,7 +291,7 @@ export function CoursePageHero({
       </div>
     </section>
     {video ? (
-      <div className="page-wrap py-8">
+      <div className="page-wrap py-8" data-ve-frame="video-grid">
         <SiteVideo src={video} title={title} className="aspect-video w-full overflow-hidden rounded-3xl" />
       </div>
     ) : null}
@@ -379,8 +379,7 @@ export function WhyNow({
 }) {
   if (!items?.length) return null;
   return (
-    <section>
-      <p className="kicker">Почему сейчас</p>
+    <section data-ve-frame="why">
       <h2 className="display section-title mt-2 max-w-3xl">{title || "Что получит ребёнок — и зачем это сейчас"}</h2>
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         {items.map((item, i) => (
@@ -401,8 +400,7 @@ export function WhyNow({
 export function ProgramSteps({ items }: { items: ProgramStep[] }) {
   if (!items.length) return null;
   return (
-    <section>
-      <p className="kicker">Программа</p>
+    <section data-ve-frame="program">
       <h2 className="display section-title mt-2">Что внутри — по шагам</h2>
       <p className="mt-3 max-w-2xl text-sm text-muted">
         Ступени школы — по возрастам и форматам. Откройте блок, чтобы увидеть подробности.
@@ -467,7 +465,7 @@ export function CourseStory({
   const leftover = program?.length ? [] : lessons.length ? folded : folded.slice(chapters.length);
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-12" data-ve-frame="course-story">
       {lead ? (
         <section>
           <p className="kicker">О курсе</p>
@@ -495,7 +493,7 @@ export function CourseStory({
       {program?.length ? (
         <ProgramSteps items={program} />
       ) : accordion.length ? (
-        <section>
+        <section data-ve-frame="program">
           <p className="kicker">Программа</p>
           <h2 className="display section-title mt-2">Что внутри — по шагам</h2>
           <p className="mt-3 max-w-2xl text-sm text-muted">Откройте блок, чтобы увидеть подробности. На пробном покажем живьём.</p>
@@ -610,8 +608,7 @@ export function RelatedAgeCourses({
   const heading = range ? `Курсы для детей ${range[1].replace(/\s+/g, " ").trim()}` : "Курсы этого возраста";
 
   return (
-    <div className="mt-12">
-      <p className="kicker">По возрасту</p>
+    <div className="mt-12" data-ve-frame="related">
       <h2 className="display mt-2 text-2xl md:text-3xl">{heading}</h2>
       <ul className="mt-6 grid gap-4 sm:grid-cols-2">
         {peers.map((course) => (
@@ -651,8 +648,7 @@ export function SchoolCourseList({
   const list = coursesForSchool(schoolPath, courses);
   if (!list.length) return null;
   return (
-    <div>
-      <p className="kicker">Курсы школы</p>
+    <div data-ve-frame="school-courses">
       <h2 className="display mt-2 text-xl md:text-2xl">Программы этого направления</h2>
       <ul className="mt-5 overflow-hidden rounded-[1.35rem] bg-surface shadow-[var(--shadow-border)]">
         {list.map((course, i) => (

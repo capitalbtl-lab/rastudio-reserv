@@ -105,7 +105,9 @@ export function PageExtras() {
   return (
     <div className="ve-extras w-full max-w-full overflow-x-clip">
       {extras.map((block) => (
-        <ExtraBlock key={block.id} block={block} />
+        <div key={block.id} data-ve-frame={block.id}>
+          <ExtraBlock block={block} />
+        </div>
       ))}
     </div>
   );

@@ -14,8 +14,7 @@ export function CourseOutcomes({ path }: { path: string }) {
   const items = lookupSell(COURSE_OUTCOMES, path);
   if (!items?.length) return null;
   return (
-    <section>
-      <p className="kicker">Результат</p>
+    <section data-ve-frame="sell-why">
       <h2 className="display section-title mt-2">Через 3 месяца ребёнок умеет</h2>
       <ol className="mt-6 grid gap-3 sm:grid-cols-2">
         {items.map((item, i) => (
@@ -108,7 +107,7 @@ export function CourseSellAfterWhy({ path }: { path: string }) {
 
 export function CourseSellAfterProgram({ path, teachers }: { path: string; teachers: TeacherCard[] }) {
   return (
-    <div className="space-y-12">
+    <div className="space-y-12" data-ve-frame="sell-program">
       <CourseTeacher path={path} teachers={teachers} />
       <CourseLadder path={path} />
       <CourseOutlook path={path} />

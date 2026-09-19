@@ -70,7 +70,7 @@ export function ScheduleBlock({
   }
 
   return (
-    <section className="mt-10">
+    <section className="mt-10" data-ve-frame="schedule">
       {heading ? (
         <>
           <p className="kicker">Расписание</p>

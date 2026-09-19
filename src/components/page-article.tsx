@@ -238,7 +238,7 @@ function CinematicPage({
         <ConvertBand path={page.pathDecoded || page.path} sessions={schedule} onTrial={(id) => openSign(id, "trial")} signup={signup} />
       ) : null}
       {page.videos?.length ? (
-        <section className="page-wrap pt-10 md:pt-12">
+        <section className="page-wrap pt-10 md:pt-12" data-ve-frame="video-grid">
           <p className="kicker">Как на занятиях</p>
           <h2 className="display mt-2 text-2xl md:text-3xl">Видео курса</h2>
           <div className="mt-6">
@@ -274,7 +274,7 @@ function CinematicPage({
               </div>
             ) : null}
             {trajectory.length ? (
-              <section className="pt-12">
+              <section className="pt-12" data-ve-frame="trajectory">
                 <p className="kicker">Траектория</p>
                 <h2 className="display mt-2 text-2xl md:text-3xl">Ребёнок последовательно проходит путь</h2>
                 <div className="mt-8">

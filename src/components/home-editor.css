@@ -169,7 +169,7 @@ html.home-editing[data-home-device="phone"] [class*="lg:min-h"] {
 }
 
 html.home-editing [data-ve-frame] {
-  scroll-margin-top: 5.5rem;
+  scroll-margin-top: 11rem;
 }
 
 .ve-nav-school {

@@ -76,7 +76,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
       />
       <ConvertBand path={course.pathDecoded || course.path || page.path} sessions={schedule} signup={signup} />
       {page.videos?.length ? (
-        <section className="page-wrap pt-10">
+        <section className="page-wrap pt-10" data-ve-frame="video-grid">
           <p className="kicker">Видео курса</p>
           <h2 className="display mt-2 text-2xl md:text-3xl">Как проходят занятия</h2>
           <div className="mt-6">

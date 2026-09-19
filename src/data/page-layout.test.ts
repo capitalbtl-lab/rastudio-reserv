@@ -166,10 +166,12 @@ describe("библиотека и документ страницы", () => {
     assert.doesNotMatch(cms, /from "@\/components\/page-extras"/);
     assert.doesNotMatch(cms, /page-layout-fn/);
     assert.match(cms, /HeroCollage/);
+    assert.match(cms, /data-ve-frame="course-hero"/);
+    assert.match(cms, /data-ve-frame="school-courses"/);
     const extras = readFileSync(new URL("../components/page-extras.tsx", import.meta.url), "utf8");
     assert.match(extras, /md:grid-cols-2/);
     assert.match(extras, /overflow-x-clip/);
-    assert.match(extras, /page-extras-fn/);
+    assert.match(extras, /data-ve-frame=\{block\.id\}/);
     assert.doesNotMatch(extras, /page-layout-fn/);
     const fn = readFileSync(new URL("./page-layout-fn.ts", import.meta.url), "utf8");
     assert.match(fn, /savePageDraft\(path, homeToLayout/);

@@ -27,7 +27,7 @@ export function ConvertBand({
   const review = reviewsForPath(path)[0];
 
   return (
-    <section className="page-wrap py-5 md:py-6">
+    <section className="page-wrap py-5 md:py-6" data-ve-frame="convert-band">
       <div className="overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border)]">
         <div className="flex flex-wrap items-end justify-between gap-2 px-5 py-3.5 md:px-6">
           <div>
@@ -152,7 +152,7 @@ export function ConvertAside({
   const seats = group ? freePlaces(group) : { n: -1, label: "" };
 
   return (
-    <aside id="trial" className="h-fit rounded-[1.75rem] bg-surface p-5 shadow-[var(--shadow-border)] lg:sticky lg:top-24">
+    <aside id="trial" data-ve-frame="convert-aside" className="h-fit rounded-[1.75rem] bg-surface p-5 shadow-[var(--shadow-border)] lg:sticky lg:top-24">
       <p className="kicker text-primary">Запись</p>
       <p className="display mt-2 text-2xl">Группа</p>
       {group ? (

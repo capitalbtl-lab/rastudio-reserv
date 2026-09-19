@@ -86,8 +86,25 @@ function editUrl(path: string) {
 }
 
 function revealBlock(id: string) {
-  const el = document.querySelector(`[data-ve-frame="${CSS.escape(id)}"]`) as HTMLElement | null;
-  el?.scrollIntoView({ behavior: "auto", block: "start" });
+  const ids = id === "trial-form" ? ["trial-form", "convert-aside"] : [id];
+  const find = () => {
+    for (const key of ids) {
+      const el = document.querySelector(`[data-ve-frame="${CSS.escape(key)}"]`) as HTMLElement | null;
+      if (el) return el;
+    }
+    return id === "trial-form" ? document.getElementById("trial") : null;
+  };
+  const go = () => {
+    const el = find();
+    if (!el) return false;
+    el.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
+    return true;
+  };
+  if (go()) return;
+  requestAnimationFrame(() => {
+    if (go()) return;
+    window.setTimeout(go, 60);
+  });
 }
 
 function previewUrl(path: string) {
@@ -320,6 +337,16 @@ export function HomeEditorChrome() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetTab, setSheetTab] = useState<"layers" | "block" | "studio">("layers");
   const [pageOpen, setPageOpen] = useState(false);
+  useEffect(() => {
+    if (!ctx?.editing) return;
+    const onClick = (e: MouseEvent) => {
+      const node = (e.target as HTMLElement | null)?.closest("[data-ve-frame]");
+      const id = node?.getAttribute("data-ve-frame");
+      if (id) ctx.select(id);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, [ctx?.editing, ctx?.select]);
   if (!ctx?.editing) return null;
   const { doc, selected, select, setDoc, device, setDevice, undo, redo, canUndo, canRedo, dirty, rail, setRail } = ctx;
   const style = selected ? doc.styles[selected] || {} : {};

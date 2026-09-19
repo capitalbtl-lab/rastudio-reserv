@@ -188,8 +188,7 @@ export function PageReviews({ path }: { path: string }) {
   if (!items.length) return null;
 
   return (
-    <section className="mt-12">
-      <p className="kicker text-primary">Яндекс Карты · {YANDEX_RATING.score}</p>
+    <section className="mt-12" data-ve-frame="page-reviews">
       <h2 className="display mt-2 text-2xl md:text-3xl">Родители об этом направлении</h2>
       <div className={cn("mt-6 grid gap-3", items.length > 1 ? "sm:grid-cols-2" : "")}>
         {items.map((item) => (
