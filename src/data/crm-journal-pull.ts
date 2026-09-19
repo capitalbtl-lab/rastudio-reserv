@@ -1250,7 +1250,7 @@ async function pullOneGroup(
 export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32, dateTo = "") {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, inboundRefreshSeatedLessons, studentProtectLessonIds, studentIndexBranches, landPackedCustomerLessons } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, inboundRefreshSeatedLessons, studentProtectLessonIds, studentIndexBranches, landPackedCustomerLessons, censusBodyReady } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const reset0 = String(customerSyncOf(cid).lessonsResetAt || "");
@@ -1485,7 +1485,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     }
     const census = await censusCustomerLessonIds(branchId, cid, censusOpts).catch(() => ({ ids: [] as number[], packed: [] as GroupCalLesson[], ok: false as const, pages: 0, error: "Alfa не ответила" }));
     const packed = Array.isArray(census.packed) ? census.packed : [];
-    const packedIds = uniquePositiveIds(packed.map((l) => Number(l.lessonId) || 0));
+    const packedIds = uniquePositiveIds(packed.filter((l) => censusBodyReady(l)).map((l) => Number(l.lessonId) || 0));
     disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
     if (!census.ok) {

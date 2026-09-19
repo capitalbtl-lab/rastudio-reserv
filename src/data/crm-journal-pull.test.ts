@@ -439,8 +439,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /refresh: true/);
     assert.match(inbound, /packedBy/);
     assert.match(inbound, /export function landPackedCustomerLessons/);
+    assert.match(inbound, /export function censusBodyReady/);
+    assert.match(inbound, /readyPrev && censusBodyReady\(readyPrev\)/);
     assert.match(pull, /landPackedCustomerLessons/);
     assert.match(pull, /havePacked/);
+    assert.match(pull, /packed.filter\(\(l\) => censusBodyReady\(l\)\)/);
     assert.match(pull, /windowNewLessonIds\(census\.ids, haveAfter\)/);
     const refAt = inbound.indexOf("export async function inboundRefreshSeatedLessons");
     const refFn = inbound.slice(refAt, inbound.indexOf("export async function inboundJournalChunk", refAt));

@@ -169,6 +169,13 @@ function packLight(
   };
 }
 
+/** С переписи можно не спрашивать id заново: есть сумма или явный пропуск. Пустая строка — нет, иначе 11.09 останется старой. */
+export function censusBodyReady(lesson: { amount?: number; pupils?: { amount?: number; attend?: boolean }[] } | null | undefined) {
+  if (!lesson) return false;
+  if (amountGiven(lesson.amount)) return true;
+  return (lesson.pupils || []).some((p) => amountGiven(p.amount) || p.attend === false);
+}
+
 function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
   const ids = (lesson.customerIds || []).map(Number).filter((n) => n > 0);
   const base = lesson.pupils?.length
@@ -522,7 +529,12 @@ export async function censusCustomerLessonIds(
   const { token } = await import("./alfacrm");
   const t = opts?.token || (await token());
   const { listAdminSlots } = await import("./alfacrm-schedule");
-  const slots = listAdminSlots();
+  let slots: { groupId?: number; groupName?: string; teacher?: string; subject?: string; branchId?: number }[] = [];
+  try {
+    slots = listAdminSlots();
+  } catch {
+    slots = [];
+  }
   const dateFrom = ymd(opts?.dateFrom) || "2015-01-01";
   const dateTo = ymd(opts?.dateTo) || ymd(ruShift(90));
   const branches = opts?.branches?.length ? opts.branches : uniqueBranches(branch);
@@ -553,7 +565,8 @@ export async function censusCustomerLessonIds(
             if (raw > 0) noDate.push(raw);
             continue;
           }
-          if (packedBy.has(lid)) continue;
+          const readyPrev = packedBy.get(lid);
+          if (readyPrev && censusBodyReady(readyPrev)) continue;
           const rec = item as Record<string, unknown>;
           const day = ymd(item.date) || ymd((item as { lesson_date?: string }).lesson_date);
           if (!day) continue;
@@ -573,7 +586,10 @@ export async function censusCustomerLessonIds(
           if (!packed) continue;
           packed.date = ymd(packed.date) || day;
           if (!packed.customerIds?.length) packed.customerIds = [id];
-          packedBy.set(lid, withPupilNames({ ...packed, branchId: bid || packed.branchId }));
+          const next = withPupilNames({ ...packed, branchId: bid || packed.branchId });
+          const prev = packedBy.get(lid);
+          if (prev && (censusBodyReady(prev) || !censusBodyReady(next))) continue;
+          packedBy.set(lid, next);
         }
         received += live.items.length;
         if (live.total > 0) {
