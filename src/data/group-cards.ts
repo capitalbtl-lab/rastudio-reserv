@@ -6,7 +6,7 @@ import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
 import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar, countAlfaLessonUniq, foldLessonAmount } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm-journal-core";
-import { chargeFromPupils, amountGiven } from "./crm-ledger-core";
+import { chargeFromPupils, amountGiven, chargeAmountGiven } from "./crm-ledger-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
 import { tryLockStudentAlfa, unlockStudentAlfa, ownsStudentAlfa, noteAlfaLessonsLanded } from "./crm-customer-sync";
@@ -395,7 +395,7 @@ export function collectCustomerJournal(
     const row: GroupCalLesson = withPupilFio({
       ...les,
       group: les.group || groupName || "",
-      amount: amountGiven(charge.amount) ? charge.amount : les.amount,
+      amount: chargeAmountGiven(les, id) ?? les.amount,
       cttId: charge.cttId || les.cttId,
       ...(bid ? { branchId: bid } : {}),
     });
@@ -404,8 +404,7 @@ export function collectCustomerJournal(
     const prev = seen.has(key) ? out.find((x) => String(x.lessonId || `${x.date}|${x.from}|${x.type}|${x.group}`) === key) : undefined;
     if (prev) {
       if (amountGiven(row.amount) && Number(row.amount) === 0) {
-        const p = (row.pupils || []).find((x) => Number(x.customerId) === id);
-        if (p && (p.attend === false || (p.amount != null && Number(p.amount) === 0))) prev.amount = 0;
+        prev.amount = 0;
       } else if (!amountGiven(prev.amount) && amountGiven(row.amount)) prev.amount = Number(row.amount);
       if (!(Number(prev.cttId) > 0) && Number(row.cttId) > 0) prev.cttId = row.cttId;
       const merged = mergeLessonPupils(prev.pupils, row.pupils);
@@ -466,7 +465,7 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
     }
     for (const cid of cids) {
       const charge = chargeFromPupils(lesson, cid);
-      const packed = { ...lesson, amount: amountGiven(charge.amount) ? charge.amount : undefined, cttId: charge.cttId || undefined };
+      const packed = { ...lesson, amount: chargeAmountGiven(lesson, cid), cttId: charge.cttId || undefined };
       const list = add.get(cid) || [];
       list.push(packed);
       add.set(cid, list);

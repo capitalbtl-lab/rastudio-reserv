@@ -205,7 +205,9 @@ describe("форма занятия карточки", () => {
     assert.match(cards, /journalGroupsOfCustomer/);
     assert.match(cards, /Любой статус/);
     assert.match(cards, /Number\(row.amount\) === 0/);
-    assert.match(cards, /p.attend === false \|\| \(p.amount != null && Number\(p.amount\) === 0\)/);
+    assert.match(cards, /prev.amount = 0/);
+    assert.match(cards, /chargeAmountGiven/);
+    assert.doesNotMatch(cards, /p.attend === false \|\| \(p.amount != null && Number\(p.amount\) === 0\)/);
     assert.doesNotMatch(cards, /Number\(l.status\) === 3 && \(l.pupils/);
     const journal = readFileSync(new URL("./crm-journal-core.ts", import.meta.url), "utf8");
     assert.match(journal, /pupils: lesson.pupils/);

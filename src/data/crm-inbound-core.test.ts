@@ -16,6 +16,7 @@ import {
   inboundFillClosed,
   keepAlfaProbe,
   bumpAlfaFromLanded,
+  foldLessonAmount,
   clampRecheckDays,
   recheckWindowYmd,
   iceWindowOrNow,
@@ -105,7 +106,7 @@ describe("вход из Alfa", () => {
     assert.equal(merged[0]?.lessonId, 50);
   });
 
-  it("склейка без номера сохраняет сумму и тему", () => {
+  it("явный 0 затирает сумму даже без состава; нет поля — старую не трогаем", () => {
     const merged = mergeJournalInbound(
       [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, amount: 0, topic: "" }],
       [{ date: "01.09.2026", from: "10:00", status: 3, amount: 350, topic: "роботы" }],
@@ -114,8 +115,16 @@ describe("вход из Alfa", () => {
     );
     assert.equal(merged.length, 1);
     assert.equal(merged[0]?.lessonId, 50);
-    assert.equal(merged[0]?.amount, 350);
+    assert.equal(merged[0]?.amount, 0);
     assert.equal((merged[0] as { topic?: string }).topic, "роботы");
+    const hole = mergeJournalInbound(
+      [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, topic: "" }],
+      [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, amount: 350, topic: "роботы" }],
+      [],
+      "union",
+    );
+    assert.equal(hole[0]?.amount, 350);
+    assert.equal((hole[0] as { topic?: string }).topic, "роботы");
     const pause = mergeJournalInbound(
       [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, amount: 0, pupils: [{ customerId: 4982, attend: false, amount: 0 }] }],
       [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, amount: 743.75 }],
@@ -123,6 +132,9 @@ describe("вход из Alfa", () => {
       "union",
     );
     assert.equal(pause[0]?.amount, 0);
+    assert.equal(foldLessonAmount({ amount: 0 }, { amount: 2468.75 }), 0);
+    assert.equal(foldLessonAmount({}, { amount: 2468.75 }), 2468.75);
+    assert.equal(foldLessonAmount({ amount: 400 }, { amount: 0 }), 400);
   });
 
   it("два урока без номера в разных группах на одно время — две строки", () => {

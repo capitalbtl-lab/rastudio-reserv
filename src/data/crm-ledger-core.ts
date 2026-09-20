@@ -151,21 +151,33 @@ export function pupilOf(pupils: LessonPupil[] | undefined, customerId: number) {
   return (pupils || []).find((p) => Number(p.customerId) === cid);
 }
 
+/** Явная сумма списания этого ученика, включая 0. Нет поля — дырка, не 0. */
+export function chargeAmountGiven(
+  lesson: { pupils?: LessonPupil[]; amount?: number },
+  customerId: number,
+): number | undefined {
+  const p = pupilOf(lesson.pupils, customerId);
+  if (p && amountGiven(p.amount)) return Number(p.amount);
+  if (amountGiven(lesson.amount)) return Number(lesson.amount);
+  return undefined;
+}
+
 /** Списание этого ученика с занятия: сначала его строка в журнале педагога. */
 export function chargeFromPupils(
   lesson: { pupils?: LessonPupil[]; amount?: number; cttId?: number },
   customerId: number,
 ) {
   const p = pupilOf(lesson.pupils, customerId);
+  const amount = chargeAmountGiven(lesson, customerId);
   if (p) {
     return {
-      amount: amountGiven(p.amount) ? Number(p.amount) : Number(lesson.amount) || 0,
+      amount: amount ?? 0,
       cttId: Number(p.cttId) || Number(lesson.cttId) || 0,
       attend: Boolean(p.attend),
     };
   }
   return {
-    amount: Number(lesson.amount) || 0,
+    amount: amount ?? 0,
     cttId: Number(lesson.cttId) || 0,
     attend: true,
   };

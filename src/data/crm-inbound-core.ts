@@ -83,17 +83,17 @@ function gidsOf(row: { groupIds?: number[] } | undefined) {
   return Array.isArray(row?.groupIds) && row.groupIds.length ? row.groupIds : undefined;
 }
 
-/** 0 из details/пропуска затирает диск. 0 без состава — дырка, сумму не трогаем. */
+/** Явный 0 из Alfa затирает диск, даже без состава. Нет поля — дырка, старую сумму не трогаем. */
 export function foldLessonAmount(
   row: { amount?: number; pupils?: { amount?: number; attend?: boolean }[] },
   old: { amount?: number },
 ) {
-  if (Number(row.amount) > 0) return Number(row.amount);
-  const skipZero =
-    Number(row.amount) === 0 &&
-    (row.pupils || []).some((p) => p.attend === false || (p.amount != null && Number(p.amount) === 0));
-  if (skipZero) return 0;
-  if (old.amount != null && Number.isFinite(Number(old.amount))) return Number(old.amount);
+  if (row.amount != null && String(row.amount) !== "" && Number.isFinite(Number(row.amount))) {
+    return Number(row.amount);
+  }
+  if (old.amount != null && String(old.amount) !== "" && Number.isFinite(Number(old.amount))) {
+    return Number(old.amount);
+  }
   return row.amount;
 }
 
