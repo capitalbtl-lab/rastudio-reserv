@@ -239,6 +239,25 @@ export const HISTORY_WORKER_SILENT_MS = 30_000;
 export const PLAN_WORKER_SILENT_MS = 120_000;
 export const RECHECK_STALL_MS = 30_000;
 export const RECHECK_429_GAP_MS = 120_000;
+/** Замок тика без касания 3 мин = завис. 429 — 120 с, касание каждые 200 мс. */
+export const TICK_LOCK_STALE_MS = 180_000;
+
+function pidAlive(pid: number) {
+  if (!(pid > 0)) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function lockAtFresh(at?: string, now = Date.now()) {
+  const raw = String(at || "");
+  if (!raw) return true;
+  const t = Date.parse(raw);
+  return Number.isFinite(t) && now - t < TICK_LOCK_STALE_MS;
+}
 
 export function stampHistoryWorkerBeat() {
   try {
@@ -257,15 +276,7 @@ export function historyWorkerBeat(now = Date.now()) {
     const pid = Number(raw.pid) || 0;
     const t = Date.parse(at);
     const ageMs = Number.isFinite(t) ? now - t : Number.POSITIVE_INFINITY;
-    let alive = false;
-    if (pid) {
-      try {
-        process.kill(pid, 0);
-        alive = true;
-      } catch {
-        alive = false;
-      }
-    }
+    const alive = pidAlive(pid);
     return { at, pid, ageMs, silent: ageMs > PLAN_WORKER_SILENT_MS || !alive };
   } catch {
     return { at: "", pid: 0, ageMs: Number.POSITIVE_INFINITY, silent: true };
@@ -302,15 +313,10 @@ export function historyTickLockPidAlive() {
   try {
     const dest = TICK_LOCK();
     if (!existsSync(dest)) return false;
-    const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number };
+    const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number; at?: string };
     const pid = Number(raw.pid) || 0;
-    if (!pid) return false;
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
+    if (!pidAlive(pid)) return false;
+    return lockAtFresh(raw.at);
   } catch {
     return false;
   }
@@ -366,24 +372,37 @@ export function shouldResumeStalledJob(
 export function tryHistoryTickLock() {
   const dest = TICK_LOCK();
   mkdirSync(dirname(dest), { recursive: true });
+  const payload = tickLockPayload();
+  const takeWx = () => {
+    writeFileSync(dest, payload, { flag: "wx" });
+    return true;
+  };
   try {
-    if (existsSync(dest)) {
-      const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number; at?: string };
-      const pid = Number(raw.pid) || 0;
-      if (pid && pid !== process.pid) {
-        try {
-          process.kill(pid, 0);
-          return false;
-        } catch {
-          /* процесс умер */
-        }
-      }
+    return takeWx();
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") return false;
+  }
+  try {
+    const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number; at?: string };
+    const pid = Number(raw.pid) || 0;
+    if (pid === process.pid) {
+      writeFileSync(dest, payload, "utf8");
+      return true;
+    }
+    if (pidAlive(pid)) return false;
+    try {
+      unlinkSync(dest);
+    } catch {
+      return false;
+    }
+    try {
+      return takeWx();
+    } catch {
+      return false;
     }
   } catch {
-    /* */
+    return false;
   }
-  writeFileSync(dest, tickLockPayload(), "utf8");
-  return true;
 }
 
 export function touchHistoryTickLock() {

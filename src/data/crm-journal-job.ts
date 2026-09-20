@@ -1521,21 +1521,28 @@ async function tickJob() {
   } catch (e) {
     const now = loadJournalJob();
     const text = e instanceof Error ? `${e.name} ${e.message}` : String(e);
-    const abort =
-      (e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError")) ||
-      /abort|SIGTERM|SIGINT|cancelled|canceled/i.test(text);
-    if (!abort && (now.id === id || !id)) {
-      patch({ id: now.id || id, running: false, cur: "", fill: null, msg: e instanceof Error ? e.message : "Сбой фоновой загрузки." });
-    }
-    if (!abort) {
-      notePlan({
-        kind: "fail",
-        text: e instanceof Error ? e.message : "Сбой фоновой загрузки.",
-        who: String(now.cur || ""),
-        mode: now.mode,
-        jobId: now.id || id,
-        reason: "crash",
+    const abort = (e instanceof Error && e.name === "AbortError") || /\bSIGTERM\b|\bSIGINT\b/.test(text);
+    if (abort) {
+      /* процесс сняли — «идёт» на диске, следующий процесс продолжит */
+    } else if (now.id === id || !id) {
+      const waits = (Number(now.waits) || 0) + 1;
+      const giveUp = waits > JOB_WAIT_CAP;
+      patch({
+        id: now.id || id,
+        waits,
+        ...(giveUp ? { running: false, cur: "", fill: null } : {}),
+        msg: e instanceof Error ? e.message : "Сбой фоновой загрузки.",
       });
+      if (giveUp) {
+        notePlan({
+          kind: "fail",
+          text: e instanceof Error ? e.message : "Сбой фоновой загрузки.",
+          who: String(now.cur || ""),
+          mode: now.mode,
+          jobId: now.id || id,
+          reason: "crash",
+        });
+      }
     }
   } finally {
     g.__raJournalJobTick = false;

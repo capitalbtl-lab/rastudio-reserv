@@ -195,7 +195,9 @@ history_job_busy() {
     const j = read(path.join(root, "storage/crm-journal-job.json")) || {};
     const lock = read(path.join(root, "storage/crm-history-tick.lock"));
     const beat = read(path.join(root, "storage/crm-history-worker.json")) || {};
-    const lockAlive = alive(lock && lock.pid);
+    const lockAt = Date.parse(String(lock && lock.at || ""));
+    const lockFresh = !lock || !lock.at || (Number.isFinite(lockAt) && Date.now() - lockAt < 180000);
+    const lockAlive = alive(lock && lock.pid) && lockFresh;
     const beatAt = Date.parse(String(beat.at || ""));
     // 120s = PLAN_WORKER_SILENT_MS: пульс живой — процесс истории не рестартуем.
     const beatFresh = Number.isFinite(beatAt) && Date.now() - beatAt < 120000;

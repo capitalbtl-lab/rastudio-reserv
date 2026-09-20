@@ -31,10 +31,16 @@ describe("автовыкладка Beget", () => {
     assert.match(watch, /maybeRestartHistory/);
     assert.match(watch, /workerAlive/);
     assert.match(watch, /lockAlive/);
+    assert.match(watch, /lockFresh/);
+    assert.match(watch, /TICK_LOCK_STALE_MS/);
+    assert.match(watch, /stuck/);
+    assert.match(watch, /HISTORY_HEAL_GAP_MS/);
     assert.doesNotMatch(watch, /история ещё занята/);
     assert.match(sh, /crm-history-restart.wanted/);
     assert.match(sh, /restart_or_defer_history/);
     assert.match(sh, /workerAlive/);
     assert.match(sh, /lockAlive/);
+    assert.match(sh, /lockFresh/);
+    assert.match(sh, /180000/);
   });
 });

@@ -13,7 +13,10 @@ const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INTERVAL_MS = 8_000;
 const LOCK = "/tmp/rastudio-deploy.lock";
+const TICK_LOCK_STALE_MS = 180_000; // как TICK_LOCK_STALE_MS в ядре
+const HISTORY_HEAL_GAP_MS = 60_000;
 let busy = false;
+let lastHistoryHeal = 0;
 
 async function git(args) {
   const { stdout } = await exec("git", args, { cwd: root, timeout: 60_000 });
@@ -66,7 +69,9 @@ function historyJobBusy() {
   let lockAlive = false;
   try {
     const lock = JSON.parse(readFileSync(path.join(root, "storage/crm-history-tick.lock"), "utf8"));
-    lockAlive = pidAlive(lock.pid);
+    const lockAt = Date.parse(String(lock.at || ""));
+    const lockFresh = !lock.at || (Number.isFinite(lockAt) && Date.now() - lockAt < TICK_LOCK_STALE_MS);
+    lockAlive = pidAlive(lock.pid) && lockFresh;
   } catch {
     lockAlive = false;
   }
@@ -86,8 +91,18 @@ function historyJobBusy() {
 
 async function maybeRestartHistory() {
   const flag = path.join(root, "storage/crm-history-restart.wanted");
-  if (!existsSync(flag)) return;
+  const wanted = existsSync(flag);
   if (historyJobBusy()) return;
+  let stuck = false;
+  try {
+    const job = JSON.parse(readFileSync(path.join(root, "storage/crm-journal-job.json"), "utf8"));
+    stuck = Boolean(job.running && !job.stop);
+  } catch {
+    stuck = false;
+  }
+  if (!wanted && !stuck) return;
+  if (stuck && !wanted && Date.now() - lastHistoryHeal < HISTORY_HEAL_GAP_MS) return;
+  lastHistoryHeal = Date.now();
   try {
     await exec("pm2", ["restart", "rastudio-history", "--update-env"], { cwd: root, timeout: 30_000 });
   } catch {
@@ -106,7 +121,7 @@ async function maybeRestartHistory() {
   } catch {
     /* */
   }
-  console.log("[deploy] история перезапущена после прогона пульта");
+  console.log(stuck ? "[deploy] история зависла — процесс перезапущен, прогон с того же" : "[deploy] история перезапущена после прогона пульта");
 }
 
 async function tick() {
