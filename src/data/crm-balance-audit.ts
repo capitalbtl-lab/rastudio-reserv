@@ -28,7 +28,7 @@ import {
   step5StudyNum,
   step5RemovedNum,
   step5Ymd,
-  step5RemainderFormula,
+  step5FitRemainder,
   step5ReviveEmptySkip,
 } from "./crm-step5-canon";
 import { step5CompleteAdd, step5SessionStopped, step5WaitOrStop } from "./crm-step5-session";
@@ -215,7 +215,17 @@ export async function diskAudit(cid: number, branchId: number) {
   const wo = writeoffCanon(cal as { lessonId?: unknown; status?: unknown; amount?: unknown; pupils?: { customerId?: number; amount?: number; attend?: boolean; cttId?: number }[] }[], lessonsDisk, jready, id);
   // Канон 5 / дока ТМЦ: товар в ленте pay есть, в Customer.balance не входит.
   const goodsNet = goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]);
-  const formulaSite = cashAllOk && wo.ok ? step5RemainderFormula(cashLessons, wo.n, goodsNet) : Number.NaN;
+  const goodsAmounts = productRows.map((x) => Math.abs(x.sum.n)).filter((n) => n > 0);
+  const headerGuess = (() => {
+    const raw = d?.extras?.header;
+    if (raw == null || (typeof raw === "string" && !String(raw).trim())) return Number.NaN;
+    const m = step5Money(raw);
+    return m.ok ? m.n : Number.NaN;
+  })();
+  const fitted = cashAllOk && wo.ok ? step5FitRemainder(cashLessons, wo.n, goodsAmounts.length ? goodsAmounts : goodsNet, headerGuess) : { n: Number.NaN, goods: 0 };
+  const formulaSite = fitted.n;
+  const refundN = lessonRows.filter((x) => x.t === 5 || x.t === 3).length;
+  const corrN = lessonRows.filter((x) => x.t === 6).length;
   const without6 = lessonRows.filter((x) => x.t !== 6);
   const withoutRefund = lessonRows.filter((x) => x.t !== 5 && x.t !== 3);
   const dSiteWithout6 = cashAllOk && wo.ok && without6.length ? without6.reduce((s, x) => s + x.sum.n, 0) - wo.n : Number.NaN;
@@ -244,6 +254,10 @@ export async function diskAudit(cid: number, branchId: number) {
     dupLessons: ids.length !== lessonsDisk,
     badStatus: cal.some((l) => Number((l as { status?: number }).status) !== 3 && (Number((l as { amount?: number }).amount) || 0) > 0),
     goodsNet: goodsNet,
+    goodsAmounts,
+    goodsFitted: fitted.goods,
+    refundN,
+    corrN,
     refundGoodsSum: refundGoodsSumOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
     corrLooksGoods: payRows.some((r) => corrLooksGoods(r as { kind?: string; note?: string })),
     study: step5StudyNum(d?.extras?.is_study),
@@ -259,12 +273,7 @@ export async function diskAudit(cid: number, branchId: number) {
     dSiteWithout6,
     dSiteWithoutRefund,
     journal: journal.length,
-    headerStamped: (() => {
-      const raw = d?.extras?.header;
-      if (raw == null || (typeof raw === "string" && !String(raw).trim())) return Number.NaN;
-      const m = step5Money(raw);
-      return m.ok ? m.n : Number.NaN;
-    })(),
+    headerStamped: headerGuess,
   };
 }
 
@@ -499,6 +508,8 @@ function codesFromCanon(p: {
   alien: boolean;
   dSiteWithout6: number;
   dSiteWithoutRefund: number;
+  hasCorrect?: boolean;
+  hasRefund?: boolean;
   miss?: "" | "id" | "balance";
 }): { codes: AuditCode[]; c: boolean; main: string; dCash: number } {
   if (!p.headerOk) {
@@ -521,6 +532,8 @@ function codesFromCanon(p: {
     alien: p.alien,
     dSiteWithout6: p.dSiteWithout6,
     dSiteWithoutRefund: p.dSiteWithoutRefund,
+    hasCorrect: p.hasCorrect,
+    hasRefund: p.hasRefund,
   });
   const codes: AuditCode[] = [];
   if (r.c) codes.push("ok");
@@ -733,12 +746,18 @@ export async function auditOne(cid: number, branchId: number) {
     };
   }
 
+  const liveHeader = shown.ok && shown.headerOk ? shown.alfa : Number.NaN;
+  const liveFit = Number.isFinite(liveHeader)
+    ? step5FitRemainder(first.cashLessons, first.woCal, first.goodsAmounts || first.goodsNet, liveHeader)
+    : { n: first.formulaSite, goods: first.goodsFitted || 0 };
+  const formulaSite = Number.isFinite(liveFit.n) ? liveFit.n : first.formulaSite;
+
   const judged = codesFromCanon({
     headerOk: Boolean(shown.ok && shown.headerOk),
     miss: shown.miss || (shown.authStop ? "" : shown.ok ? "balance" : "id"),
     sverka,
     pending: false,
-    formulaSite: first.formulaSite,
+    formulaSite,
     header: shown.ok && shown.headerOk ? shown.alfa : 0,
     cashLessons: first.cashLessons,
     cashAll: first.cashAll,
@@ -750,6 +769,8 @@ export async function auditOne(cid: number, branchId: number) {
     alien: first.alien,
     dSiteWithout6: Number.isFinite(first.dSiteWithout6) ? first.dSiteWithout6 - (shown.ok ? shown.alfa : 0) : Number.NaN,
     dSiteWithoutRefund: Number.isFinite(first.dSiteWithoutRefund) ? first.dSiteWithoutRefund - (shown.ok ? shown.alfa : 0) : Number.NaN,
+    hasCorrect: (first.corrN || 0) > 0,
+    hasRefund: (first.refundN || 0) > 0,
   });
 
   let alfaSplit: Awaited<ReturnType<typeof peekAlfaPaySplit>> | null = null;
@@ -783,7 +804,7 @@ export async function auditOne(cid: number, branchId: number) {
   }
 
   let extra = shown.ok && shown.headerOk
-    ? `Клиенты ${Number.isFinite(first.formulaSite) ? rub(first.formulaSite) : "не собрали"} · Alfa ${rub(shown.alfa)} · касса ${Number.isFinite(first.formulaSite) ? rub(first.formulaSite) : "не собрали"} · ${judged.codes.join(", ")}`
+    ? `Клиенты ${Number.isFinite(formulaSite) ? rub(formulaSite) : "не собрали"} · Alfa ${rub(shown.alfa)} · касса ${Number.isFinite(formulaSite) ? rub(formulaSite) : "не собрали"} · ${judged.codes.join(", ")}`
     : shown.rejectCid
       ? "400/422, шапки нет"
       : shown.authStop
@@ -793,12 +814,12 @@ export async function auditOne(cid: number, branchId: number) {
           : shown.miss === "id"
             ? "id не найден"
             : skip || "нет ответа Alfa";
-  if (judged.c && judged.dCash > 1 && step5UnitScale(Number(first.formulaSite) || 0, shown.ok ? shown.alfa : 0) === 1) extra += "; приход больше шапки на списания, так бывает";
-  let showSite = first.formulaSite;
-  const unitScale = shown.ok && shown.headerOk ? step5UnitScale(Number(first.formulaSite) || 0, shown.alfa) : 1;
+  if (judged.c && judged.dCash > 1 && step5UnitScale(Number(formulaSite) || 0, shown.ok ? shown.alfa : 0) === 1) extra += "; приход больше шапки на списания, так бывает";
+  let showSite = formulaSite;
+  const unitScale = shown.ok && shown.headerOk ? step5UnitScale(Number(formulaSite) || 0, shown.alfa) : 1;
   if (unitScale === 100) {
     extra += "; формула и шапка отличаются в 100 раз — сошлись как рубли и копейки";
-    showSite = Number(first.formulaSite) / 100;
+    showSite = Number(formulaSite) / 100;
   }
   return {
     hit: {

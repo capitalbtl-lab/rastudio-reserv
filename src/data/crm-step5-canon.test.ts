@@ -14,6 +14,7 @@ import {
   step5Newer,
   step5Reasons,
   step5RemainderFormula,
+  step5FitRemainder,
   step5Close,
   step5UnitScale,
   step5ReviveEmptySkip,
@@ -138,6 +139,14 @@ describe("шаг 5 канон", () => {
     assert.equal(step5RemainderFormula(148779, 146354), 2425);
     assert.equal(step5RemainderFormula(129487.5, 127487.5, 2000), 0);
     assert.equal(step5RemainderFormula(148779, 146354, 2500), -75);
+    assert.equal(step5FitRemainder(205375 + 157325, 157325, [2500], 205375).n, 205375);
+    assert.equal(step5FitRemainder(205375 + 157325, 157325, [2500], 205375).goods, 0);
+    assert.equal(step5FitRemainder(2787.5, 0, [2000], 787.5).n, 787.5);
+    assert.equal(step5FitRemainder(2787.5, 0, [2000], 787.5).goods, 2000);
+    assert.equal(step5FitRemainder(1700, 0, [2000], 787.5).goods, 0);
+    assert.equal(step5FitRemainder(33660, 0, [1950, 31400, 650], 2260).n, 2260);
+    assert.equal(step5FitRemainder(3087.5, 0, [2000, 1950], 1087.5).n, 1087.5);
+    assert.equal(step5FitRemainder(40000, 0, [31400, 3900, 3900], 4700).n, 4700);
     assert.equal(step5Close(2425, 2425), true);
     assert.equal(step5Close(2425, 24.25), true);
     assert.equal(step5Close(24.25, 2425), true);

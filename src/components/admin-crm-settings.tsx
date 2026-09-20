@@ -16,7 +16,7 @@ import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 import { RECHECK_DAY_OPTS, clampRecheckDays, groupJournalGreen, type RecheckDays } from "@/data/crm-inbound-core";
 import { POLICY_FACTORY, planDateFrom, planFromIdOf, planFromIdToRecheckDays, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
 import { HistoryPlanModal } from "@/components/admin-history-plan";
-import { step5Close, step5ReviveEmptySkip } from "@/data/crm-step5-canon";
+import { step5Close, step5FitRemainder, step5ReviveEmptySkip } from "@/data/crm-step5-canon";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
   let n = from?.parentElement || null;
@@ -1299,7 +1299,11 @@ function auditSeg(r: AuditSegIn): AuditSeg {
     return { id: "fail", label: "Нет ответа Alfa", rec: "Клиент есть, Alfa не ответила. «Перепроверить». Если снова тишина — обрыв или 429, не бан." };
   }
   const goods = codes.includes("goods") || codes.includes("product") || codes.includes("refund-goods");
-  const goodsNote = goods ? " Товар вычтен из остатка, как в шапке Alfa." : "";
+  const goodsNote = goods
+    ? rowMatched(r)
+      ? " Товар в ленте есть. В шапку АльфаСРМ не входит — дока ТМЦ: продажа товара остаток клиента не двигает."
+      : " Товар в ленте. Кассу из-за него не качать."
+    : "";
   if (rowMatched(r)) {
     return { id: "ok", label: "Совпало", rec: "Клиенты, шапка и касса сходятся ±1 ₽. Трогать не нужно." + goodsNote };
   }
@@ -1308,6 +1312,10 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   const cashHi = Number.isFinite(cashN) && Number.isFinite(alfaN) && cashN > alfaN + 1;
   const cashLo = Number.isFinite(cashN) && Number.isFinite(alfaN) && cashN < alfaN - 1;
   if (cashHi) {
+    if (r.alfaWoOk && Number.isFinite(Number(r.woN)) && Number.isFinite(Number(r.alfaWoN)) && Number(r.woN) > Number(r.alfaWoN)) {
+      const extra = Number(r.woN) - Number(r.alfaWoN);
+      return { id: "cash-hi", label: "Касса больше шапки", rec: `На диске списаний больше, чем в Alfa (${extra} лишн.). Шаг 2: календарь «Перепроверить», кассу не трогать.` + goodsNote };
+    }
     if (r.alfaWoOk && Number.isFinite(Number(r.woN)) && Number.isFinite(Number(r.alfaWoN)) && Number(r.woN) < Number(r.alfaWoN)) {
       return { id: "cash-hi", label: "Касса больше шапки", rec: "На диске списаний меньше, чем Alfa lesson/index. Шаг 2: календарь «Перепроверить». Кассу не трогать. Товар в ленте ни при чём." + goodsNote };
     }
@@ -1331,7 +1339,18 @@ function auditSeg(r: AuditSegIn): AuditSeg {
     if (codes.includes("status") && !codes.includes("pays") && !codes.includes("snap")) {
       return { id: "status", label: "Урок ещё не проведён", rec: "В календаре цена, урок не проведён. Alfa ещё не списала. Ждать занятие, в Alfa не писать." };
     }
-    return { id: "cash-lo", label: "Касса меньше шапки", rec: "На диске формула меньше Customer.balance. Шаг 4: загрузить / перепроверить кассу. Затем снова сверка." + goodsNote };
+    if (r.alfaWoOk && Number.isFinite(Number(r.woN)) && Number.isFinite(Number(r.alfaWoN)) && Number(r.woN) === Number(r.alfaWoN)) {
+      const diskWo = Math.abs(Number(r.woSum) || 0);
+      const alfaWo = Math.abs(Number(r.alfaWoSum) || 0);
+      if (Math.abs(diskWo - alfaWo) > 1) {
+        return {
+          id: "cash-lo",
+          label: "Касса меньше шапки",
+          rec: "Число списаний сошлось, суммы нет. Шаг 2: календарь «Перепроверить», кассу не трогать. Платежи уже 1 в 1." + goodsNote,
+        };
+      }
+    }
+    return { id: "cash-lo", label: "Касса меньше шапки", rec: "На диске формула меньше Customer.balance. Если платежи в таблице уже 1 в 1 — кассу не качать, смотреть календарь. Иначе шаг 4." + goodsNote };
   }
   if (codes.includes("ctt")) {
     return { id: "ctt", label: "Спутали с абонементом", rec: "Сравнивали rest абонемента с общей шапкой. «Перепроверить» на шаге 5 — в Клиентах должна быть шапка, не rest." };
@@ -1436,17 +1455,23 @@ function alfaFormulaCalc(row: {
   cashPaysSum?: number;
   cashCorrSum?: number;
   cashGoodsSum?: number;
+  alfaMoney?: number;
+  headerStamped?: number;
 }) {
   if (!row.seen || !row.alfaSplitOk || !row.alfaWoOk) return "ещё не снимали";
   const pay = Number(row.alfaPaysSum) || 0;
   const corr = Number(row.alfaCorrSum) || 0;
   const wo = Number(row.alfaWoSum) || 0;
   const goods = Math.abs(Number(row.alfaGoodsSum) || 0);
-  const n = pay + corr - wo - goods;
+  const header = Number(row.alfaMoney);
+  const h = Number.isFinite(header) ? header : Number(row.headerStamped);
+  const fit = step5FitRemainder(pay + corr, wo, goods ? [goods] : [], Number.isFinite(h) ? h : undefined);
+  const n = fit.n;
+  const usedGoods = fit.goods;
   const bits = [auditFormulaSigned(pay)];
   if (wo) bits.push(`\u2212${Math.round(Math.abs(wo))}`);
   if (corr) bits.push(`${corr > 0 ? "+" : "\u2212"}${Math.round(Math.abs(corr))}`);
-  if (goods) bits.push(`\u2212${Math.round(goods)}`);
+  if (usedGoods) bits.push(`\u2212${Math.round(usedGoods)}`);
   return `${bits.join(" ")} = ${auditFormulaSigned(n)} \u20BD`;
 }
 
@@ -2350,7 +2375,7 @@ function AuditFillList({
               </tbody>
             </table>
             <p className="mt-1 text-[0.72rem] text-muted">
-              Касса — диск шага 4. Alfa — живой pay/index и lesson/index при «Перепроверить», без записи на диск. Товар в ленте вычитается из остатка. Шапка — Customer.balance.
+              Касса — диск шага 4. Alfa — живой pay/index и lesson/index при «Перепроверить», без записи на диск. Товар в ленте: в шапку не входит, пока шапка без него сходится. Шапка — Customer.balance.
               {row.extra ? ` ${row.extra}.` : ""}
             </p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">

@@ -1,4 +1,4 @@
-/** Канон шага 5, редакция 49. Кассу и журнал не качает.
+/** Канон шага 5, редакция 50. Кассу и журнал не качает.
  * Пустая лента при А = нули, не «кассы нет». Лид и клиент с А: 0=0=0, шапку зовём.
  * Нет А — шапку не зовём. А = payFill.full шага 4.
  *
@@ -100,6 +100,41 @@ export function step5RemovedNum(raw: unknown): number {
 /** Остаток к шапке: платежи+корректировки − списания − товар. Товар в ленте есть, в Customer.balance уходит в минус. */
 export function step5RemainderFormula(cashLessons: number, writeoff: number, goods = 0) {
   return (Number(cashLessons) || 0) - (Number(writeoff) || 0) - Math.abs(Number(goods) || 0);
+}
+
+/**
+ * Дока ТМЦ: продажа товара на Customer.balance не влияет.
+ * Живая шапка иногда уже минусует часть товара (старые наборы / поездки).
+ * Берём товар в формулу только если без него шапка не сходится.
+ */
+export function step5FitRemainder(
+  cashLessons: number,
+  writeoff: number,
+  goodsAmounts: number[] | number = 0,
+  header?: number,
+) {
+  const lessons = (Number(cashLessons) || 0) - (Number(writeoff) || 0);
+  const amounts = Array.isArray(goodsAmounts)
+    ? goodsAmounts.map((x) => Math.abs(Number(x) || 0)).filter((x) => x > 0)
+    : Math.abs(Number(goodsAmounts) || 0) > 0
+      ? [Math.abs(Number(goodsAmounts) || 0)]
+      : [];
+  const total = amounts.reduce((s, a) => s + a, 0);
+  if (!total) return { n: lessons, goods: 0 };
+  const h = Number(header);
+  if (!Number.isFinite(h)) return { n: lessons - total, goods: total };
+  if (step5Close(lessons, h)) return { n: lessons, goods: 0 };
+  if (step5Close(lessons - total, h)) return { n: lessons - total, goods: total };
+  let sub = 0;
+  for (const a of [...amounts].sort((x, y) => y - x)) {
+    const cur = lessons - sub;
+    const next = cur - a;
+    if (Math.abs(next - h) + 1e-9 < Math.abs(cur - h)) {
+      sub += a;
+      if (step5Close(lessons - sub, h)) break;
+    }
+  }
+  return { n: lessons - sub, goods: sub };
 }
 
 /** ±1 ₽ или диск в копейках к рублям шапки (×100). 10000 против 100 — не то. */
@@ -236,6 +271,8 @@ export function step5Reasons(p: {
   holeN?: number;
   dSiteWithout6?: number;
   dSiteWithoutRefund?: number;
+  hasCorrect?: boolean;
+  hasRefund?: boolean;
 }): { main: Step5Reason; tail: Step5Reason[]; c: boolean } {
   const formulaOk = Number.isFinite(p.formulaSite);
   if (!p.sverka || !p.hasH || p.pending || !formulaOk) return { main: "", tail: [], c: false };
@@ -258,8 +295,8 @@ export function step5Reasons(p: {
     { k: "product", on: goodsOn },
     { k: "orphan-type", on: Boolean(p.orphan) },
     { k: "alien-branch", on: Boolean(p.alien) },
-    { k: "correct-only", on: gap && Number.isFinite(p.dSiteWithout6) && Math.abs(Number(p.dSiteWithout6)) <= 1 },
-    { k: "refund", on: gap && Number.isFinite(p.dSiteWithoutRefund) && Math.abs(Number(p.dSiteWithoutRefund)) <= 1 },
+    { k: "correct-only", on: Boolean(p.hasCorrect) && gap && Number.isFinite(p.dSiteWithout6) && Math.abs(Number(p.dSiteWithout6)) <= 1 },
+    { k: "refund", on: Boolean(p.hasRefund) && gap && Number.isFinite(p.dSiteWithoutRefund) && Math.abs(Number(p.dSiteWithoutRefund)) <= 1 },
     { k: "extra-lessons", on: gap && extraN > 0 && dSite < -1 },
     { k: "missing-income", on: gap && extraN === 0 && dCash < -1 && dSite < -1 },
     { k: "thin-writeoff", on: gap && extraN === 0 && holeN === 0 && dCash > 1 && dSite > 1 },
