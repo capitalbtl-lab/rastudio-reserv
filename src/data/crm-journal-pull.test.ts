@@ -127,7 +127,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /plan.pending.slice\(0, 1\)/);
     assert.match(pull, /needProbe.slice\(0, 1\)/);
     assert.match(pull, /kind === "archiveCount"/);
-    assert.match(pull, /lastArchivePolicy: report, \.\.\.journalPullState\(\)/);
+    assert.match(pull, /\.\.\.journalPullState\(\), ok: true as const[\s\S]*?lastArchivePolicy: report/);
     assert.doesNotMatch(pull, /if \(live && live.has\(x.cid\)\) return false/);
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /peopleKinds/);

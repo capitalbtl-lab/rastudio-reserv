@@ -71,8 +71,6 @@ export function peopleLessonsLine(opts: {
   if (holeList) parts.push(`нет на диске ${holeList}`);
   const extraList = formatLessonIds(extraIds);
   if (extraList) parts.push(`лишние id ${extraList}`);
-  const countGap = diskN != null && alfaN != null && alfaN > diskN ? alfaN - diskN : 0;
-  if (countGap > 0 && !holeIds.length) parts.push(`счётчик +${countGap} без id`);
   parts.push(`пачка ${pack}`);
   if (hasPlus) parts.push(`+${k}`);
   const clock = peopleClock(opts.at);
@@ -82,8 +80,6 @@ export function peopleLessonsLine(opts: {
   let packsLeft: number | undefined;
   if (holeIds.length) {
     hint = "id из переписи, на диске строк нет";
-  } else if (countGap > 0) {
-    hint = "Alfa насчитала больше, чем отдала с датой";
   } else if (holeKnown && hole === 0 && (!extraKnown || extra === 0)) {
     hint = "ничего нового";
   } else if (hasPlus && k > 0 && left > 0) {

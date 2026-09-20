@@ -6,6 +6,7 @@ import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts"
 import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd, groupJournalGreen } from "./crm-inbound-core.ts";
 import { loadSyncPolicy, saveSyncPolicyRun } from "./crm-sync-policy.ts";
 import { appendPlanLog, loadPlanLog } from "./crm-sync-plan-log.ts";
+import { observeJobClose, observeJobStart } from "./crm-step-run-log.ts";
 import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, scheduleOf, stampPlanFired, stampPlanSkip, stampPlanRun, stampPlanHandsExcept } from "./crm-sync-policy-core.ts";
 import {
   emptyJournalJob,
@@ -150,7 +151,7 @@ function stoppedMsg(job?: JournalJob) {
   return stoppedJobMsg(Number(j.n) || 0, Number(j.total) || 0);
 }
 
-function packGrain(parts: { key: string; label: string; from: string; to: string; done: boolean; weak?: boolean; rechecked?: boolean; empty?: boolean; lessons?: number; needDetails?: number; conducted?: number; at?: string; err?: string }[], grain: Grain) {
+function packGrain(parts: { key?: string; done?: boolean; weak?: boolean; rechecked?: boolean; empty?: boolean }[], grain: Grain) {
   const list = parts || [];
   const byKey = new Map(list.map((p) => [p.key, p]));
   const have = new Set(list.map((p) => p.key));
@@ -588,6 +589,11 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     pipe: Array.isArray(opts.pipe) ? opts.pipe.map(String).filter(Boolean) : [],
   };
   saveJournalJob(job);
+  try {
+    observeJobStart(job);
+  } catch {
+    /* лог */
+  }
   if (!opts.fromPipe) {
     notePlan({
       kind: "start",
@@ -752,6 +758,11 @@ export function stopJournalJob() {
       jobId: j.id,
       reason: "stop",
     });
+  }
+  try {
+    observeJobClose(j);
+  } catch {
+    /* лог */
   }
   return saveJournalJob({
     ...j,
@@ -1037,6 +1048,11 @@ function finishWaveOrStop(job: JournalJob, msg: string, n = job.n): { done: true
       reason: recent.length ? "skips" : "done",
     });
   }
+  try {
+    observeJobClose(job);
+  } catch {
+    /* лог */
+  }
   return { done: true, gap: 0, msg };
 }
 
@@ -1175,7 +1191,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   if (loadJournalJob().stop) return { done: true, gap: 0, msg: stoppedMsg() };
   if (mode === "count") {
     patch({ id, cur: "считаю отбор", fill: { kind: "archiveCount", label: "считаю отбор" } });
-    const got = await awaitWhileJob(id, historyLoadOne({ kind: "archiveCount", school: job.school || job.filter }));
+    const got = await awaitWhileJob(id, historyLoadOne({ kind: "archiveCount", school: job.school || job.filter, jobId: id, jobMode: mode }));
     if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
     const res = got.value;
     if (loadJournalJob().id !== id) return { done: true, gap: 0 };
@@ -1192,6 +1208,8 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
         probe: job.catalogFirst && loopKind === "archiveCatalog",
         school: job.school || job.filter,
         study: job.study,
+        jobId: id,
+        jobMode: mode,
       }),
     );
     if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
@@ -1294,6 +1312,8 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       school: job.school || job.filter,
       name: item.name,
       slowFill: mode === "people-slow",
+      jobId: id,
+      jobMode: mode,
     }),
   );
   if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };

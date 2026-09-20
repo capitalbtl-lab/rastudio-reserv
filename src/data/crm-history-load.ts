@@ -1,6 +1,7 @@
 /** Единый загрузчик «Истории из Alfa». Кнопки только старт/стоп. В Alfa не пишет. */
 
 import { journalPull, type JournalPullKind } from "./crm-journal-pull";
+import { diskPersonSnap, observeStepPull } from "./crm-step-run-log.ts";
 
 export type HistoryLoadSpec = {
   kind: JournalPullKind;
@@ -19,6 +20,8 @@ export type HistoryLoadSpec = {
   school?: string;
   name?: string;
   slowFill?: boolean;
+  jobId?: string;
+  jobMode?: string;
 };
 
 export type HistoryLoadResult = {
@@ -30,7 +33,7 @@ export type HistoryLoadResult = {
   lastLife?: { left?: number };
   lastArchives?: { branch?: string };
   lastArchivesPupils?: { left?: number };
-  student?: { paysMore?: boolean; paysOk?: boolean };
+  student?: { paysMore?: boolean; paysOk?: boolean; short?: boolean; seated?: number; dropped?: number; holeApproved?: boolean; dups?: boolean };
   pagesComplete?: boolean;
   holeN?: number;
   extraN?: number;
@@ -45,7 +48,9 @@ export function historyCashSkip(filled: boolean, force: boolean, scanned = false
 /** Один объект за вызов. Касса слева всегда читает Alfa, даже если раньше «сканировали». */
 export async function historyLoadOne(spec: HistoryLoadSpec): Promise<HistoryLoadResult> {
   const kind = spec.kind;
-  return journalPull({
+  const started = Date.now();
+  const before = Number(spec.customerId) ? diskPersonSnap(Number(spec.customerId)) : {};
+  const res = await journalPull({
     kind,
     study: spec.study,
     customerId: spec.customerId,
@@ -63,7 +68,33 @@ export async function historyLoadOne(spec: HistoryLoadSpec): Promise<HistoryLoad
     name: spec.name,
     lite: true,
     slowFill: Boolean(spec.slowFill),
-  }) as Promise<HistoryLoadResult>;
+  });
+  try {
+    observeStepPull(
+      {
+        kind,
+        recheck: Boolean(spec.recheck),
+        probe: Boolean(spec.probe),
+        dateFrom: spec.dateFrom,
+        dateTo: spec.dateTo,
+        recheckDays: spec.recheckDays,
+        study: spec.study,
+        customerId: spec.customerId,
+        groupId: spec.groupId,
+        branchId: spec.branchId,
+        name: spec.name,
+        jobId: spec.jobId,
+        jobMode: spec.jobMode,
+        peopleKind: kind === "balance" ? "balance" : "",
+      },
+      before,
+      res as Parameters<typeof observeStepPull>[2],
+      started,
+    );
+  } catch {
+    /* лог не рвёт шаг */
+  }
+  return res as HistoryLoadResult;
 }
 
 export function historyPullKind(mode: string, jobKind: string): JournalPullKind {

@@ -65,6 +65,14 @@ type StudentHit = {
   paysScanned?: boolean;
   paysEmpty?: boolean;
   cashRows?: number;
+  cashPaysN?: number;
+  cashRefundN?: number;
+  cashCorrN?: number;
+  cashGoodsN?: number;
+  cashPaysSum?: number;
+  cashRefundSum?: number;
+  cashCorrSum?: number;
+  cashGoodsSum?: number;
   rechecked?: boolean;
   paysRechecked?: boolean;
   done: boolean;
@@ -73,6 +81,16 @@ type StudentHit = {
   short?: boolean;
   holeN?: number;
   extraN?: number;
+  holeIds?: number[];
+  extraIds?: number[];
+  loadLessonsDisk?: number;
+  loadLessonsAlfa?: number;
+  loadPaysN?: number;
+  loadDupsN?: number;
+  recheckLessonsDisk?: number;
+  recheckLessonsAlfa?: number;
+  recheckPaysN?: number;
+  recheckDupsN?: number;
   dups?: boolean;
   seated?: number;
   holeApproved?: boolean;
@@ -769,10 +787,36 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       alfa?: number;
       short?: boolean;
       holeN?: number;
+      extraN?: number;
+      holeIds?: number[];
+      extraIds?: number[];
       holeApproved?: boolean;
       dups?: boolean;
       journal: boolean;
       pays: boolean;
+      paysScanned?: boolean;
+      paysEmpty?: boolean;
+      cashRows?: number;
+      cashPaySum?: number;
+      cashWriteoff?: number;
+      cashRemain?: number;
+      cashHeader?: number | null;
+      cashPaysN?: number;
+      cashRefundN?: number;
+      cashCorrN?: number;
+      cashGoodsN?: number;
+      cashPaysSum?: number;
+      cashRefundSum?: number;
+      cashCorrSum?: number;
+      cashGoodsSum?: number;
+      loadLessonsDisk?: number;
+      loadLessonsAlfa?: number;
+      loadPaysN?: number;
+      loadDupsN?: number;
+      recheckLessonsDisk?: number;
+      recheckLessonsAlfa?: number;
+      recheckPaysN?: number;
+      recheckDupsN?: number;
       rechecked: boolean;
       paysRechecked: boolean;
       extra: string;
@@ -1006,7 +1050,7 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
         periods: journalPeriods().length,
         miss: packList([]),
         doneList: packList([]),
-        rows: groups.map((g) => groupFillRow(g)).slice(0, 800),
+        rows: groups.map((g) => ({ ...groupFillRow(g), pupilN: 0 })).slice(0, 800),
       },
       live: emptySide("1"),
       archive: emptySide("2"),
@@ -1624,9 +1668,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     if (scanDone) {
       stampCustomerSync(cid, {
         paysAt: payAt,
-        paysRows: paysOf(cid).filter((x) => !x.deleted).length,
         ...(recheck ? { paysRecheckAt: payAt } : {}),
-      });
+        paysRows: paysOf(cid).filter((x) => !x.deleted).length,
+      } as import("./crm-customer-sync").CustomerSyncStamp);
     }
     } finally {
       if (recheck) unlockStudentAlfa(cid);
@@ -1909,7 +1953,7 @@ export async function journalPull(opts: {
           : "Нового общего файла групп нет — справа только те, что уже сверены.";
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: h.n, scanned: h.n, more: false, ...snap() };
+    return { ...snap(), ok: true as const, extra: store.note, count: h.n, scanned: h.n, more: false };
   }
 
   if (kind === "archiveCount") {
@@ -1933,7 +1977,7 @@ export async function journalPull(opts: {
     store.note = formatArchiveCountNote(report);
     store.at = report.at;
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: report.working, scanned: report.disk, more: false, lastArchivePolicy: report, ...journalPullState() };
+    return { ...journalPullState(), ok: true as const, extra: store.note, count: report.working, scanned: report.disk, more: false, lastArchivePolicy: report };
   }
 
   if (kind === "archiveCatalog") {
@@ -1965,19 +2009,19 @@ export async function journalPull(opts: {
       store.note = "Нет номера ученика.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     if (!diskIsArchive({ is_study: study, removed: d.extras?.removed, status: d.status }) || String(d.status || "") === "удалён" || String(d.extras?.removed || "") === "1") {
       store.note = "В рабочий архив можно добавить только архивного клиента.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     addArchiveWorking(cid, "manual");
     store.note = `${String(d.child?.fio || "").trim() || `клиент ${cid}`} в рабочем архиве.`;
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: 1, scanned: 1, more: false, ...snap() };
+    return { ...snap(), ok: true as const, extra: store.note, count: 1, scanned: 1, more: false };
   }
 
   if (kind === "audit") {
@@ -2010,7 +2054,7 @@ export async function journalPull(opts: {
           : "Нет текущих учеников на диске.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     if (studentPullCid && studentPullCid !== one.cid) {
       return {
@@ -2032,6 +2076,7 @@ export async function journalPull(opts: {
       store.at = hit.at;
       saveStore(store);
       return {
+        ...snap(),
         ok: true as const,
         extra: store.note,
         count: auditOnRight(hit.codes) ? 1 : 0,
@@ -2039,7 +2084,6 @@ export async function journalPull(opts: {
         more: !wanted,
         lastAudit: report,
         student: { cid: hit.cid, branchId: hit.branchId, name: hit.name, groups: groupsOfStudent(hit.cid), lessons: 0, pays: 0, done: auditOnRight(hit.codes), ok: auditOnRight(hit.codes) },
-        ...snap(),
       };
     } catch (e) {
       const err = e instanceof Error ? e.message : "Alfa не ответила";
@@ -2047,11 +2091,11 @@ export async function journalPull(opts: {
       store.at = new Date().toISOString();
       saveStore(store);
       return {
+        ...litePullState(),
         ok: false as const,
         error: /429|502/i.test(err) ? err : `нет ответа · ${err}`,
         more: true,
         lastAudit: store.lastAudit || null,
-        ...litePullState(),
       };
     } finally {
       studentPullCid = 0;
@@ -2067,7 +2111,7 @@ export async function journalPull(opts: {
       store.note = "Нет входа в AlfaCRM.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     const bag = loadArchiveBag();
     const liveKeys = new Set(listAdminSlots().map((s) => `${Number(s.branchId) || 0}:${Number(s.groupId) || 0}`));
@@ -2129,7 +2173,7 @@ export async function journalPull(opts: {
         : `Архивных групп на диске ${bag.items.length}. Все 4 филиала просмотрены.`;
     store.at = bag.at;
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: added.length, scanned: added.length, more, lastArchives, ...snap() };
+    return { ...snap(), ok: true as const, extra: store.note, count: added.length, scanned: added.length, more, lastArchives };
   }
 
   if (kind === "archivesPupils") {
@@ -2155,7 +2199,7 @@ export async function journalPull(opts: {
       store.note = note;
       store.at = row.at;
       saveStore(store);
-      return { ok: true as const, extra: note, count: row.added, scanned: row.added, more: row.more, lastArchivesPupils: row, ...snap() };
+      return { ...snap(), ok: true as const, extra: note, count: row.added, scanned: row.added, more: row.more, lastArchivesPupils: row };
     };
     if (!plan.need) {
       return lastArchivesPupils({ more: false, left: 0 }, "Новых архивных групп по карточкам нет.");
@@ -2171,7 +2215,7 @@ export async function journalPull(opts: {
       store.note = "Нет входа в AlfaCRM.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     const bag = loadArchiveBag();
     const seen = new Set(bag.items.map((g) => `${g.branchId}:${g.groupId}`));
@@ -2233,7 +2277,7 @@ export async function journalPull(opts: {
       .join(". ");
     store.at = bag.at;
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: added.length, scanned: batch.length, more: left > 0, lastArchivesPupils: report, ...snap() };
+    return { ...snap(), ok: true as const, extra: store.note, count: added.length, scanned: batch.length, more: left > 0, lastArchivesPupils: report };
   }
 
   if (kind === "life") {
@@ -2242,7 +2286,7 @@ export async function journalPull(opts: {
       store.note = "Сначала загрузите группы из Alfa.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     const now = new Date().toISOString();
     const youngNames: string[] = [];
@@ -2285,7 +2329,7 @@ export async function journalPull(opts: {
         const prev = fillOf(g.branchId, g.groupId);
         const fromA = hit.from || String(prev.life?.from || g.bDate || "");
         const toA = hit.to || String(prev.life?.to || g.eDate || "");
-        const source = hit.ok ? "alfa" : prev.life?.source || "slot";
+        const source = hit.ok ? ("alfa" as const) : prev.life?.source === "alfa" ? ("alfa" as const) : ("slot" as const);
         patchFill(g.branchId, g.groupId, { life: { from: fromA, to: toA, source } });
         const cur = loadGroupCard(g.branchId, g.groupId);
         if (cur) {
@@ -2342,7 +2386,7 @@ export async function journalPull(opts: {
     store.note = `Определено ${scoped.length} групп${school ? ` в «${school}»` : ""}: молодых ${young}, средних ${mid}, старых ${old}${unknown ? `, без срока ${unknown}` : ""}. Срок из Alfa уточнили у ${probed}${left ? `, осталось ${left}` : ""}.`;
     store.at = now;
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: scoped.length, scanned: scoped.length, more: left > 0, lastLife, ...snap() };
+    return { ...snap(), ok: true as const, extra: store.note, count: scoped.length, scanned: scoped.length, more: left > 0, lastLife };
   }
 
   if (kind === "details") {
@@ -2351,12 +2395,12 @@ export async function journalPull(opts: {
       store.note = "Этой группы нет в списке.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     const card = loadGroupCard(hit.branchId, hit.groupId);
     if (!card) {
       store.note = `«${hit.name}»: сначала загрузите явки.`;
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     const periodKey = String(opts.periodKey || "");
     const periods = journalPeriods();
@@ -2385,7 +2429,7 @@ export async function journalPull(opts: {
         : `«${hit.name}»: ${period ? `${period.label} · ` : ""}ДЗ грузить нечего — проведённых без темы нет`;
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: enriched.filled, scanned: 1, more: leftNow > 0, periodKey, periodLabel: period?.label || "", ...snap() };
+    return { ...snap(), ok: true as const, extra: store.note, count: enriched.filled, scanned: 1, more: leftNow > 0, periodKey, periodLabel: period?.label || "" };
   }
 
   if (kind === "group" || kind === "school") {
@@ -2394,7 +2438,7 @@ export async function journalPull(opts: {
       store.note = school ? `В школе «${school}» нет групп на сайте.` : "Сначала загрузите группы из Alfa.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     const grain = (opts.grain === "half" || opts.grain === "year" ? opts.grain : "quarter") as Grain;
     const periodKey = String(opts.periodKey || "");
@@ -2403,14 +2447,14 @@ export async function journalPull(opts: {
       store.note = "Выберите группу и порцию (квартал). Фон сам журнал не качает.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     const hit = scoped.find((g) => g.groupId === selectedGid && (!selectedBid || g.branchId === selectedBid)) || scoped.find((g) => g.groupId === selectedGid);
     if (!hit) {
       store.note = "Этой группы нет в списке.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, more: false, ...snap() };
+      return { ...snap(), ok: false as const, error: store.note, more: false };
     }
     const fill = fillOf(hit.branchId, hit.groupId);
     const doneKeys = pulledPeriodKeys({ done: Object.keys(fill.pulled || {}), pulled: fill.pulled });
@@ -2447,7 +2491,7 @@ export async function journalPull(opts: {
       store.note = `«${hit.name}»: вся информация загружена.`;
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: true as const, extra: store.note, count: 0, scanned: 0, more: false, ...snap() };
+      return { ...snap(), ok: true as const, extra: store.note, count: 0, scanned: 0, more: false };
     }
     const res = await pullOneGroup(hit, picked, recheck || Boolean(periodKey && periodKey !== "whole" && chunkDone(picked, doneKeys)), opts.recheckDays, String(opts.dateFrom || "").trim(), String(opts.dateTo || "").trim(), Boolean(opts.prune) || wholly).catch((e) => ({
       extra: `«${hit.name}»: ${e instanceof Error ? e.message : "ошибка"}`,
@@ -2472,6 +2516,7 @@ export async function journalPull(opts: {
       return !chunkDone(c, afterFill) || c.keys.some((k) => afterWeak.has(k));
     });
     return {
+      ...snap(),
       ok: res.ok !== false,
       extra: store.note,
       count: res.count,
@@ -2483,7 +2528,6 @@ export async function journalPull(opts: {
       holeN: res.holeN,
       extraN: res.extraN,
       seated: res.seated,
-      ...snap(),
     };
   }
 
@@ -2498,7 +2542,7 @@ export async function journalPull(opts: {
         : "Сначала загрузите клиентов и архив.";
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: false as const, error: store.note, more: false, ...snap() };
+    return { ...snap(), ok: false as const, error: store.note, more: false };
   }
   const key = `${study}:${group ? `${group.branchId}:${group.groupId}` : school || "*"}`;
   const idx = Number(store.studentIdx[key]) || 0;
@@ -2515,7 +2559,7 @@ export async function journalPull(opts: {
     store.note = "Нет ученика для загрузки.";
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: false as const, error: store.note, more: false, ...snap() };
+    return { ...snap(), ok: false as const, error: store.note, more: false };
   }
   if (wanted) {
     studentPullCid = wanted;
@@ -2569,17 +2613,26 @@ export async function journalPull(opts: {
       store.at = new Date().toISOString();
       saveStore(store);
       return {
+        ...snap(),
         ok: probed.ok,
         extra: store.note,
         count: held.alfa,
         scanned: 1,
         more: false,
         student: { cid: one.cid, branchId: one.branchId, name, groups: groupsOfStudent(one.cid), lessons: disk, pays: 0, done: closed, ok: closed, alfa: held.alfa, short, dups, holeApproved: Boolean(customerSyncOf(one.cid).journalHoleApprovedAt) },
-        ...snap(),
       };
     }
     const balance = kind === "balance";
-    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim(), Boolean(opts.slowFill), clampRecheckDays(opts.recheckDays), String(opts.dateTo || "").trim());
+    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim(), Boolean(opts.slowFill), clampRecheckDays(opts.recheckDays), String(opts.dateTo || "").trim()) as Awaited<ReturnType<typeof pullOneStudent>> & {
+      paysScanned?: boolean;
+      paysEmpty?: boolean;
+      cashRows?: number;
+      holeN?: number;
+      extraN?: number;
+      seated?: number;
+      payFail?: string;
+      censusErr?: string;
+    };
     if (row.blocked) {
       return {
         ok: false as const,
@@ -2593,6 +2646,7 @@ export async function journalPull(opts: {
     const name = fioOf(one.cid);
     const landed = lessonsJournalReady(sync);
     const who = study === "1" ? "текущие" : study === "2" ? "архив" : "ученики";
+    const gapIds = lessonGapIds(one.cid, sync.lessonsSeenIds);
     const hit: StudentHit = {
       cid: one.cid,
       branchId: one.branchId,
@@ -2605,6 +2659,7 @@ export async function journalPull(opts: {
       paysScanned: Boolean(row.paysScanned),
       paysEmpty: Boolean(row.paysEmpty),
       cashRows: Number(row.cashRows) || row.pays || 0,
+      ...cashCardOf(one.cid),
       rechecked: Boolean(row.rechecked),
       paysRechecked: Boolean(row.paysRechecked),
       done: row.done,
@@ -2614,8 +2669,18 @@ export async function journalPull(opts: {
       dups: row.dups,
       holeN: row.holeN,
       extraN: row.extraN,
+      holeIds: gapIds.hole,
+      extraIds: gapIds.extra,
+      loadLessonsDisk: sync.loadLessonsDisk ?? sync.lessonsDisk,
+      loadLessonsAlfa: sync.loadLessonsAlfa ?? sync.lessonsAlfa,
+      loadPaysN: sync.loadPaysN,
+      loadDupsN: sync.loadDupsN ?? sync.lessonsExtraN,
+      recheckLessonsDisk: sync.recheckLessonsDisk ?? (sync.lessonsRecheckAt ? sync.lessonsDisk : undefined),
+      recheckLessonsAlfa: sync.recheckLessonsAlfa ?? (sync.lessonsRecheckAt ? sync.lessonsAlfa : undefined),
+      recheckPaysN: sync.recheckPaysN,
+      recheckDupsN: sync.recheckDupsN ?? (sync.lessonsRecheckAt ? sync.lessonsExtraN : undefined),
       seated: Number(row.seated) || 0,
-      holeApproved: Boolean(customerSyncOf(one.cid).journalHoleApprovedAt),
+      holeApproved: Boolean(sync.journalHoleApprovedAt),
     };
     const prev = store.lastStudents && store.lastStudents.study === study ? store.lastStudents.rows : [];
     const merged = [hit, ...prev.filter((r) => r.cid !== hit.cid)].slice(0, 40);
@@ -2644,6 +2709,7 @@ export async function journalPull(opts: {
     saveStore(store);
     const censusFailed = !balance && row.censusOk === false;
     return {
+      ...snap(),
       ok: censusFailed ? (false as const) : (true as const),
       extra: store.note,
       error: censusFailed ? String(row.censusErr || "перепись не дошла") : undefined,
@@ -2651,7 +2717,6 @@ export async function journalPull(opts: {
       scanned: 1,
       more: !wanted,
       student: hit,
-      ...snap(),
     };
   } finally {
     if (studentPullCid === one.cid) studentPullCid = 0;

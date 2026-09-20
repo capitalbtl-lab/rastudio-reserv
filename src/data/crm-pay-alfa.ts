@@ -64,7 +64,7 @@ export function payItemGroups(branchId?: number) {
   const b = Number(branchId) || 0;
   const map = new Map<string, { value: string; label: string }[]>();
   for (const it of ALFA_PAY_ITEMS) {
-    if (b && it.branches.length && !it.branches.includes(b as 1 | 2 | 3 | 4)) continue;
+    if (b && it.branches.length && !(it.branches as readonly number[]).includes(b)) continue;
     const list = map.get(it.group) || [];
     list.push({ value: String(it.id), label: it.name });
     map.set(it.group, list);
@@ -125,6 +125,7 @@ export function packAlfaPayCreate(input: {
   payerName?: string;
   groupId?: number;
   payMethod?: string;
+  tariffId?: number;
 }) {
   const branchId = num(input.branchId) || 1;
   const kind = str(input.kind) || "income";

@@ -1157,7 +1157,7 @@ export function AdminSchedule() {
       ]);
       if (!still()) return;
       if (!res.ok) {
-        setMsg(res.error || "Карточка с сайта. AlfaCRM не ответила — данные группы можно править здесь.");
+        setMsg((res as { error?: string }).error || "Карточка с сайта. AlfaCRM не ответила — данные группы можно править здесь.");
         return;
       }
       if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
@@ -1501,7 +1501,7 @@ export function AdminSchedule() {
         setDetail((d) => (d ? { ...d, subjectId: Number(created.id), error: "" } : d));
         setMsg(`Предмет «${created.name}» создан в AlfaCRM и включён`);
       } else {
-        setDetail((d) => (d ? { ...d, error: (!res.ok && res.error) || "AlfaCRM не создала предмет. Повторите." } : d));
+        setDetail((d) => (d ? { ...d, error: (!res.ok && (res as { error?: string }).error) || "AlfaCRM не создала предмет. Повторите." } : d));
       }
     } catch (e) {
       setDetail((d) => (d ? { ...d, error: e instanceof Error ? e.message : "Не удалось создать предмет." } : d));
@@ -1546,7 +1546,7 @@ export function AdminSchedule() {
     const site = await adminSchedule({ data: { token: token(), action: "save", slots: nextSlots } as never });
     take(site as never);
     if (!site.ok) {
-      setDetail((d) => (d ? { ...d, saving: false, error: site.error || "Не сохранилось на сайте." } : d));
+      setDetail((d) => (d ? { ...d, saving: false, error: (site as { error?: string }).error || "Не сохранилось на сайте." } : d));
       return;
     }
     if (!exportMode) {
@@ -1617,8 +1617,8 @@ export function AdminSchedule() {
     });
     take(res as never);
     if (!res.ok) {
-      setDetail((d) => (d ? { ...d, saving: false, error: res.error || "АСРМ не приняла группу." } : d));
-      setMsg(res.error || "АСРМ не приняла группу.");
+      setDetail((d) => (d ? { ...d, saving: false, error: (res as { error?: string }).error || "АСРМ не приняла группу." } : d));
+      setMsg((res as { error?: string }).error || "АСРМ не приняла группу.");
       return;
     }
     const extra = res as { groupId?: number; slots?: CrmSlot[]; queued?: boolean; local?: boolean; error?: string; extra?: string; flushed?: boolean; pending?: number; needConfirm?: boolean; issues?: { code: string; text: string }[] };
@@ -1691,8 +1691,8 @@ export function AdminSchedule() {
     const res = await adminSchedule({ data: { token: token(), action: "save", slots: next } as never });
     take(res as never);
     if (!res.ok) {
-      setDetail((d) => (d ? { ...d, saving: false, error: res.error || "Не сохранилось на сайте." } : d));
-      setMsg(res.error || "Не сохранилось на сайте.");
+      setDetail((d) => (d ? { ...d, saving: false, error: (res as { error?: string }).error || "Не сохранилось на сайте." } : d));
+      setMsg((res as { error?: string }).error || "Не сохранилось на сайте.");
       return;
     }
     const saved = ((res as { slots?: CrmSlot[] }).slots || next).find((s) => s.id === slot.id) || slot;
@@ -2618,7 +2618,7 @@ export function AdminSchedule() {
       window.clearInterval(timer);
       take(res as never);
       if (!res.ok) {
-        setPushUi((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не приняла выгрузку." }));
+        setPushUi((u) => ({ ...u, done: true, error: (res as { error?: string }).error || "AlfaCRM не приняла выгрузку." }));
       } else {
         const pack = res as unknown as { results?: { id: string; ok: boolean; groupId?: number; created?: boolean; error?: string }[]; created?: number; pushed?: number; failed?: number; slots?: CrmSlot[] };
         const rows = Array.isArray(pack.results) ? pack.results : [];

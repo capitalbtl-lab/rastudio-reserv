@@ -138,6 +138,8 @@ export type CustomerCard = {
     subjectId?: number;
     teacherId?: number;
     roomId?: number;
+    bDate?: string;
+    eDate?: string;
   }[];
   calendar?: { id: number; date: string; from: string; to: string; type: string; typeId: number; group: string; teacher: string; status?: number; subject?: string; room?: string }[];
   tariffs?: { id: number; tariffId?: number; name: string; rest: number; lessons: number; archived?: boolean; bDate?: string; eDate?: string; price?: number }[];
@@ -696,7 +698,7 @@ function packGroupLink(id: number, branchId: number, name = "", active = true): 
 
 function catalogGroups(branch: number) {
   const seen = new Set<string>();
-  const out: { id: number; name: string; branchId: number; subjectId?: number; teacher?: string; day?: string; from?: string; to?: string }[] = [];
+  const out: { id: number; name: string; branchId: number; subjectId?: number; teacher?: string; teacherId?: number; day?: string; from?: string; to?: string; roomId?: number; course?: string; school?: string; schoolId?: string; courseId?: string; statusId?: number }[] = [];
   for (const s of listAdminSlots()) {
     if (!s.groupId || !isAdminGroup(s.statusId)) continue;
     const key = `${s.branchId}:${s.groupId}`;
@@ -1220,6 +1222,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "actorsSave"
           | "crmQueueTick"
           | "journalPull"
+          | "stepLog"
           | "voiceAsk"
           | "customersSearch"
           | "tariffsGet"
@@ -1362,6 +1365,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
         lessonId?: number;
         diskOnly?: boolean;
         homework?: string;
+        runId?: string;
+        rowId?: string;
+        otherId?: string;
+        format?: string;
+        step?: number;
         customers?: {
           id: number;
           name?: string;
@@ -2086,11 +2094,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!customerId) return { ok: false as const, error: "Нет customerId." };
       const { parseDossierCtt, pullCustomerTariffs } = await import("./pupil-tariffs");
       const { stampDossierCtt, findDossier } = await import("./dossiers");
-      if (data.pull) {
+      if ((data as { pull?: unknown }).pull) {
         await pullCustomerTariffs(branch, customerId).catch(() => []);
         const { cardFromDossier } = await import("./customer-card-disk");
         const d = findDossier({ crmId: customerId });
-        return { ok: true as const, customer: d ? cardFromDossier(d, branch) : { id: customerId, tariffs: parseDossierCtt(d?.extras) } };
+        return { ok: true as const, customer: d ? cardFromDossier(d, branch) : { id: customerId, tariffs: parseDossierCtt(undefined) } };
       }
       if (data.remove) {
         const rowId = Number(data.tariffRowId || data.id || 0);
@@ -3033,7 +3041,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "alfaLinkSave") {
       const raw = data.alfaLink;
-      const next = saveAlfaLink(typeof raw === "object" && raw ? raw : alfaLinkOf(typeof raw === "string" ? raw : ""));
+      const next = saveAlfaLink(typeof raw === "string" ? raw : raw && typeof raw === "object" ? (raw as import("./crm-alfa-link").AlfaLinkState) : "");
       logAdmin(`Связь AlfaCRM: ${next.mode === "offline" ? "без Alfa" : "фон"}`);
       return { ok: true as const, alfaLink: next };
     }
@@ -3080,6 +3088,95 @@ export const adminSchedule = createServerFn({ method: "POST" })
         },
       };
     }
+    if (data.action === "stepLog") {
+      const {
+        listRunIndex,
+        listRunsByStep,
+        loadRun,
+        listAllRows,
+        patchStepRow,
+        patchStepRun,
+        deleteStepRow,
+        deleteStepRun,
+        closeStepRun,
+        compareRuns,
+        rowsToCsv,
+        rowsToText,
+        namedText,
+        flipsText,
+        namedBuckets,
+        summarizeRows,
+        runHeadline,
+        settingsLine,
+      } = await import("./crm-step-run-log");
+      const op = String(data.kind || "list");
+      const runId = String(data.runId || data.name || "").trim();
+      const rowId = String(data.rowId || "").trim();
+      const stepN = Number(data.step) as 0 | 1 | 2 | 3 | 4 | 5;
+      if (op === "get") {
+        const run = runId ? loadRun(runId) : null;
+        if (!run) return { ok: false as const, error: "Прогон не найден." };
+        return { ok: true as const, run, named: namedBuckets(run.rows), headline: runHeadline(run) };
+      }
+      if (op === "patch") {
+        if (runId && rowId) {
+          const hit = patchStepRow(runId, rowId, { note: String(data.note || ""), name: data.label ? String(data.label) : undefined });
+          return hit ? { ok: true as const, row: hit } : { ok: false as const, error: "Строка не найдена." };
+        }
+        if (runId) {
+          const run = patchStepRun(runId, { note: String(data.note || "") });
+          return run ? { ok: true as const, run } : { ok: false as const, error: "Прогон не найден." };
+        }
+        return { ok: false as const, error: "Нет прогона." };
+      }
+      if (op === "deleteRow") {
+        return { ok: deleteStepRow(runId, rowId) };
+      }
+      if (op === "deleteRun") {
+        return { ok: deleteStepRun(runId) };
+      }
+      if (op === "close") {
+        const run = closeStepRun(runId);
+        return run ? { ok: true as const, run } : { ok: false as const, error: "Прогон не найден." };
+      }
+      if (op === "compare") {
+        const a = runId ? loadRun(runId) : null;
+        const b = String(data.otherId || "").trim() ? loadRun(String(data.otherId)) : null;
+        if (!a || !b) return { ok: false as const, error: "Нужны два прогона." };
+        const flips = compareRuns(a.rows, b.rows);
+        return {
+          ok: true as const,
+          flips,
+          text: `${namedText(a.rows, runHeadline(a))}\n\n— против —\n\n${namedText(b.rows, runHeadline(b))}\n\n${flipsText(flips)}`,
+          a: { id: a.id, headline: runHeadline(a), summary: a.summary },
+          b: { id: b.id, headline: runHeadline(b), summary: b.summary },
+        };
+      }
+      if (op === "export") {
+        const fmt = String(data.format || "txt");
+        if (runId) {
+          const run = loadRun(runId);
+          if (!run) return { ok: false as const, error: "Прогон не найден." };
+          const text = fmt === "csv" ? rowsToCsv(run.rows) : `${runHeadline(run)}\n${settingsLine(run.settings)}\n\n${namedText(run.rows)}\n\n${rowsToText(run.rows)}`;
+          return { ok: true as const, text, filename: `shag-${run.step}-${run.id}.${fmt === "csv" ? "csv" : "txt"}` };
+        }
+        const all = listAllRows();
+        const text = fmt === "csv" ? rowsToCsv(all.rows) : `${namedText(all.rows, "Вся обработка")}\n\n${rowsToText(all.rows)}`;
+        return { ok: true as const, text, filename: `istoria-log.${fmt === "csv" ? "csv" : "txt"}` };
+      }
+      if (op === "all") {
+        const all = listAllRows();
+        return {
+          ok: true as const,
+          runs: all.runs,
+          rows: all.rows,
+          named: namedBuckets(all.rows),
+          summary: summarizeRows(all.rows),
+        };
+      }
+      const runs = stepN >= 1 && stepN <= 5 ? listRunsByStep(stepN) : listRunIndex();
+      return { ok: true as const, runs };
+    }
     if (data.action === "journalPull") {
       const { journalPull, journalPullState } = await import("./crm-journal-pull");
       const kind = String(data.kind || "");
@@ -3090,6 +3187,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
           return { ok: false as const, error: e instanceof Error ? e.message : "Список журнала не собрался.", students: { all: 0, live: 0, archive: 0 } };
         }
       }
+      let before: import("./crm-step-run-log-core").StepLogSnap = {};
+      const watchCid = Number((data as { customerId?: number }).customerId) || 0;
+      if (kind !== "jobStart" && kind !== "jobStop" && kind !== "jobStatus") {
+        try {
+          const { diskPersonSnap } = await import("./crm-step-run-log");
+          if (watchCid) before = diskPersonSnap(watchCid);
+        } catch {
+          /* лог */
+        }
+      }
       const res = await journalPull({
         kind,
         groupId: Number(data.groupId) || 0,
@@ -3097,7 +3204,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         school: String(data.school || ""),
         study: data.study === "1" || data.study === "2" ? data.study : "all",
         periodKey: String((data as { periodKey?: string }).periodKey || ""),
-        grain: (data as { grain?: string }).grain === "half" || (data as { grain?: string }).grain === "year" ? (data as { grain: "half" | "year" }).grain : "quarter",
+        grain: (data as { grain?: string }).grain === "half" || (data as { grain?: string }).grain === "year" ? ((data as { grain?: string }).grain as "half" | "year") : "quarter",
         recheck: Boolean((data as { recheck?: boolean }).recheck),
         customerId: Number((data as { customerId?: number }).customerId) || 0,
         probe: Boolean((data as { probe?: boolean }).probe),
@@ -3111,7 +3218,33 @@ export const adminSchedule = createServerFn({ method: "POST" })
         jobItems: (await import("./crm-journal-job-core")).parseJobItems((data as { jobItems?: unknown }).jobItems),
         archived: Boolean((data as { archived?: boolean }).archived),
       });
-      if (kind !== "jobStatus") logAdmin(`Журнал Alfa: ${res.extra || res.error || kind}`);
+      if (kind !== "jobStart" && kind !== "jobStop" && kind !== "jobStatus") {
+        try {
+          const { observeStepPull } = await import("./crm-step-run-log");
+          observeStepPull(
+            {
+              kind,
+              jobMode: String((data as { jobMode?: string }).jobMode || ""),
+              peopleKind: (data as { peopleKind?: string }).peopleKind === "balance" ? "balance" : "",
+              recheck: Boolean((data as { recheck?: boolean }).recheck),
+              probe: Boolean((data as { probe?: boolean }).probe),
+              dateFrom: String((data as { dateFrom?: string }).dateFrom || "").trim(),
+              dateTo: String((data as { dateTo?: string }).dateTo || "").trim(),
+              recheckDays: Number((data as { recheckDays?: number }).recheckDays) || 0,
+              study: data.study === "1" || data.study === "2" ? String(data.study) : "",
+              customerId: Number((data as { customerId?: number }).customerId) || 0,
+              groupId: Number(data.groupId) || 0,
+              branchId: Number(data.branchId) || 0,
+              name: String((data as { name?: string }).name || ""),
+            },
+            before,
+            res as Parameters<typeof observeStepPull>[2],
+          );
+        } catch {
+          /* лог */
+        }
+      }
+      if (kind !== "jobStatus") logAdmin(`Журнал Alfa: ${(res as { extra?: string; error?: string }).extra || (res as { extra?: string; error?: string }).error || kind}`);
       return res;
     }
     if (data.action === "voiceAsk") {

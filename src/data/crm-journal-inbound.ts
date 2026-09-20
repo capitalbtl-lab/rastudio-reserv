@@ -178,7 +178,7 @@ export function censusBodyReady(lesson: { amount?: number; pupils?: { amount?: n
 
 function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
   const ids = (lesson.customerIds || []).map(Number).filter((n) => n > 0);
-  const base = lesson.pupils?.length
+  const base: { customerId: number; name?: string; attend: boolean }[] = lesson.pupils?.length
     ? lesson.pupils
     : ids.map((customerId) => ({ customerId, attend: true as boolean }));
   if (!base.length) return lesson;
@@ -208,7 +208,7 @@ export async function inboundJournalGroup(
   gid: number,
   opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean; recheck?: boolean; prune?: boolean; recheckDays?: number; groupName?: string },
 ) {
-  if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[], capped: false, hole: [] as number[], gone: [] as number[], pagesComplete: true };
+  if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[], capped: false, hole: [] as number[], gone: [] as number[], pagesComplete: true, censusN: 0, diskUniq: 0, seated: 0, checksum: "" };
   const slots = opts?.slots || (opts?.groupName ? [] : (await import("./alfacrm-schedule")).listAdminSlots());
   const slot = slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid);
   const cached = loadGroupCard(branch, gid);
@@ -288,7 +288,7 @@ export async function inboundJournalGroup(
   await pull(1, dateFrom, dateTo);
   await pull(2, dateFrom, dateTo);
   if (!alfaOk) {
-    return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила${lastErr ? ` (${lastErr.slice(0, 80)})` : ""}`, count: 0, calendar: cached?.calendar || [], capped: true, hole: [] as number[], gone: [] as number[], pagesComplete: false };
+    return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила${lastErr ? ` (${lastErr.slice(0, 80)})` : ""}`, count: 0, calendar: cached?.calendar || [], capped: true, hole: [] as number[], gone: [] as number[], pagesComplete: false, censusN: 0, diskUniq: 0, seated: 0, checksum: "" };
   }
   const pulled = [...byKey.values()];
   const hold = opts?.hold || pendingExportIds(["lesson.update", "lesson.create"]);
@@ -856,7 +856,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         ? lessonFillForWindow(lessonFillOf(customerSyncOf(id).lessonFill), dateFrom, branches[0] || branch)
         : lessonFillStart(branches[0] || branch, dateFrom);
     let ran = 0;
-    const maxRun = homeLite ? LESSON_STATUSES.length : Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
+    const maxRun = homeLite ? LESSON_STATUSES.length : Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts?.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
     const maxPages = homeLite ? 1 : deepHist ? 12 : Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
     const from = wantFull ? dateFrom : ruShift(LESSON_RECENT_DAYS);
     let aborted = false;
@@ -937,7 +937,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         pulled.push(withPupilNames(packed));
       }
     }
-    const detailCap = Number(opts?.deep) > 0 ? Math.min(24, Number(opts.deep)) : Number(opts?.take) > 0 ? 3 : 6;
+    const detailCap = Number(opts?.deep) > 0 ? Math.min(24, Number(opts?.deep)) : Number(opts?.take) > 0 ? 3 : 6;
     const home = Number(branches[0] || branch) || 1;
     const thin = pulled
       .filter((l) => {

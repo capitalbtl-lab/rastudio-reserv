@@ -458,7 +458,7 @@ describe("фон истории из Alfa", () => {
     const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
     const load = readFileSync(new URL("./crm-history-load.ts", import.meta.url), "utf8");
     assert.match(pay, /if \(!opts\?\.force && filled\) return paysOf/);
-    assert.match(pay, /payFillEmpty\(customerId\)/);
+    assert.match(pay, /export function payFillEmpty\(/);
     assert.doesNotMatch(pay, /if \(!hit\) markPayJournalComplete/);
     assert.match(pay, /keepAll: true/);
     assert.match(load, /export function historyCashSkip/);

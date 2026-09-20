@@ -16,6 +16,7 @@ import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 import { RECHECK_DAY_OPTS, clampRecheckDays, groupJournalGreen, type RecheckDays } from "@/data/crm-inbound-core";
 import { POLICY_FACTORY, planDateFrom, planFromIdOf, planFromIdToRecheckDays, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
 import { HistoryPlanModal } from "@/components/admin-history-plan";
+import { StepRunLogModal, StepRunLogPanel } from "@/components/admin-step-run-log";
 import { step5Close, step5FitRemainder, step5ReviveEmptySkip } from "@/data/crm-step5-canon";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
@@ -277,6 +278,7 @@ type ServerJob = {
   waits?: number;
   next?: string;
   workerSilent?: boolean;
+  recheckDays?: number;
   fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null;
 };
 
@@ -548,6 +550,8 @@ type PeopleRow = {
   short?: boolean;
   holeN?: number;
   extraN?: number;
+  holeIds?: number[];
+  extraIds?: number[];
   dups?: boolean;
   holeApproved?: boolean;
   journal?: boolean;
@@ -560,6 +564,22 @@ type PeopleRow = {
   cashWriteoff?: number;
   cashRemain?: number;
   cashHeader?: number | null;
+  cashPaysN?: number;
+  cashRefundN?: number;
+  cashCorrN?: number;
+  cashGoodsN?: number;
+  cashPaysSum?: number;
+  cashRefundSum?: number;
+  cashCorrSum?: number;
+  cashGoodsSum?: number;
+  loadLessonsDisk?: number;
+  loadLessonsAlfa?: number;
+  loadPaysN?: number;
+  loadDupsN?: number;
+  recheckLessonsDisk?: number;
+  recheckLessonsAlfa?: number;
+  recheckPaysN?: number;
+  recheckDupsN?: number;
   rechecked?: boolean;
   paysRechecked?: boolean;
   extra?: string;
@@ -1507,12 +1527,30 @@ function patchPeopleSide(
       dups,
       holeN: hit.holeN != null ? Number(hit.holeN) : p.holeN,
       extraN: hit.extraN != null ? Number(hit.extraN) : p.extraN,
+      holeIds: hit.holeIds ?? p.holeIds,
+      extraIds: hit.extraIds ?? p.extraIds,
       holeApproved: hit.holeApproved != null ? Boolean(hit.holeApproved) : p.holeApproved,
       journal,
       pays,
       paysScanned,
       paysEmpty,
       cashRows,
+      cashPaysN: hit.cashPaysN ?? p.cashPaysN,
+      cashRefundN: hit.cashRefundN ?? p.cashRefundN,
+      cashCorrN: hit.cashCorrN ?? p.cashCorrN,
+      cashGoodsN: hit.cashGoodsN ?? p.cashGoodsN,
+      cashPaysSum: hit.cashPaysSum ?? p.cashPaysSum,
+      cashRefundSum: hit.cashRefundSum ?? p.cashRefundSum,
+      cashCorrSum: hit.cashCorrSum ?? p.cashCorrSum,
+      cashGoodsSum: hit.cashGoodsSum ?? p.cashGoodsSum,
+      loadLessonsDisk: hit.loadLessonsDisk ?? p.loadLessonsDisk,
+      loadLessonsAlfa: hit.loadLessonsAlfa ?? p.loadLessonsAlfa,
+      loadPaysN: hit.loadPaysN ?? p.loadPaysN,
+      loadDupsN: hit.loadDupsN ?? p.loadDupsN,
+      recheckLessonsDisk: hit.recheckLessonsDisk ?? p.recheckLessonsDisk,
+      recheckLessonsAlfa: hit.recheckLessonsAlfa ?? p.recheckLessonsAlfa,
+      recheckPaysN: hit.recheckPaysN ?? p.recheckPaysN,
+      recheckDupsN: hit.recheckDupsN ?? p.recheckDupsN,
       paysMore: Boolean(hit.paysMore),
       rechecked,
       paysRechecked,
@@ -1532,7 +1570,7 @@ function mergePeopleSide<T extends { total?: number; people?: PeopleRow[] }>(cur
   const resPeople = res?.people || [];
   const curPeople = cur?.people || [];
   const people = resPeople.length ? resPeople : curPeople;
-  const total = Number(res?.total) > 0 ? Number(res.total) : people.length || Number(cur?.total) || 0;
+  const total = Number(res?.total) > 0 ? Number(res?.total) : people.length || Number(cur?.total) || 0;
   return { ...(cur as T), ...(res as T), people, total };
 }
 
@@ -2780,6 +2818,7 @@ export function AdminCrmSettings() {
       n?: number;
       total?: number;
       msg?: string;
+      recheckDays?: number;
       fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null;
     };
   } | null>(null);
@@ -2802,6 +2841,7 @@ export function AdminCrmSettings() {
   const [histTab, setHistTab] = useState<HistTab>("roster");
   const [loadGuide, setLoadGuide] = useState<HistTab | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  const [procLogOpen, setProcLogOpen] = useState(false);
   const crmTabsRef = useRef<HTMLDivElement>(null);
   const histTabsRef = useRef<HTMLDivElement>(null);
   const tabLockY = useRef<number | null>(null);
@@ -3181,7 +3221,7 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy";
+    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "hydrateDisk" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
@@ -3307,7 +3347,7 @@ export function AdminCrmSettings() {
       stopSchool.current = false;
       setBusy(true);
       setSchoolRun({ cur: job.cur || "", n: job.n || 0, total: job.total || 0, waits: job.waits || 0 });
-      setFillLoading(job.fill || (job.cur ? { kind: job.kind || job.fill?.kind, label: job.cur, customerId: job.fill?.customerId } : null));
+      setFillLoading(job.fill || (job.cur ? { kind: job.kind, label: job.cur } : null));
       if (job.msg) setMsg(job.msg);
       return;
     }
@@ -4234,6 +4274,16 @@ export function AdminCrmSettings() {
                 </button>,
                 HINT.plan,
                 )}
+                {withHint(
+                <button
+                  type="button"
+                  className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", procLogOpen ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+                  onClick={() => setProcLogOpen(true)}
+                >
+                  Лог обработки
+                </button>,
+                "Поименно кто как обработан на шагах 1–5. Копировать, скачать, править, удалить. Шаги не меняет.",
+                )}
                 {HIST_TABS.map((t) => (
                   <span key={t.id} className="inline-flex items-center gap-0.5">
                     <button
@@ -4268,6 +4318,7 @@ export function AdminCrmSettings() {
                   })
                 }
               />
+              <StepRunLogModal open={procLogOpen} onClose={() => setProcLogOpen(false)} tick={journal?.job?.cur || journal?.at} />
               {histTab === "roster" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="flex items-center gap-2 font-display text-[1.15rem]">
@@ -4468,6 +4519,7 @@ export function AdminCrmSettings() {
                     </>
                   );
                 })()}
+                <StepRunLogPanel step={1} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
 
@@ -4748,6 +4800,7 @@ export function AdminCrmSettings() {
                 <p className="mt-2 text-[0.72rem] text-muted">
                   Название группы раскрывает карточку на месте, без прыжка вверх. Другая группа — эта закрывается. Список без внутреннего скролла.
                 </p>
+                <StepRunLogPanel step={3} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
 
@@ -4910,6 +4963,7 @@ export function AdminCrmSettings() {
                     </>
                   );
                 })()}
+                <StepRunLogPanel step={2} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
 
@@ -5009,6 +5063,7 @@ export function AdminCrmSettings() {
                     </>
                   );
                 })()}
+                <StepRunLogPanel step={4} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
 
@@ -5109,6 +5164,7 @@ export function AdminCrmSettings() {
                     </>
                   );
                 })()}
+                <StepRunLogPanel step={5} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
             </div>

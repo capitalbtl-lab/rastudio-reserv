@@ -810,7 +810,7 @@ async function inboundPayWindow(
       if (explicit && explicit !== customerId) return null;
       return packPay(it, customerId, branchId);
     })
-    .filter((x): x is PayRow => Boolean(x) && Number(x.customerId) === customerId);
+    .filter((x): x is PayRow => x != null && Number(x.customerId) === customerId);
   const hold = holdPayIds();
   const merged0 = markRefundOfGoods(mergePayInbound(pulled, paysOf(customerId), hold));
   const pulledIds = pulled.map((x) => Number(x.id) || 0);
@@ -870,7 +870,7 @@ export async function inboundCustomerPays(
   const have = paysOf(customerId).some((x) => !x.deleted);
   if (!opts?.force && filled) return paysOf(customerId);
   if (!opts?.force && payFillScanned(customerId) && !have && !filled) {
-    delete store.payFill[String(customerId)];
+    if (store.payFill) delete store.payFill[String(customerId)];
   }
   if (cur && !cur.done) {
     const i = branches.indexOf(cur.bid);
@@ -993,7 +993,7 @@ export async function inboundCustomerPays(
       if (explicit && explicit !== customerId) return null;
       return packPay(it, customerId, branchId);
     })
-    .filter((x): x is PayRow => Boolean(x) && Number(x.customerId) === customerId);
+    .filter((x): x is PayRow => x != null && Number(x.customerId) === customerId);
   const hold = holdPayIds();
   const merged = markRefundOfGoods(mergePayInbound(pulled, paysOf(customerId), hold));
   replaceCustomerPays(customerId, merged, { keepAll: true });
