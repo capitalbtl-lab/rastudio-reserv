@@ -191,12 +191,18 @@ history_job_busy() {
     const path = require("path");
     const root = process.cwd();
     const read = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
+    const alive = (pid) => { const n = Number(pid) || 0; if (!n) return false; try { process.kill(n, 0); return true; } catch { return false; } };
     const j = read(path.join(root, "storage/crm-journal-job.json")) || {};
-    if (j.running && !j.stop) process.exit(0);
     const lock = read(path.join(root, "storage/crm-history-tick.lock"));
-    const pid = Number(lock && lock.pid) || 0;
-    if (!pid) process.exit(1);
-    try { process.kill(pid, 0); process.exit(0); } catch { process.exit(1); }
+    const beat = read(path.join(root, "storage/crm-history-worker.json")) || {};
+    const lockAlive = alive(lock && lock.pid);
+    const beatAt = Date.parse(String(beat.at || ""));
+    // 120s = PLAN_WORKER_SILENT_MS: пульс живой — процесс истории не рестартуем.
+    const beatFresh = Number.isFinite(beatAt) && Date.now() - beatAt < 120000;
+    const workerAlive = beatFresh && alive(beat.pid);
+    if (lockAlive) process.exit(0);
+    if (j.running && !j.stop && workerAlive) process.exit(0);
+    process.exit(1);
   '
 }
 

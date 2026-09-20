@@ -101,10 +101,13 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobRetryGapMs("ок"), 5000);
     assert.equal(jobRetryGapMs("нет ответа", 14), 2000);
     assert.match(readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8"), /jobRetryGapMs\(err \|\| "перепись не дошла", blue \|\| live.recheck \? jobPeriodDays/);
-    assert.equal(historyJobBusyOf({ running: true, stop: false }), true);
-    assert.equal(historyJobBusyOf({ running: true, stop: true }), false);
+    assert.equal(historyJobBusyOf({ running: true, stop: false }, false, true), true);
+    assert.equal(historyJobBusyOf({ running: true, stop: false }, false, false), false);
+    assert.equal(historyJobBusyOf({ running: true, stop: false }, true, false), true);
     assert.equal(historyJobBusyOf({ running: false, stop: false }, true), true);
-    assert.equal(historyJobBusyOf({ running: false, stop: false }, false), false);
+    assert.equal(historyJobBusyOf({ running: false, stop: false }, false, true), false);
+    assert.equal(historyJobBusyOf({ running: true, stop: true }, false, true), false);
+    assert.equal(historyJobBusyOf({ running: true, stop: true }, true, true), true);
   });
   it("очередь учеников: слева неготовые, справа перепроверка", () => {
     const people = [
@@ -507,7 +510,7 @@ describe("фон истории из Alfa", () => {
     assert.match(core, /process.kill\(pid, 0\)/);
     assert.doesNotMatch(core, /age < 90_000/);
     assert.doesNotMatch(job, /STALE_LOCK_MS/);
-    assert.match(job, /beats % 40/);
+    assert.doesNotMatch(job, /beats % 40/);
     assert.match(job, /advanceJobWave/);
     assert.match(job, /shouldResumeStalledJob\(cur\)/);
     assert.match(job, /NODE_ENV === "test"/);
@@ -522,9 +525,26 @@ describe("фон истории из Alfa", () => {
     assert.match(core, /historyWorkerProcessAlive/);
     assert.match(core, /historyJobBusy/);
     assert.match(core, /tickLockPayload/);
-    assert.match(core, /workerSilent: stop \? false : historyWorkerSilent/);
+    assert.doesNotMatch(core, /function tickLockPayload\(\) \{[\s\S]{0,200}loadJournalJob/);
+    assert.match(core, /jobShouldHalt/);
+    assert.match(core, /statSync/);
+    const sleepFn = job.slice(job.indexOf("async function sleepGap"), job.indexOf("async function awaitWhileJob"));
+    assert.match(sleepFn, /touchHistoryTickLock/);
+    assert.match(sleepFn, /jobShouldHalt/);
+    assert.doesNotMatch(sleepFn, /loadJournalJob/);
+    assert.doesNotMatch(sleepFn, /patch\(/);
+    const waitFn = job.slice(job.indexOf("async function awaitWhileJob"), job.indexOf("function stoppedMsg"));
+    assert.match(waitFn, /jobShouldHalt/);
+    assert.match(waitFn, /touchHistoryTickLock/);
+    assert.doesNotMatch(waitFn, /patch\(/);
+    assert.doesNotMatch(waitFn, /beats % 40/);
+    assert.match(core, /workerSilent: stop \? false : historyWorkerSilent\(j\) && !historyWorkerProcessAlive/);
     assert.match(job, /historyWorkerProcessAlive/);
     assert.match(job, /if \(!isHistoryWorker\(\)\) \{/);
+    assert.match(job, /process.once\("SIGTERM"/);
+    assert.match(job, /process.once\("SIGINT"/);
+    assert.match(job, /const abort =/);
+    assert.match(eco, /kill_timeout: 8000/);
     assert.match(ui, /процесс истории молчит/);
     assert.match(worker, /RA_HISTORY_WORKER = "1"/);
     assert.match(worker, /ts-ext-hook\.mjs/);

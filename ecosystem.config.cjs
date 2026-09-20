@@ -74,6 +74,7 @@ module.exports = {
       autorestart: true,
       max_restarts: 20,
       restart_delay: 4000,
+      kill_timeout: 8000,
       max_memory_restart: "450M",
       env: {
         TZ: "Europe/Moscow",

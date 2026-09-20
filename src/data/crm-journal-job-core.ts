@@ -1,6 +1,6 @@
 /** Состояние фоновой «Истории из Alfa»: диск, без Alfa. */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 /**
@@ -167,6 +167,9 @@ function fileOf() {
   return join(process.cwd(), "storage", "crm-journal-job.json");
 }
 
+let haltPeekMtime = -1;
+let haltPeek = { stop: false, id: "" };
+
 export function loadJournalJob(): JournalJob {
   try {
     if (!existsSync(fileOf())) return emptyJournalJob();
@@ -202,7 +205,32 @@ export function saveJournalJob(job: JournalJob) {
   const tmp = `${dest}.tmp`;
   writeFileSync(tmp, JSON.stringify(job), "utf8");
   renameSync(tmp, dest);
+  try {
+    haltPeekMtime = statSync(dest).mtimeMs;
+    haltPeek = { stop: Boolean(job.stop), id: job.id };
+  } catch {
+    haltPeekMtime = -1;
+  }
   return job;
+}
+
+/** Стоп/смена id без разбора всей очереди, если файл не менялся. Лок не жрёт карточки. */
+export function jobShouldHalt(id = "") {
+  try {
+    const dest = fileOf();
+    if (!existsSync(dest)) {
+      haltPeekMtime = -1;
+      return true;
+    }
+    const m = statSync(dest).mtimeMs;
+    if (m === haltPeekMtime) return haltPeek.stop || Boolean(id && haltPeek.id !== id);
+    haltPeekMtime = m;
+  } catch {
+    haltPeekMtime = -1;
+  }
+  const j = loadJournalJob();
+  haltPeek = { stop: Boolean(j.stop), id: j.id };
+  return haltPeek.stop || Boolean(id && haltPeek.id !== id);
 }
 
 const TICK_LOCK = () => join(process.cwd(), "storage", "crm-history-tick.lock");
@@ -230,7 +258,7 @@ export function historyWorkerBeat(now = Date.now()) {
     const t = Date.parse(at);
     const ageMs = Number.isFinite(t) ? now - t : Number.POSITIVE_INFINITY;
     let alive = false;
-    if (pid && pid !== process.pid) {
+    if (pid) {
       try {
         process.kill(pid, 0);
         alive = true;
@@ -256,10 +284,18 @@ export function historyWorkerSilent(job = loadJournalJob(), ms = HISTORY_WORKER_
   return !Number.isFinite(age) || age > ms;
 }
 
-/** Пульт грузит или перепроверяет: выкладка историю не рестартует. */
-export function historyJobBusyOf(job: { running?: boolean; stop?: boolean }, lockAlive = false) {
-  if (job.running && !job.stop) return true;
-  return Boolean(lockAlive);
+/**
+ * Выкладка не рестартует историю, пока кто-то реально крутит прогон.
+ * running на диске при мёртвом процессе — не busy: иначе загрузка не доходит.
+ */
+export function historyJobBusyOf(
+  job: { running?: boolean; stop?: boolean },
+  lockAlive = false,
+  workerAlive = false,
+) {
+  if (lockAlive) return true;
+  if (job.running && !job.stop && workerAlive) return true;
+  return false;
 }
 
 export function historyTickLockPidAlive() {
@@ -268,7 +304,7 @@ export function historyTickLockPidAlive() {
     if (!existsSync(dest)) return false;
     const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number };
     const pid = Number(raw.pid) || 0;
-    if (!pid || pid === process.pid) return false;
+    if (!pid) return false;
     try {
       process.kill(pid, 0);
       return true;
@@ -281,18 +317,12 @@ export function historyTickLockPidAlive() {
 }
 
 export function historyJobBusy(job = loadJournalJob()) {
-  return historyJobBusyOf(job, historyTickLockPidAlive());
+  return historyJobBusyOf(job, historyTickLockPidAlive(), historyWorkerProcessAlive());
 }
 
+/** Только pid/время. Не читать очередь — иначе лок жрёт карточки на перепроверке. */
 function tickLockPayload() {
-  const j = loadJournalJob();
-  return JSON.stringify({
-    pid: process.pid,
-    at: new Date().toISOString(),
-    jobId: j.id || "",
-    mode: j.mode || "",
-    recheck: Boolean(j.recheck),
-  });
+  return JSON.stringify({ pid: process.pid, at: new Date().toISOString() });
 }
 
 export function jobRetryGapMs(err?: string, periodDays?: number) {
@@ -402,7 +432,7 @@ export function journalJobSnapshot() {
     waits: j.waits,
     itemsN: j.items.length,
     next: stop ? "" : nextName,
-    workerSilent: stop ? false : historyWorkerSilent(j),
+    workerSilent: stop ? false : historyWorkerSilent(j) && !historyWorkerProcessAlive(),
     recheckDays: j.recheckDays,
     dateFrom: j.dateFrom,
     dateTo: j.dateTo,

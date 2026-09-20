@@ -45,31 +45,49 @@ function building() {
   return lockHeld();
 }
 
-function historyJobBusy() {
+function pidAlive(pid) {
+  const n = Number(pid) || 0;
+  if (!n) return false;
   try {
-    const job = JSON.parse(readFileSync(path.join(root, "storage/crm-journal-job.json"), "utf8"));
-    if (job.running && !job.stop) return true;
-  } catch {
-    /* нет прогона */
-  }
-  try {
-    const lock = JSON.parse(readFileSync(path.join(root, "storage/crm-history-tick.lock"), "utf8"));
-    const pid = Number(lock.pid) || 0;
-    if (!pid) return false;
-    process.kill(pid, 0);
+    process.kill(n, 0);
     return true;
   } catch {
     return false;
   }
 }
 
+function historyJobBusy() {
+  let job = {};
+  try {
+    job = JSON.parse(readFileSync(path.join(root, "storage/crm-journal-job.json"), "utf8"));
+  } catch {
+    job = {};
+  }
+  let lockAlive = false;
+  try {
+    const lock = JSON.parse(readFileSync(path.join(root, "storage/crm-history-tick.lock"), "utf8"));
+    lockAlive = pidAlive(lock.pid);
+  } catch {
+    lockAlive = false;
+  }
+  let workerAlive = false;
+  try {
+    const beat = JSON.parse(readFileSync(path.join(root, "storage/crm-history-worker.json"), "utf8"));
+    const beatAt = Date.parse(String(beat.at || ""));
+    const beatFresh = Number.isFinite(beatAt) && Date.now() - beatAt < 120_000; // PLAN_WORKER_SILENT_MS
+    workerAlive = beatFresh && pidAlive(beat.pid);
+  } catch {
+    workerAlive = false;
+  }
+  if (lockAlive) return true;
+  if (job.running && !job.stop && workerAlive) return true;
+  return false;
+}
+
 async function maybeRestartHistory() {
   const flag = path.join(root, "storage/crm-history-restart.wanted");
   if (!existsSync(flag)) return;
-  if (historyJobBusy()) {
-    console.log("[deploy] история ещё занята, рестарт ждёт");
-    return;
-  }
+  if (historyJobBusy()) return;
   try {
     await exec("pm2", ["restart", "rastudio-history", "--update-env"], { cwd: root, timeout: 30_000 });
   } catch {

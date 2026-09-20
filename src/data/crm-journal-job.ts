@@ -40,6 +40,7 @@ import {
   stoppedJobMsg,
   shouldResumeStalledJob,
   jobRetryGapMs,
+  jobShouldHalt,
   JOB_WAIT_CAP,
   isRecheckWaveMode,
   jobHasIce,
@@ -113,13 +114,9 @@ function patch(extra: Partial<JournalJob>) {
 
 async function sleepGap(ms: number, id = "") {
   const until = Date.now() + ms;
-  let beats = 0;
   while (Date.now() < until) {
-    const j = loadJournalJob();
-    if (j.stop || (id && j.id !== id)) return;
+    if (jobShouldHalt(id)) return;
     touchHistoryTickLock();
-    beats += 1;
-    if (beats % 40 === 0) patch({ id: id || j.id });
     await new Promise((r) => setTimeout(r, 200));
   }
 }
@@ -128,7 +125,6 @@ async function sleepGap(ms: number, id = "") {
 async function awaitWhileJob<T>(id: string, task: Promise<T>): Promise<{ stopped: true } | { value: T }> {
   return new Promise((resolve, reject) => {
     let settled = false;
-    let beats = 0;
     const finish = (fn: () => void) => {
       if (settled) return;
       settled = true;
@@ -136,13 +132,8 @@ async function awaitWhileJob<T>(id: string, task: Promise<T>): Promise<{ stopped
       fn();
     };
     const iv = setInterval(() => {
-      const j = loadJournalJob();
-      if (j.stop || (id && j.id !== id)) finish(() => resolve({ stopped: true }));
-      else {
-        touchHistoryTickLock();
-        beats += 1;
-        if (beats % 40 === 0) patch({ id });
-      }
+      if (jobShouldHalt(id)) finish(() => resolve({ stopped: true }));
+      else touchHistoryTickLock();
     }, 250);
     task.then(
       (value) => finish(() => resolve({ value })),
@@ -925,6 +916,16 @@ export function resumeJournalJob() {
 
 export async function runHistoryWorker() {
   process.env.RA_HISTORY_WORKER = "1";
+  const bye = () => {
+    try {
+      releaseHistoryTickLock();
+    } catch {
+      /* */
+    }
+    process.exit(0);
+  };
+  process.once("SIGINT", bye);
+  process.once("SIGTERM", bye);
   startJournalJobWatch();
   await new Promise(() => {});
 }
@@ -1519,15 +1520,23 @@ async function tickJob() {
     }
   } catch (e) {
     const now = loadJournalJob();
-    if (now.id === id || !id) patch({ id: now.id || id, running: false, cur: "", fill: null, msg: e instanceof Error ? e.message : "Сбой фоновой загрузки." });
-    notePlan({
-      kind: "fail",
-      text: e instanceof Error ? e.message : "Сбой фоновой загрузки.",
-      who: String(now.cur || ""),
-      mode: now.mode,
-      jobId: now.id || id,
-      reason: "crash",
-    });
+    const text = e instanceof Error ? `${e.name} ${e.message}` : String(e);
+    const abort =
+      (e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError")) ||
+      /abort|SIGTERM|SIGINT|cancelled|canceled/i.test(text);
+    if (!abort && (now.id === id || !id)) {
+      patch({ id: now.id || id, running: false, cur: "", fill: null, msg: e instanceof Error ? e.message : "Сбой фоновой загрузки." });
+    }
+    if (!abort) {
+      notePlan({
+        kind: "fail",
+        text: e instanceof Error ? e.message : "Сбой фоновой загрузки.",
+        who: String(now.cur || ""),
+        mode: now.mode,
+        jobId: now.id || id,
+        reason: "crash",
+      });
+    }
   } finally {
     g.__raJournalJobTick = false;
     releaseHistoryTickLock();
