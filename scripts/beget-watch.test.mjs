@@ -35,6 +35,8 @@ describe("автовыкладка Beget", () => {
     assert.match(watch, /TICK_LOCK_STALE_MS/);
     assert.match(watch, /stuck/);
     assert.match(watch, /HISTORY_HEAL_GAP_MS/);
+    assert.match(watch, /stuck && Date.now\(\) - lastHistoryHeal/);
+    assert.doesNotMatch(watch, /stuck && !wanted && Date.now/);
     assert.doesNotMatch(watch, /история ещё занята/);
     assert.match(sh, /crm-history-restart.wanted/);
     assert.match(sh, /restart_or_defer_history/);

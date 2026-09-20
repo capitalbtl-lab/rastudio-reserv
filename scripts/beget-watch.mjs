@@ -101,7 +101,7 @@ async function maybeRestartHistory() {
     stuck = false;
   }
   if (!wanted && !stuck) return;
-  if (stuck && !wanted && Date.now() - lastHistoryHeal < HISTORY_HEAL_GAP_MS) return;
+  if (stuck && Date.now() - lastHistoryHeal < HISTORY_HEAL_GAP_MS) return;
   lastHistoryHeal = Date.now();
   try {
     await exec("pm2", ["restart", "rastudio-history", "--update-env"], { cwd: root, timeout: 30_000 });

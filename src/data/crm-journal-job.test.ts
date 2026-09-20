@@ -527,7 +527,10 @@ describe("фон истории из Alfa", () => {
     assert.match(core, /tickLockPayload/);
     assert.doesNotMatch(core, /function tickLockPayload\(\) \{[\s\S]{0,200}loadJournalJob/);
     assert.match(core, /TICK_LOCK_STALE_MS = 180_000/);
+    assert.match(core, /HISTORY_RESTART_GRACE_MS = 15_000/);
+    assert.match(core, /ageMs < HISTORY_RESTART_GRACE_MS/);
     assert.match(core, /flag: "wx"/);
+    assert.match(core, /pid && pid !== process.pid/);
     assert.match(core, /jobShouldHalt/);
     assert.match(core, /statSync/);
     const sleepFn = job.slice(job.indexOf("async function sleepGap"), job.indexOf("async function awaitWhileJob"));
@@ -549,6 +552,7 @@ describe("фон истории из Alfa", () => {
     assert.doesNotMatch(job, /TimeoutError/);
     assert.match(job, /giveUp/);
     assert.match(job, /waits > JOB_WAIT_CAP/);
+    assert.match(job, /sleepGap\(jobRetryGapMs/);
     assert.match(eco, /kill_timeout: 8000/);
     assert.match(eco, /max_memory_restart: "600M"/);
     assert.match(eco, /max-old-space-size=512/);

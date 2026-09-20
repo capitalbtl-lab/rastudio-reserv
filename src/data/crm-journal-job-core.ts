@@ -241,6 +241,8 @@ export const RECHECK_STALL_MS = 30_000;
 export const RECHECK_429_GAP_MS = 120_000;
 /** Замок тика без касания 3 мин = завис. 429 — 120 с, касание каждые 200 мс. */
 export const TICK_LOCK_STALE_MS = 180_000;
+/** Pid мёртв, пульс свежий — ждём рестарт процесса, сайт очередь не берёт. */
+export const HISTORY_RESTART_GRACE_MS = 15_000;
 
 function pidAlive(pid: number) {
   if (!(pid > 0)) return false;
@@ -286,7 +288,9 @@ export function historyWorkerBeat(now = Date.now()) {
 /** Процесс истории жив по пульсу — сайт очередь не перехватывает. */
 export function historyWorkerProcessAlive(now = Date.now()) {
   const beat = historyWorkerBeat(now);
-  return Boolean(beat.pid && !beat.silent);
+  if (beat.pid && !beat.silent) return true;
+  if (beat.pid && beat.ageMs < HISTORY_RESTART_GRACE_MS) return true;
+  return false;
 }
 
 export function historyWorkerSilent(job = loadJournalJob(), ms = HISTORY_WORKER_SILENT_MS) {
@@ -407,7 +411,13 @@ export function tryHistoryTickLock() {
 
 export function touchHistoryTickLock() {
   try {
-    writeFileSync(TICK_LOCK(), tickLockPayload(), "utf8");
+    const dest = TICK_LOCK();
+    if (existsSync(dest)) {
+      const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number };
+      const pid = Number(raw.pid) || 0;
+      if (pid && pid !== process.pid) return;
+    }
+    writeFileSync(dest, tickLockPayload(), "utf8");
   } catch {
     /* */
   }

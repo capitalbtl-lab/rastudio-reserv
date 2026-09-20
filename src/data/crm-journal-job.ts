@@ -1542,6 +1542,8 @@ async function tickJob() {
           jobId: now.id || id,
           reason: "crash",
         });
+      } else {
+        await sleepGap(jobRetryGapMs(text, jobPeriodDays(now)), id);
       }
     }
   } finally {
