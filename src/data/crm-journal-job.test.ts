@@ -37,6 +37,7 @@ import {
   isRecheckWaveMode,
   jobHasIce,
   jobItemSkipped,
+  historyJobBusyOf,
 } from "./crm-journal-job-core.ts";
 
 describe("фон истории из Alfa", () => {
@@ -100,6 +101,10 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobRetryGapMs("ок"), 5000);
     assert.equal(jobRetryGapMs("нет ответа", 14), 2000);
     assert.match(readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8"), /jobRetryGapMs\(err \|\| "перепись не дошла", blue \|\| live.recheck \? jobPeriodDays/);
+    assert.equal(historyJobBusyOf({ running: true, stop: false }), true);
+    assert.equal(historyJobBusyOf({ running: true, stop: true }), false);
+    assert.equal(historyJobBusyOf({ running: false, stop: false }, true), true);
+    assert.equal(historyJobBusyOf({ running: false, stop: false }, false), false);
   });
   it("очередь учеников: слева неготовые, справа перепроверка", () => {
     const people = [
@@ -514,8 +519,12 @@ describe("фон истории из Alfa", () => {
     assert.match(pull, /resumeJournalJob\(\)/);
     assert.match(core, /tryHistoryTickLock/);
     assert.match(core, /historyWorkerSilent/);
+    assert.match(core, /historyWorkerProcessAlive/);
+    assert.match(core, /historyJobBusy/);
+    assert.match(core, /tickLockPayload/);
     assert.match(core, /workerSilent: stop \? false : historyWorkerSilent/);
-    assert.match(job, /if \(!isHistoryWorker\(\) && !historyWorkerSilent/);
+    assert.match(job, /historyWorkerProcessAlive/);
+    assert.match(job, /if \(!isHistoryWorker\(\)\) \{/);
     assert.match(ui, /процесс истории молчит/);
     assert.match(worker, /RA_HISTORY_WORKER = "1"/);
     assert.match(worker, /ts-ext-hook\.mjs/);
@@ -524,6 +533,9 @@ describe("фон истории из Alfa", () => {
     assert.match(eco, /name: "rastudio-history"/);
     assert.match(eco, /ts-ext-register\.mjs/);
     assert.match(deploy, /pm2 restart rastudio-history/);
+    assert.match(deploy, /crm-history-restart.wanted/);
+    assert.match(deploy, /история занята/);
+    assert.match(deploy, /restart_or_defer_history/);
     assert.match(ui, /F5 ничего не сбрасывает/);
     assert.match(ui, /HINT\.plan/);
     assert.match(ui, /вкладку можно закрыть|страницу можно закрыть/);

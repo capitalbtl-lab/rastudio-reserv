@@ -4,7 +4,7 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, readFileSync, unlinkSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,6 +45,52 @@ function building() {
   return lockHeld();
 }
 
+function historyJobBusy() {
+  try {
+    const job = JSON.parse(readFileSync(path.join(root, "storage/crm-journal-job.json"), "utf8"));
+    if (job.running && !job.stop) return true;
+  } catch {
+    /* нет прогона */
+  }
+  try {
+    const lock = JSON.parse(readFileSync(path.join(root, "storage/crm-history-tick.lock"), "utf8"));
+    const pid = Number(lock.pid) || 0;
+    if (!pid) return false;
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function maybeRestartHistory() {
+  const flag = path.join(root, "storage/crm-history-restart.wanted");
+  if (!existsSync(flag)) return;
+  if (historyJobBusy()) {
+    console.log("[deploy] история ещё занята, рестарт ждёт");
+    return;
+  }
+  try {
+    await exec("pm2", ["restart", "rastudio-history", "--update-env"], { cwd: root, timeout: 30_000 });
+  } catch {
+    try {
+      await exec("pm2", ["start", path.join(root, "ecosystem.config.cjs"), "--only", "rastudio-history"], {
+        cwd: root,
+        timeout: 30_000,
+      });
+    } catch (e) {
+      console.error("[deploy] рестарт истории", e instanceof Error ? e.message : e);
+      return;
+    }
+  }
+  try {
+    unlinkSync(flag);
+  } catch {
+    /* */
+  }
+  console.log("[deploy] история перезапущена после прогона пульта");
+}
+
 async function tick() {
   if (busy) return;
   if (building()) {
@@ -53,6 +99,7 @@ async function tick() {
   }
   busy = true;
   try {
+    await maybeRestartHistory();
     await git(["fetch", "origin", "main"]);
     const local = await git(["rev-parse", "HEAD"]);
     const remote = await git(["rev-parse", "origin/main"]);

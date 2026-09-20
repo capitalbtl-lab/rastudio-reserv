@@ -223,21 +223,76 @@ export function stampHistoryWorkerBeat() {
 
 export function historyWorkerBeat(now = Date.now()) {
   try {
-    if (!existsSync(WORKER_BEAT())) return { at: "", ageMs: Number.POSITIVE_INFINITY, silent: true };
-    const raw = JSON.parse(readFileSync(WORKER_BEAT(), "utf8")) as { at?: string };
+    if (!existsSync(WORKER_BEAT())) return { at: "", pid: 0, ageMs: Number.POSITIVE_INFINITY, silent: true };
+    const raw = JSON.parse(readFileSync(WORKER_BEAT(), "utf8")) as { at?: string; pid?: number };
     const at = String(raw.at || "");
+    const pid = Number(raw.pid) || 0;
     const t = Date.parse(at);
     const ageMs = Number.isFinite(t) ? now - t : Number.POSITIVE_INFINITY;
-    return { at, ageMs, silent: ageMs > PLAN_WORKER_SILENT_MS };
+    let alive = false;
+    if (pid && pid !== process.pid) {
+      try {
+        process.kill(pid, 0);
+        alive = true;
+      } catch {
+        alive = false;
+      }
+    }
+    return { at, pid, ageMs, silent: ageMs > PLAN_WORKER_SILENT_MS || !alive };
   } catch {
-    return { at: "", ageMs: Number.POSITIVE_INFINITY, silent: true };
+    return { at: "", pid: 0, ageMs: Number.POSITIVE_INFINITY, silent: true };
   }
+}
+
+/** Процесс истории жив по пульсу — сайт очередь не перехватывает. */
+export function historyWorkerProcessAlive(now = Date.now()) {
+  const beat = historyWorkerBeat(now);
+  return Boolean(beat.pid && !beat.silent);
 }
 
 export function historyWorkerSilent(job = loadJournalJob(), ms = HISTORY_WORKER_SILENT_MS) {
   if (!job.running) return false;
   const age = Date.now() - Date.parse(job.lastAt || job.startedAt || "");
   return !Number.isFinite(age) || age > ms;
+}
+
+/** Пульт грузит или перепроверяет: выкладка историю не рестартует. */
+export function historyJobBusyOf(job: { running?: boolean; stop?: boolean }, lockAlive = false) {
+  if (job.running && !job.stop) return true;
+  return Boolean(lockAlive);
+}
+
+export function historyTickLockPidAlive() {
+  try {
+    const dest = TICK_LOCK();
+    if (!existsSync(dest)) return false;
+    const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number };
+    const pid = Number(raw.pid) || 0;
+    if (!pid || pid === process.pid) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
+
+export function historyJobBusy(job = loadJournalJob()) {
+  return historyJobBusyOf(job, historyTickLockPidAlive());
+}
+
+function tickLockPayload() {
+  const j = loadJournalJob();
+  return JSON.stringify({
+    pid: process.pid,
+    at: new Date().toISOString(),
+    jobId: j.id || "",
+    mode: j.mode || "",
+    recheck: Boolean(j.recheck),
+  });
 }
 
 export function jobRetryGapMs(err?: string, periodDays?: number) {
@@ -297,13 +352,13 @@ export function tryHistoryTickLock() {
   } catch {
     /* */
   }
-  writeFileSync(dest, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), "utf8");
+  writeFileSync(dest, tickLockPayload(), "utf8");
   return true;
 }
 
 export function touchHistoryTickLock() {
   try {
-    writeFileSync(TICK_LOCK(), JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), "utf8");
+    writeFileSync(TICK_LOCK(), tickLockPayload(), "utf8");
   } catch {
     /* */
   }

@@ -27,5 +27,10 @@ describe("автовыкладка Beget", () => {
     assert.match(sh, /2700/);
     assert.match(watch, /45 \* 60 \* 1000/);
     assert.doesNotMatch(watch, /timeout: 20 \* 60 \* 1000/);
+    assert.match(watch, /crm-history-restart.wanted/);
+    assert.match(watch, /maybeRestartHistory/);
+    assert.match(watch, /история ещё занята/);
+    assert.match(sh, /crm-history-restart.wanted/);
+    assert.match(sh, /restart_or_defer_history/);
   });
 });

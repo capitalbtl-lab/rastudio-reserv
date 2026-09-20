@@ -35,6 +35,7 @@ import {
   touchHistoryTickLock,
   releaseHistoryTickLock,
   historyWorkerSilent,
+  historyWorkerProcessAlive,
   stampHistoryWorkerBeat,
   stoppedJobMsg,
   shouldResumeStalledJob,
@@ -112,9 +113,13 @@ function patch(extra: Partial<JournalJob>) {
 
 async function sleepGap(ms: number, id = "") {
   const until = Date.now() + ms;
+  let beats = 0;
   while (Date.now() < until) {
     const j = loadJournalJob();
     if (j.stop || (id && j.id !== id)) return;
+    touchHistoryTickLock();
+    beats += 1;
+    if (beats % 40 === 0) patch({ id: id || j.id });
     await new Promise((r) => setTimeout(r, 200));
   }
 }
@@ -894,6 +899,7 @@ function kickHistoryTick() {
   setTimeout(() => {
     const j = loadJournalJob();
     if (!j.running || j.stop) return;
+    if (historyWorkerProcessAlive()) return;
     if (historyWorkerSilent(j, 2500)) resumeJournalJobFromDisk();
   }, 3000);
 }
@@ -901,6 +907,7 @@ function kickHistoryTick() {
 function resumeJournalJobFromDisk() {
   const j = loadJournalJob();
   if (!j.running || j.stop) return;
+  if (!isHistoryWorker() && historyWorkerProcessAlive()) return;
   if (!isHistoryWorker() && !historyWorkerSilent(j)) return;
   void tickJob();
 }
@@ -911,6 +918,7 @@ export function resumeJournalJob() {
     resumeJournalJobFromDisk();
     return loadJournalJob();
   }
+  if (historyWorkerProcessAlive()) return loadJournalJob();
   if (historyWorkerSilent()) resumeJournalJobFromDisk();
   return loadJournalJob();
 }
@@ -1479,7 +1487,10 @@ function doneMsg(job: JournalJob) {
 
 async function tickJob() {
   if (g.__raJournalJobTick) return;
-  if (!isHistoryWorker() && !historyWorkerSilent()) return;
+  if (!isHistoryWorker()) {
+    if (historyWorkerProcessAlive()) return;
+    if (!historyWorkerSilent()) return;
+  }
   if (!tryHistoryTickLock()) return;
   g.__raJournalJobTick = true;
   let id = "";

@@ -183,7 +183,35 @@ rm -rf "$ROOT/.output.bak"
 if ! pm2 describe rastudio-deploy 2>/dev/null | grep -q "status.*online"; then
   pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio-deploy >/dev/null 2>&1 || true
 fi
-pm2 restart rastudio-history --update-env >/dev/null 2>&1 || pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio-history >/dev/null 2>&1 || true
+
+# Замок истории: загрузка и перепроверка с пульта не рвутся выкладкой.
+history_job_busy() {
+  node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const root = process.cwd();
+    const read = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
+    const j = read(path.join(root, "storage/crm-journal-job.json")) || {};
+    if (j.running && !j.stop) process.exit(0);
+    const lock = read(path.join(root, "storage/crm-history-tick.lock"));
+    const pid = Number(lock && lock.pid) || 0;
+    if (!pid) process.exit(1);
+    try { process.kill(pid, 0); process.exit(0); } catch { process.exit(1); }
+  '
+}
+
+restart_or_defer_history() {
+  if history_job_busy; then
+    mkdir -p "$ROOT/storage"
+    date -u +%Y-%m-%dT%H:%M:%SZ > "$ROOT/storage/crm-history-restart.wanted"
+    echo "[deploy] история занята (загрузка/перепроверка с пульта) — рестарт отложен"
+    return
+  fi
+  rm -f "$ROOT/storage/crm-history-restart.wanted"
+  pm2 restart rastudio-history --update-env >/dev/null 2>&1 || pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio-history >/dev/null 2>&1 || true
+}
+
+restart_or_defer_history
 for app in rastudio-pay-poll; do
   if ! pm2 describe "$app" >/dev/null 2>&1; then
     pm2 start "$ROOT/ecosystem.config.cjs" --only "$app"
