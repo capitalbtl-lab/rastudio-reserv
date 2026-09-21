@@ -183,6 +183,77 @@ export function chargeFromPupils(
   };
 }
 
+export type LessonDebtRow = {
+  lessonId?: unknown;
+  status?: unknown;
+  amount?: unknown;
+  date?: string;
+  type?: string;
+  typeId?: number;
+  subject?: string;
+  subjectId?: number;
+  cttId?: number;
+  pupils?: LessonPupil[];
+};
+
+function lessonTrialLike(l: { type?: string; typeId?: number }) {
+  return Number(l.typeId) === 3 || /пробн/i.test(String(l.type || ""));
+}
+
+function lessonSubjectKey(l: { subjectId?: number; subject?: string; type?: string; typeId?: number }) {
+  const sid = Number(l.subjectId) || 0;
+  if (sid > 0) return `id:${sid}`;
+  const s = String(l.subject || l.type || "").trim().toLowerCase();
+  return s ? `n:${s}` : "";
+}
+
+function lessonDay(raw: unknown) {
+  const s = String(raw || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(s);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return s.slice(0, 10);
+}
+
+/** Проведён в долг: был, явный 0, абонемента нет. Пауза / пробное / уважительная — нет. */
+export function lessonDebtLike(lesson: LessonDebtRow, customerId: number) {
+  if (Number(lesson.status) !== 3) return false;
+  if (lessonTrialLike(lesson)) return false;
+  const cid = Number(customerId) || 0;
+  if (!cid) return false;
+  const p = pupilOf(lesson.pupils, cid);
+  if (!p) return false;
+  if (p.attend === false) return false;
+  if (Number(p.reasonId) === 2) return false;
+  const raw = amountGiven(p.amount) ? p.amount : lesson.amount;
+  if (!amountGiven(raw) || Number(raw) !== 0) return false;
+  const ctt = Number(p.cttId) || Number(lesson.cttId) || 0;
+  return ctt <= 0;
+}
+
+/** Цена долга: последняя его проведённая > 0 (тот же предмет, если есть), иначе тариф, иначе 0. */
+export function step5DebtPrice(lesson: LessonDebtRow, customerId: number, cal: LessonDebtRow[], tariffFallback = 0) {
+  const cid = Number(customerId) || 0;
+  const self = Number(lesson.lessonId) || 0;
+  const want = lessonSubjectKey(lesson);
+  const hits: { day: string; amount: number; same: boolean }[] = [];
+  for (const l of cal || []) {
+    if (Number(l.status) !== 3) continue;
+    const lid = Number(l.lessonId) || 0;
+    if (self && lid && lid === self) continue;
+    const n = cid ? Number(chargeFromPupils(l, cid).amount) || 0 : Number(l.amount) || 0;
+    if (!(n > 0)) continue;
+    hits.push({ day: lessonDay(l.date), amount: n, same: Boolean(want && lessonSubjectKey(l) === want) });
+  }
+  hits.sort((a, b) => a.day.localeCompare(b.day));
+  const same = hits.filter((h) => h.same);
+  if (same.length) return same[same.length - 1].amount;
+  if (hits.length) return hits[hits.length - 1].amount;
+  const fb = Number(tariffFallback) || 0;
+  return fb > 0 ? fb : 0;
+}
+
+
 export function lessonPupilsKey(
   lessons: { lessonId?: number; pupils?: { customerId?: number; amount?: number; attend?: boolean }[] }[],
 ) {

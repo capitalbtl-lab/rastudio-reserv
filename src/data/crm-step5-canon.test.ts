@@ -147,6 +147,8 @@ describe("шаг 5 канон", () => {
     assert.equal(step5FitRemainder(33660, 0, [1950, 31400, 650], 2260).n, 2260);
     assert.equal(step5FitRemainder(3087.5, 0, [2000, 1950], 1087.5).n, 1087.5);
     assert.equal(step5FitRemainder(40000, 0, [31400, 3900, 3900], 4700).n, 4700);
+    assert.equal(step5RemainderFormula(121150, 115987.5, 2000), 3162.5);
+    assert.equal(step5FitRemainder(121150, 115987.5, [2000], 3162.5).n, 3162.5);
     assert.equal(step5Close(2425, 2425), true);
     assert.equal(step5Close(2425, 24.25), true);
     assert.equal(step5Close(24.25, 2425), true);

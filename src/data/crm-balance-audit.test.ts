@@ -394,8 +394,10 @@ describe("шаг 5 сверка остатка", () => {
     assert.match(src, /goodsNetOf/);
     assert.match(src, /step5FitRemainder/);
     assert.match(src, /chargeFromPupils/);
+    assert.match(src, /lessonDebtLike/);
+    assert.match(src, /step5DebtPrice/);
     assert.match(src, /!\(a\.n > 0\)/);
-    assert.match(src, /writeoffCanon\([\s\S]*jready, id\)/);
+    assert.match(src, /writeoffCanon\([\s\S]*jready, id/);
     assert.match(src, /if \(wo > 0\)/);
     const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
     const inbound = pay.slice(pay.indexOf("export async function inboundCustomerPays"), pay.indexOf("export type PayPollResult"));

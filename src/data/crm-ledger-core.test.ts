@@ -16,6 +16,8 @@ import {
   lessonPupilsKey,
   amountGiven,
   storedWriteoff,
+  lessonDebtLike,
+  step5DebtPrice,
 } from "./crm-ledger-core.ts";
 
 describe("журнал оплат и списаний", () => {
@@ -139,6 +141,76 @@ describe("журнал оплат и списаний", () => {
     assert.equal(storedWriteoff(0, 743.75, { attend: false }), 0);
     assert.equal(storedWriteoff(undefined, 743.75, { attend: true }), 743.75);
     assert.equal(storedWriteoff(undefined, 743.75, { attend: false }), 0);
+  });
+
+  it("долг за урок: ноль журнала, в сверке цена последней проведённой", () => {
+    const cid = 4324;
+    const paid = {
+      lessonId: 11,
+      status: 3,
+      date: "2026-09-06",
+      subject: "Робототехника",
+      amount: 1087.5,
+      pupils: [{ customerId: cid, amount: 1087.5, attend: true, cttId: 9 }],
+    };
+    const debt = {
+      lessonId: 12,
+      status: 3,
+      date: "2026-09-13",
+      subject: "Робототехника",
+      amount: 0,
+      pupils: [{ customerId: cid, amount: 0, attend: true }],
+    };
+    const pause = {
+      lessonId: 13,
+      status: 3,
+      date: "2026-09-11",
+      subject: "Робототехника",
+      amount: 0,
+      pupils: [{ customerId: cid, amount: 0, attend: false, reasonId: 2 }],
+    };
+    const freeCtt = {
+      lessonId: 14,
+      status: 3,
+      date: "2026-09-20",
+      subject: "Робототехника",
+      amount: 0,
+      pupils: [{ customerId: cid, amount: 0, attend: true, cttId: 9 }],
+    };
+    const trial = {
+      lessonId: 15,
+      status: 3,
+      date: "2026-09-21",
+      type: "Пробное",
+      typeId: 3,
+      amount: 0,
+      pupils: [{ customerId: cid, amount: 0, attend: true }],
+    };
+    const hole = {
+      lessonId: 16,
+      status: 3,
+      date: "2026-09-22",
+      subject: "Робототехника",
+      pupils: [{ customerId: cid, attend: true }],
+    };
+    assert.equal(lessonDebtLike(debt, cid), true);
+    assert.equal(lessonDebtLike(paid, cid), false);
+    assert.equal(lessonDebtLike(pause, cid), false);
+    assert.equal(lessonDebtLike(freeCtt, cid), false);
+    assert.equal(lessonDebtLike(trial, cid), false);
+    assert.equal(lessonDebtLike(hole, cid), false);
+    assert.equal(step5DebtPrice(debt, cid, [paid, debt]), 1087.5);
+    assert.equal(step5DebtPrice(debt, cid, [debt], 8700 / 8), 1087.5);
+    assert.equal(step5DebtPrice(debt, cid, [debt], 0), 0);
+    const missPaid = {
+      lessonId: 17,
+      status: 3,
+      date: "2026-09-08",
+      amount: 1087.5,
+      pupils: [{ customerId: cid, amount: 1087.5, attend: false }],
+    };
+    assert.equal(lessonDebtLike(missPaid, cid), false);
+    assert.equal(chargeFromPupils(missPaid, cid).amount, 1087.5);
   });
 
   it("одно занятие дважды на диске не удваивает списание", () => {

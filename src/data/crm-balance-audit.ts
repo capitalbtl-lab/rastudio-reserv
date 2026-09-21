@@ -3,7 +3,7 @@
  * diskAlfaRole не зовём. Лид в Альфе: шапки клиента нет — снято. Пустая лента при А — нули, шапку зовём.
  */
 
-import { uniqueBranches, lessonWriteoffAmount, chargeFromPupils } from "./crm-ledger-core";
+import { uniqueBranches, lessonWriteoffAmount, chargeFromPupils, lessonDebtLike, step5DebtPrice, type LessonDebtRow } from "./crm-ledger-core";
 import { liveCttOf } from "./crm-pay-core";
 import {
   classifyAudit,
@@ -148,10 +148,11 @@ function livePayRows(rows: PayLike[]) {
 }
 
 function writeoffCanon(
-  cal: { lessonId?: unknown; status?: unknown; amount?: unknown; pupils?: { customerId?: number; amount?: number; attend?: boolean; cttId?: number }[] }[],
+  cal: LessonDebtRow[],
   lessonsDisk: number,
   jready: boolean,
   customerId?: number,
+  tariffOf?: (l: LessonDebtRow) => number,
 ) {
   if (lessonsDisk < 1) return { ok: true, n: 0, k: 0 };
   if (!jready) return { ok: false, n: 0, k: 0 };
@@ -163,9 +164,19 @@ function writeoffCanon(
     if (Number(l.status) !== 3) continue;
     const raw = cid ? chargeFromPupils(l, cid).amount : l.amount;
     const a = step5Money(raw);
-    if (!a.ok || !(a.n > 0)) continue;
-    n += a.n;
-    k += 1;
+    if (a.ok && a.n > 0) {
+      n += a.n;
+      k += 1;
+      continue;
+    }
+    if (!a.ok || !(a.n > 0)) {
+      if (!cid || !lessonDebtLike(l, cid)) continue;
+      const price = step5DebtPrice(l, cid, cal, tariffOf ? tariffOf(l) : 0);
+      const d = step5Money(price);
+      if (!d.ok || !(d.n > 0)) continue;
+      n += d.n;
+      k += 1;
+    }
   }
   return { ok: true, n, k };
 }
@@ -175,7 +186,7 @@ export async function diskAudit(cid: number, branchId: number) {
   const { collectCustomerJournal, loadCustomerCalendar } = await import("./group-cards");
   const { paysOf, payCustomerFilled, payFillPending, customerBalance } = await import("./crm-pay");
   const { accountSnapOf, goodsNetOf, refundGoodsSumOf, corrLooksGoods } = await import("./crm-pay-core");
-  const { parseDossierCtt } = await import("./pupil-tariffs");
+  const { parseDossierCtt, pickLessonCtt, lessonWriteoffOf } = await import("./pupil-tariffs");
   const { customerSyncOf, lessonsJournalReady } = await import("./crm-customer-sync");
   const { isArchiveWorking } = await import("./crm-archive-policy");
   const id = Number(cid) || 0;
@@ -212,7 +223,10 @@ export async function diskAudit(cid: number, branchId: number) {
   const lessonsDisk = new Set(ids).size;
   const sync = customerSyncOf(id);
   const jready = lessonsJournalReady(sync);
-  const wo = writeoffCanon(cal as { lessonId?: unknown; status?: unknown; amount?: unknown; pupils?: { customerId?: number; amount?: number; attend?: boolean; cttId?: number }[] }[], lessonsDisk, jready, id);
+  const ctts = parseDossierCtt(d?.extras);
+  const wo = writeoffCanon(cal as LessonDebtRow[], lessonsDisk, jready, id, (l) =>
+    lessonWriteoffOf(pickLessonCtt(ctts, { subjectId: Number(l.subjectId) || 0, subject: String(l.subject || l.type || "") })),
+  );
   // Канон 5 / дока ТМЦ: товар в ленте pay есть, в Customer.balance не входит.
   const goodsNet = goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]);
   const goodsAmounts = productRows.map((x) => Math.abs(x.sum.n)).filter((n) => n > 0);
@@ -230,7 +244,7 @@ export async function diskAudit(cid: number, branchId: number) {
   const withoutRefund = lessonRows.filter((x) => x.t !== 5 && x.t !== 3);
   const dSiteWithout6 = cashAllOk && wo.ok && without6.length ? without6.reduce((s, x) => s + x.sum.n, 0) - wo.n : Number.NaN;
   const dSiteWithoutRefund = cashAllOk && wo.ok && withoutRefund.length ? withoutRefund.reduce((s, x) => s + x.sum.n, 0) - wo.n : Number.NaN;
-  const snap = d ? accountSnapOf(d.extras?.balance, parseDossierCtt(d.extras)) : Number.NaN;
+  const snap = d ? accountSnapOf(d.extras?.balance, ctts) : Number.NaN;
   const clients = d ? customerBalance(id, snap, wo.n) : 0;
   return {
     name: String(d?.child?.fio || "").trim() || `клиент ${id}`,
@@ -250,7 +264,7 @@ export async function diskAudit(cid: number, branchId: number) {
     livePays: live.length,
     liveFair: fair.length,
     lessonsDisk,
-    liveCtt: liveCttOf(parseDossierCtt(d?.extras)).length > 0,
+    liveCtt: liveCttOf(ctts).length > 0,
     dupLessons: ids.length !== lessonsDisk,
     badStatus: cal.some((l) => Number((l as { status?: number }).status) !== 3 && (Number((l as { amount?: number }).amount) || 0) > 0),
     goodsNet: goodsNet,
