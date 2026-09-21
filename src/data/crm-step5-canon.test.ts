@@ -16,6 +16,7 @@ import {
   step5RemainderFormula,
   step5FitRemainder,
   step5ApplyDebts,
+  step5PickWriteoff,
   step5Close,
   step5UnitScale,
   step5ReviveEmptySkip,
@@ -157,6 +158,14 @@ describe("шаг 5 канон", () => {
     assert.deepEqual(
       step5ApplyDebts({ n: 93928.75, k: 119 }, [1087.5], 93850, 0, 138.75),
       { n: 93928.75, k: 119 },
+    );
+    assert.equal(
+      step5PickWriteoff({ n: 115887.5, k: 136 }, { ok: true, n: 115987.5, k: 136 }, 121150, [2000], 3162.5).n,
+      115987.5,
+    );
+    assert.equal(
+      step5PickWriteoff({ n: 93928.75, k: 119 }, { ok: true, n: 93711.25, k: 119 }, 93850, 0, 138.75).n,
+      93711.25,
     );
     assert.equal(step5Close(2425, 2425), true);
     assert.equal(step5Close(2425, 24.25), true);

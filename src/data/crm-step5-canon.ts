@@ -165,6 +165,28 @@ export function step5ApplyDebts(
   return { n, k };
 }
 
+/** Живой journal ближе к шапке — берём его сумму списаний, не диск. */
+export function step5PickWriteoff(
+  disk: { n: number; k: number },
+  peek: { ok?: boolean; n?: number; k?: number } | null | undefined,
+  cashLessons: number,
+  goodsAmounts: number[] | number,
+  header: number,
+) {
+  const base = { n: Number(disk.n) || 0, k: Number(disk.k) || 0 };
+  if (!peek?.ok || !Number.isFinite(Number(peek.n))) return base;
+  const h = Number(header);
+  const cash = Number(cashLessons);
+  if (!Number.isFinite(h) || !Number.isFinite(cash)) return base;
+  const peekN = Number(peek.n) || 0;
+  const diskFit = step5FitRemainder(cash, base.n, goodsAmounts, h);
+  const peekFit = step5FitRemainder(cash, peekN, goodsAmounts, h);
+  if (Math.abs(peekFit.n - h) + 1e-9 < Math.abs(diskFit.n - h)) {
+    return { n: peekN, k: Number(peek.k) || base.k };
+  }
+  return base;
+}
+
 /** ±1 ₽ или диск в копейках к рублям шапки (×100). 10000 против 100 — не то. */
 export function step5Close(a: number, b: number) {
   if (!Number.isFinite(a) || !Number.isFinite(b)) return false;

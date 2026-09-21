@@ -205,6 +205,15 @@ describe("журнал оплат и списаний", () => {
       true,
     );
     assert.equal(step5DebtPrice(debt, cid, [paid, debt]), 1087.5);
+    const oldPrice = {
+      lessonId: 8,
+      status: 3,
+      date: "2026-06-07",
+      subject: "Робототехника (7-9 лет)",
+      amount: 987.5,
+      pupils: [{ customerId: cid, amount: 987.5, attend: true }],
+    };
+    assert.equal(step5DebtPrice(debt, cid, [oldPrice, paid, debt]), 1087.5);
     assert.equal(step5DebtPrice(debt, cid, [debt], 8700 / 8), 1087.5);
     assert.equal(step5DebtPrice(debt, cid, [debt], 0), 0);
     const missPaid = {

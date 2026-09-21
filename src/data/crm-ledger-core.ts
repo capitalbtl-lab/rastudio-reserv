@@ -236,7 +236,7 @@ export function lessonDebtLike(lesson: LessonDebtRow, customerId: number) {
   return ctt <= 0;
 }
 
-/** Цена долга: последняя его проведённая > 0 (тот же предмет, если есть), иначе тариф, иначе 0. */
+/** Цена долга: последняя проведённая > 0 по дате, иначе тариф. Предмет — только если день тот же. */
 export function step5DebtPrice(lesson: LessonDebtRow, customerId: number, cal: LessonDebtRow[], tariffFallback = 0) {
   const cid = Number(customerId) || 0;
   const self = Number(lesson.lessonId) || 0;
@@ -250,10 +250,13 @@ export function step5DebtPrice(lesson: LessonDebtRow, customerId: number, cal: L
     if (!(n > 0)) continue;
     hits.push({ day: lessonDay(l.date), amount: n, same: Boolean(want && lessonSubjectKey(l) === want) });
   }
-  hits.sort((a, b) => a.day.localeCompare(b.day));
-  const same = hits.filter((h) => h.same);
-  if (same.length) return same[same.length - 1].amount;
-  if (hits.length) return hits[hits.length - 1].amount;
+  hits.sort((a, b) => a.day.localeCompare(b.day) || Number(a.same) - Number(b.same));
+  const last = hits[hits.length - 1];
+  if (last) {
+    const sameDay = hits.filter((h) => h.day === last.day && h.same);
+    if (sameDay.length) return sameDay[sameDay.length - 1].amount;
+    return last.amount;
+  }
   const fb = Number(tariffFallback) || 0;
   return fb > 0 ? fb : 0;
 }

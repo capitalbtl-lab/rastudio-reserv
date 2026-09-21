@@ -30,6 +30,7 @@ import {
   step5Ymd,
   step5FitRemainder,
   step5ApplyDebts,
+  step5PickWriteoff,
   step5ReviveEmptySkip,
 } from "./crm-step5-canon";
 import { step5CompleteAdd, step5SessionStopped, step5WaitOrStop } from "./crm-step5-session";
@@ -774,8 +775,33 @@ export async function auditOne(cid: number, branchId: number) {
         liveHeader,
       )
     : { n: first.woCal, k: first.woN };
+
+  let alfaSplit: Awaited<ReturnType<typeof peekAlfaPaySplit>> | null = null;
+  let alfaWo: Awaited<ReturnType<typeof peekAlfaLessonCommission>> | null = null;
+  if (shown.ok && shown.token && !shown.stopped && !shown.authStop) {
+    try {
+      alfaSplit = await peekAlfaPaySplit(shown.request, shown.token, shown.branch || branch, id);
+    } catch {
+      alfaSplit = { ok: false as const };
+    }
+    try {
+      alfaWo = await peekAlfaLessonCommission(shown.request, shown.token, shown.branch || branch, id);
+    } catch {
+      alfaWo = { ok: false as const };
+    }
+  }
+
+  const woPick = Number.isFinite(liveHeader)
+    ? step5PickWriteoff(
+        woLive,
+        alfaWo && alfaWo.ok ? { ok: true, n: alfaWo.alfaWoSum, k: alfaWo.alfaWoN } : null,
+        first.cashLessons,
+        first.goodsAmounts || first.goodsNet,
+        liveHeader,
+      )
+    : woLive;
   const liveFit = Number.isFinite(liveHeader)
-    ? step5FitRemainder(first.cashLessons, woLive.n, first.goodsAmounts || first.goodsNet, liveHeader)
+    ? step5FitRemainder(first.cashLessons, woPick.n, first.goodsAmounts || first.goodsNet, liveHeader)
     : { n: first.formulaSite, goods: first.goodsFitted || 0 };
   const formulaSite = Number.isFinite(liveFit.n) ? liveFit.n : first.formulaSite;
 
@@ -799,21 +825,6 @@ export async function auditOne(cid: number, branchId: number) {
     hasCorrect: (first.corrN || 0) > 0,
     hasRefund: (first.refundN || 0) > 0,
   });
-
-  let alfaSplit: Awaited<ReturnType<typeof peekAlfaPaySplit>> | null = null;
-  let alfaWo: Awaited<ReturnType<typeof peekAlfaLessonCommission>> | null = null;
-  if (shown.ok && shown.token && !shown.stopped && !shown.authStop) {
-    try {
-      alfaSplit = await peekAlfaPaySplit(shown.request, shown.token, shown.branch || branch, id);
-    } catch {
-      alfaSplit = { ok: false as const };
-    }
-    try {
-      alfaWo = await peekAlfaLessonCommission(shown.request, shown.token, shown.branch || branch, id);
-    } catch {
-      alfaWo = { ok: false as const };
-    }
-  }
 
   if (shown.ok && shown.headerOk) {
     // extras.header, не stampDossierAlfaBalance
@@ -856,8 +867,8 @@ export async function auditOne(cid: number, branchId: number) {
       clients: Number.isFinite(showSite) ? showSite : Number.NaN,
       alfa: shown.ok && shown.headerOk ? shown.alfa : Number.NaN,
       cash: Number.isFinite(showSite) ? showSite : Number.NaN,
-      woSum: woLive.n,
-      woN: woLive.k,
+      woSum: woPick.n,
+      woN: woPick.k,
       cttRest: 0,
       codes: judged.codes,
       repaired: false,
