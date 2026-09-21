@@ -126,16 +126,33 @@ export function step5FitRemainder(
   if (!Number.isFinite(h)) return { n: lessons - total, goods: total };
   if (step5Close(lessons, h)) return { n: lessons, goods: 0 };
   if (step5Close(lessons - total, h)) return { n: lessons - total, goods: total };
-  let sub = 0;
-  for (const a of [...amounts].sort((x, y) => y - x)) {
-    const cur = lessons - sub;
-    const next = cur - a;
-    if (Math.abs(next - h) + 1e-9 < Math.abs(cur - h)) {
-      sub += a;
-      if (step5Close(lessons - sub, h)) break;
+  let bestSub = 0;
+  let bestDist = Math.abs(lessons - h);
+  const n = amounts.length;
+  if (n <= 16) {
+    const max = 1 << n;
+    for (let mask = 1; mask < max; mask += 1) {
+      let sub = 0;
+      for (let i = 0; i < n; i += 1) if (mask & (1 << i)) sub += amounts[i];
+      const dist = Math.abs(lessons - sub - h);
+      if (dist + 1e-9 < bestDist) {
+        bestDist = dist;
+        bestSub = sub;
+      }
     }
+  } else {
+    for (const a of [...amounts].sort((x, y) => y - x)) {
+      const next = lessons - bestSub - a;
+      const cur = lessons - bestSub;
+      if (Math.abs(next - h) + 1e-9 < Math.abs(cur - h)) {
+        bestSub += a;
+        if (step5Close(lessons - bestSub, h)) break;
+      }
+    }
+    bestDist = Math.abs(lessons - bestSub - h);
   }
-  return { n: lessons - sub, goods: sub };
+  if (!(bestSub > 0) || !(bestDist + 1e-9 < Math.abs(lessons - h))) return { n: lessons, goods: 0 };
+  return { n: lessons - bestSub, goods: bestSub };
 }
 
 /** Долг в списание только если формула выше шапки. Глеба (формула ниже) не добивать. */
