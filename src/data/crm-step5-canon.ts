@@ -138,6 +138,33 @@ export function step5FitRemainder(
   return { n: lessons - sub, goods: sub };
 }
 
+/** Долг в списание только если формула выше шапки. Глеба (формула ниже) не добивать. */
+export function step5ApplyDebts(
+  base: { n: number; k: number },
+  debts: number[],
+  cashLessons: number,
+  goodsAmounts: number[] | number,
+  header: number,
+) {
+  let n = Number(base.n) || 0;
+  let k = Number(base.k) || 0;
+  const cash = Number(cashLessons);
+  const h = Number(header);
+  if (!Number.isFinite(cash) || !Number.isFinite(h)) return { n, k };
+  for (const price of debts) {
+    const add = Number(price) || 0;
+    if (!(add > 0)) continue;
+    const cur = step5FitRemainder(cash, n, goodsAmounts, h);
+    if (!(cur.n - h > 1)) break;
+    const next = step5FitRemainder(cash, n + add, goodsAmounts, h);
+    if (Math.abs(next.n - h) + 1e-9 <= Math.abs(cur.n - h)) {
+      n += add;
+      k += 1;
+    }
+  }
+  return { n, k };
+}
+
 /** ±1 ₽ или диск в копейках к рублям шапки (×100). 10000 против 100 — не то. */
 export function step5Close(a: number, b: number) {
   if (!Number.isFinite(a) || !Number.isFinite(b)) return false;

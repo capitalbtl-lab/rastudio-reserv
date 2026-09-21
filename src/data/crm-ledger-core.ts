@@ -193,6 +193,7 @@ export type LessonDebtRow = {
   subject?: string;
   subjectId?: number;
   cttId?: number;
+  customerIds?: number[];
   pupils?: LessonPupil[];
 };
 
@@ -215,19 +216,23 @@ function lessonDay(raw: unknown) {
   return s.slice(0, 10);
 }
 
-/** Проведён в долг: был, явный 0, абонемента нет. Пауза / пробное / уважительная — нет. */
+/** Проведён в долг: был, 0 или дырка, абонемента нет. Пауза / пробное / уважительная — нет. */
 export function lessonDebtLike(lesson: LessonDebtRow, customerId: number) {
   if (Number(lesson.status) !== 3) return false;
   if (lessonTrialLike(lesson)) return false;
   const cid = Number(customerId) || 0;
   if (!cid) return false;
   const p = pupilOf(lesson.pupils, cid);
-  if (!p) return false;
-  if (p.attend === false) return false;
-  if (Number(p.reasonId) === 2) return false;
-  const raw = amountGiven(p.amount) ? p.amount : lesson.amount;
-  if (!amountGiven(raw) || Number(raw) !== 0) return false;
-  const ctt = Number(p.cttId) || Number(lesson.cttId) || 0;
+  if (p) {
+    if (p.attend === false) return false;
+    if (Number(p.reasonId) === 2) return false;
+  } else {
+    const ids = (lesson.customerIds || []).map(Number).filter((n) => n > 0);
+    if (ids.length && !ids.includes(cid)) return false;
+  }
+  const raw = p && amountGiven(p.amount) ? p.amount : lesson.amount;
+  if (amountGiven(raw) && Number(raw) > 0) return false;
+  const ctt = Number(p?.cttId) || Number(lesson.cttId) || 0;
   return ctt <= 0;
 }
 

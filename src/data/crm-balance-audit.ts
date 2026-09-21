@@ -29,6 +29,7 @@ import {
   step5RemovedNum,
   step5Ymd,
   step5FitRemainder,
+  step5ApplyDebts,
   step5ReviveEmptySkip,
 } from "./crm-step5-canon";
 import { step5CompleteAdd, step5SessionStopped, step5WaitOrStop } from "./crm-step5-session";
@@ -153,12 +154,14 @@ function writeoffCanon(
   jready: boolean,
   customerId?: number,
   tariffOf?: (l: LessonDebtRow) => number,
+  fit?: { cash: number; goods: number[] | number; header: number },
 ) {
   if (lessonsDisk < 1) return { ok: true, n: 0, k: 0 };
   if (!jready) return { ok: false, n: 0, k: 0 };
   let n = 0;
   let k = 0;
   const cid = Number(customerId) || 0;
+  const debts: number[] = [];
   for (const l of cal) {
     if ((Number(l.lessonId) || 0) <= 0) continue;
     if (Number(l.status) !== 3) continue;
@@ -172,13 +175,11 @@ function writeoffCanon(
     if (!a.ok || !(a.n > 0)) {
       if (!cid || !lessonDebtLike(l, cid)) continue;
       const price = step5DebtPrice(l, cid, cal, tariffOf ? tariffOf(l) : 0);
-      const d = step5Money(price);
-      if (!d.ok || !(d.n > 0)) continue;
-      n += d.n;
-      k += 1;
+      if (price > 0) debts.push(price);
     }
   }
-  return { ok: true, n, k };
+  const applied = step5ApplyDebts({ n, k }, debts, Number(fit?.cash), fit?.goods ?? 0, Number(fit?.header));
+  return { ok: true, n: applied.n, k: applied.k, baseN: n, baseK: k, debts };
 }
 
 export async function diskAudit(cid: number, branchId: number) {
@@ -224,10 +225,6 @@ export async function diskAudit(cid: number, branchId: number) {
   const sync = customerSyncOf(id);
   const jready = lessonsJournalReady(sync);
   const ctts = parseDossierCtt(d?.extras);
-  const wo = writeoffCanon(cal as LessonDebtRow[], lessonsDisk, jready, id, (l) =>
-    lessonWriteoffOf(pickLessonCtt(ctts, { subjectId: Number(l.subjectId) || 0, subject: String(l.subject || l.type || "") })),
-  );
-  // Канон 5 / дока ТМЦ: товар в ленте pay есть, в Customer.balance не входит.
   const goodsNet = goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]);
   const goodsAmounts = productRows.map((x) => Math.abs(x.sum.n)).filter((n) => n > 0);
   const headerGuess = (() => {
@@ -236,6 +233,10 @@ export async function diskAudit(cid: number, branchId: number) {
     const m = step5Money(raw);
     return m.ok ? m.n : Number.NaN;
   })();
+  const wo = writeoffCanon(cal as LessonDebtRow[], lessonsDisk, jready, id, (l) =>
+    lessonWriteoffOf(pickLessonCtt(ctts, { subjectId: Number(l.subjectId) || 0, subject: String(l.subject || l.type || "") })),
+    { cash: cashLessons, goods: goodsAmounts.length ? goodsAmounts : goodsNet, header: headerGuess },
+  );
   const fitted = cashAllOk && wo.ok ? step5FitRemainder(cashLessons, wo.n, goodsAmounts.length ? goodsAmounts : goodsNet, headerGuess) : { n: Number.NaN, goods: 0 };
   const formulaSite = fitted.n;
   const refundN = lessonRows.filter((x) => x.t === 5 || x.t === 3).length;
@@ -259,6 +260,9 @@ export async function diskAudit(cid: number, branchId: number) {
     woCard: wo.n,
     woN: wo.k || 0,
     woOk: wo.ok,
+    woBaseN: wo.baseN,
+    woBaseK: wo.baseK,
+    woDebts: wo.debts,
     paysComplete: payCustomerFilled(id),
     payPending: payFillPending(id),
     livePays: live.length,
@@ -761,8 +765,17 @@ export async function auditOne(cid: number, branchId: number) {
   }
 
   const liveHeader = shown.ok && shown.headerOk ? shown.alfa : Number.NaN;
+  const woLive = Number.isFinite(liveHeader)
+    ? step5ApplyDebts(
+        { n: Number(first.woBaseN ?? first.woCal) || 0, k: Number(first.woBaseK ?? first.woN) || 0 },
+        first.woDebts || [],
+        first.cashLessons,
+        first.goodsAmounts || first.goodsNet,
+        liveHeader,
+      )
+    : { n: first.woCal, k: first.woN };
   const liveFit = Number.isFinite(liveHeader)
-    ? step5FitRemainder(first.cashLessons, first.woCal, first.goodsAmounts || first.goodsNet, liveHeader)
+    ? step5FitRemainder(first.cashLessons, woLive.n, first.goodsAmounts || first.goodsNet, liveHeader)
     : { n: first.formulaSite, goods: first.goodsFitted || 0 };
   const formulaSite = Number.isFinite(liveFit.n) ? liveFit.n : first.formulaSite;
 
@@ -843,8 +856,8 @@ export async function auditOne(cid: number, branchId: number) {
       clients: Number.isFinite(showSite) ? showSite : Number.NaN,
       alfa: shown.ok && shown.headerOk ? shown.alfa : Number.NaN,
       cash: Number.isFinite(showSite) ? showSite : Number.NaN,
-      woSum: first.woCal,
-      woN: first.woN,
+      woSum: woLive.n,
+      woN: woLive.k,
       cttRest: 0,
       codes: judged.codes,
       repaired: false,

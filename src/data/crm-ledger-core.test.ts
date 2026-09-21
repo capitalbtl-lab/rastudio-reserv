@@ -198,7 +198,12 @@ describe("журнал оплат и списаний", () => {
     assert.equal(lessonDebtLike(pause, cid), false);
     assert.equal(lessonDebtLike(freeCtt, cid), false);
     assert.equal(lessonDebtLike(trial, cid), false);
-    assert.equal(lessonDebtLike(hole, cid), false);
+    assert.equal(lessonDebtLike(hole, cid), true);
+    assert.equal(step5DebtPrice(hole, cid, [paid, hole]), 1087.5);
+    assert.equal(
+      lessonDebtLike({ lessonId: 18, status: 3, pupils: [{ customerId: cid, attend: true }], customerIds: [cid] }, cid),
+      true,
+    );
     assert.equal(step5DebtPrice(debt, cid, [paid, debt]), 1087.5);
     assert.equal(step5DebtPrice(debt, cid, [debt], 8700 / 8), 1087.5);
     assert.equal(step5DebtPrice(debt, cid, [debt], 0), 0);
