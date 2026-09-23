@@ -2213,7 +2213,7 @@ function AuditStepPick({ busy, active, onRun }: { busy?: boolean; active?: boole
     [5, "5 сверка"],
   ];
   return (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+    <div className="mt-2 flex w-full flex-wrap items-center gap-1.5">
       <span className="text-[0.72rem] font-medium text-muted">Какие шаги</span>
       {labels.map(([n, label]) => {
         const on = steps.includes(n);
@@ -2232,13 +2232,13 @@ function AuditStepPick({ busy, active, onRun }: { busy?: boolean; active?: boole
       <button
         type="button"
         disabled={busy || !steps.length}
-        className={cn(BTN_LOAD_SM, "w-fit shrink-0 px-4", active && "ra-progress-run", (!steps.length || busy) && "opacity-50")}
+        className={cn(BTN_LOAD_SM, "ml-auto w-fit shrink-0 px-4", active && "ra-progress-run", (!steps.length || busy) && "opacity-50")}
         onClick={(e) => {
           e.stopPropagation();
           onRun(steps);
         }}
       >
-        Запустить
+        Перепроверить этого
       </button>
     </div>
   );
@@ -2256,13 +2256,11 @@ function AuditFillList({
   busy,
   loadingCid,
   onRecheck,
-  onPlanOne,
 }: {
   rows: AuditUiRow[];
   busy?: boolean;
   loadingCid?: number;
   onRecheck: (row: AuditUiRow, steps: number[]) => void;
-  onPlanOne?: (row: { cid: number; name: string }) => void;
 }) {
   const [open, setOpen] = useState("");
   const [query, setQuery] = useState("");
@@ -2409,18 +2407,7 @@ function AuditFillList({
           {` · ${money}`}
         </p>
         {full || !recOnCard ? null : <p className="mt-1 text-[0.78rem] leading-snug">{seg.rec}</p>}
-        {row.seen && !full && onPlanOne ? (
-          <button
-            type="button"
-            className="mt-2 h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPlanOne({ cid: row.cid, name: row.name });
-            }}
-          >
-            Перепроверить этого
-          </button>
-        ) : null}
+        {full ? null : <AuditStepPick busy={busy && !active} active={active} onRun={(steps) => onRecheck(row, steps)} />}
         {shown ? (
           <div className="mt-3 border-t border-black/5 pt-3">
             {recOnCard ? null : <p className="text-[0.78rem] leading-snug font-medium">{seg.rec}</p>}
@@ -2471,9 +2458,6 @@ function AuditFillList({
               Касса — диск шага 4. Alfa — живой pay/index и lesson/index при «Перепроверить», без записи на диск. Товар в ленте: в шапку не входит, пока шапка без него сходится. Шапка — Customer.balance.
               {row.extra ? ` ${row.extra}.` : ""}
             </p>
-            <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">
-              <AuditStepPick busy={busy && !active} active={active} onRun={(steps) => onRecheck(row, steps)} />
-            </div>
           </div>
         ) : null}
       </li>
@@ -5259,10 +5243,6 @@ export function AdminCrmSettings() {
                             steps: steps.join(","),
                           })
                         }
-                        onPlanOne={(row) => {
-                          setPlanFocus(row);
-                          setPlanOpen(true);
-                        }}
                       />
                     </>
                   );
