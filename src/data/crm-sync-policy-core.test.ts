@@ -13,6 +13,8 @@ import {
   mskWall,
   nextSlotAt,
   pickDueRule,
+  planDateFrom,
+  planFromIdToRecheckDays,
   planHorizon,
   planFireDecision,
   planRuleToJob,
@@ -159,6 +161,32 @@ describe("пульт Истории", () => {
     assert.equal(planRuleToJob(six, msk(2026, 8, 15, 12, 0)).recheckDays, 182);
     const one = scheduleOf({ id: "d", mode: "people", when: { kind: "daily" }, at: "04:00", dateFromId: "m1" });
     assert.equal(planRuleToJob(one, msk(2026, 2, 31, 12, 0)).dateFrom, "2026-02-28");
+  });
+
+  it("окно чипа доезжает до джоба: месяцы не становятся одним, загрузка берёт дату", () => {
+    const now = msk(2026, 8, 23, 12, 0);
+    const ids = ["2015", "7", "3", "2", "1", "m6", "m4", "m2", "m1"] as const;
+    for (const id of ids) {
+      const days = planFromIdToRecheckDays(id);
+      const auto = planRuleToJob(scheduleOf({ id: "a", mode: "auto", when: { kind: "daily" }, at: "04:00", dateFromId: id, recheckDays: days }), now);
+      assert.equal(auto.recheckDays, days, id);
+      assert.equal(auto.dateFrom, planDateFrom(id, now), id);
+      const cal = planRuleToJob(scheduleOf({ id: "b", mode: "people", when: { kind: "daily" }, at: "04:00", dateFromId: id }), now);
+      assert.equal(cal.recheck, false);
+      assert.equal(cal.dateFrom, planDateFrom(id, now));
+      const pay = planRuleToJob(scheduleOf({ id: "c", mode: "balance", when: { kind: "daily" }, at: "04:00", dateFromId: id }), now);
+      assert.equal(pay.kind, "balance");
+      assert.equal(pay.dateFrom, planDateFrom(id, now));
+    }
+    assert.equal(scheduleOf({ id: "m", mode: "auto", when: { kind: "daily" }, at: "04:00", dateFromId: "m2", recheckDays: 62 }).recheckDays, 62);
+    assert.equal(scheduleOf({ id: "n", mode: "auto", when: { kind: "daily" }, at: "04:00", dateFromId: "m4", recheckDays: 122 }).recheckDays, 122);
+    const slow = planRuleToJob(scheduleOf({ id: "s", mode: "people-slow", when: { kind: "daily" }, at: "04:00", dateFromId: "m6" }), now);
+    assert.equal(slow.dateFrom, "2026-03-23");
+    const step = planRuleToJob(scheduleOf({ id: "g", mode: "groups", when: { kind: "daily" }, at: "04:00", dateFromId: "7" }), now);
+    assert.equal(step.dateFrom, "");
+    const blue = planRuleToJob(scheduleOf({ id: "r", mode: "people-recheck", when: { kind: "weekly", days: [1] }, at: "18:00", recheckDays: 122 }), now);
+    assert.equal(blue.recheck, true);
+    assert.equal(blue.recheckDays, 122);
   });
 
   it("сохранение с экрана не затирает due воркера", () => {

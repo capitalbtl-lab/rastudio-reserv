@@ -323,6 +323,11 @@ function DraftForm({
           </label>
           <p className="mt-3 text-sm">
             {planModeMeta(mode).label}. {whenLabel(when())}, {at} МСК. {study === "2" ? "Архив." : "Сейчас ходят."}
+            {mode === "auto" || mode === "people" || mode === "people-slow" || mode === "balance"
+              ? ` Окно: ${PLAN_FROM_OPTS.find((o) => o.id === fromId)?.label || ""}.`
+              : isRecheck(mode)
+                ? ` Окно: ${PLAN_RECHECK_OPTS.find((o) => o.days === recheckDays)?.label || ""}.`
+                : ""}
           </p>
           <p className="mt-1 text-[0.75rem] text-muted">Пока общий тумблер выкл — слот лежит и ночью не стартует.</p>
         </>

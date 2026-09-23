@@ -469,7 +469,8 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   const study = opts.study === "2" ? "2" : "1";
   const skipLeads = Boolean(opts.skipLeads) || /(?:^|&)leads=0(?:&|$)/.test(String(opts.name || ""));
   let recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
-  const freezeIce = Boolean(recheck) || Boolean(opts.dateFrom && opts.recheckDays);
+  const span = Boolean(String(opts.dateFrom || "").trim() && String(opts.dateTo || "").trim());
+  const freezeIce = Boolean(recheck) || span;
   let items = buildItems({ ...opts, kind, recheck, skipLeads });
   let wave: RecheckWave = "";
   let follow: JournalJobItem[] = [];
