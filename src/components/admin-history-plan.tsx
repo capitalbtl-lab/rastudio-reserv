@@ -78,13 +78,38 @@ function Chip({ on, children, onClick, disabled }: { on?: boolean; children: Rea
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1",
-        on ? "bg-black text-white ring-black" : "bg-white ring-black/10 hover:bg-black/5",
+        "h-8 rounded-full px-3 text-[0.78rem] font-medium transition",
+        on ? "bg-black text-white" : "bg-black/[0.04] text-black/80 hover:bg-black/[0.07]",
         disabled && "opacity-50",
       )}
     >
       {children}
     </button>
+  );
+}
+
+function Switch({ on, disabled, onClick }: { on: boolean; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn("relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-40", on ? "bg-black" : "bg-black/15")}
+    >
+      <span className={cn("absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform", on && "translate-x-5")} />
+    </button>
+  );
+}
+
+function Dots({ n, i }: { n: number; i: number }) {
+  return (
+    <span className="flex items-center gap-1" aria-hidden>
+      {Array.from({ length: n }, (_, k) => (
+        <span key={k} className={cn("h-1 rounded-full", k === i ? "w-5 bg-black" : k < i ? "w-1.5 bg-black/40" : "w-1.5 bg-black/15")} />
+      ))}
+    </span>
   );
 }
 
@@ -166,11 +191,12 @@ function DraftForm({
   const titles = ["Что запускать", "Когда", "Кого", "Сохранить"];
 
   return (
-    <div className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-      <p className="text-[0.72rem] font-semibold text-muted">
-        {step + 1} из {titles.length} · {seed ? "правка" : "новое"}
-      </p>
-      <p className="font-display text-[1.05rem]">{titles[step]}</p>
+    <div className="rounded-[1.25rem] bg-white p-5 shadow-sm ring-1 ring-black/[0.04]">
+      <div className="flex items-center justify-between gap-3">
+        <Dots n={titles.length} i={step} />
+        <p className="text-[0.72rem] text-muted">{seed ? "правка" : "новое"}</p>
+      </div>
+      <p className="mt-3 font-display text-[1.35rem] leading-none">{titles[step]}</p>
       {step === 0 ? (
         <label className="mt-3 block text-sm font-semibold">
           Режим
@@ -388,8 +414,9 @@ function NowWizard({
   }
 
   return (
-    <div className="rounded-2xl bg-surface-2 p-4">
-      <p className="text-[0.72rem] font-semibold text-muted">{step + 1} из 4 · {titles[step]}</p>
+    <div className="rounded-[1.25rem] bg-white p-5 shadow-sm ring-1 ring-black/[0.04]">
+      <Dots n={4} i={step} />
+      <p className="mt-3 font-display text-[1.35rem] leading-none">{titles[step]}</p>
       {step === 0 ? (
         <div className="mt-3 grid gap-2">
           {(
@@ -406,7 +433,10 @@ function NowWizard({
                 setWhoKind(id);
                 if (id !== "one") setAct("all");
               }}
-              className={cn("rounded-xl px-3 py-2.5 text-left ring-1", whoKind === id ? "bg-black text-white ring-black" : "bg-white ring-black/10")}
+              className={cn(
+                "rounded-2xl px-4 py-3.5 text-left transition",
+                whoKind === id ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]",
+              )}
             >
               <span className="block text-sm font-semibold">{title}</span>
               <span className={cn("mt-0.5 block text-[0.75rem]", whoKind === id ? "text-white/75" : "text-muted")}>{hint}</span>
@@ -417,11 +447,11 @@ function NowWizard({
       {step === 1 ? (
         one ? (
           <div className="mt-3 grid gap-2">
-            <button type="button" onClick={() => setAct("audit")} className={cn("rounded-xl px-3 py-2.5 text-left ring-1", act === "audit" ? "bg-black text-white ring-black" : "bg-white ring-black/10")}>
+            <button type="button" onClick={() => setAct("audit")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "audit" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
               <span className="block text-sm font-semibold">Шаг 5 · сверка</span>
               <span className={cn("mt-0.5 block text-[0.75rem]", act === "audit" ? "text-white/75" : "text-muted")}>Календарь и кассу не трогает.</span>
             </button>
-            <button type="button" onClick={() => setAct("calendar")} className={cn("rounded-xl px-3 py-2.5 text-left ring-1", act === "calendar" ? "bg-black text-white ring-black" : "bg-white ring-black/10")}>
+            <button type="button" onClick={() => setAct("calendar")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "calendar" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
               <span className="block text-sm font-semibold">Календарь</span>
               <span className={cn("mt-0.5 block text-[0.75rem]", act === "calendar" ? "text-white/75" : "text-muted")}>Синяя перепроверка только его.</span>
             </button>
@@ -507,17 +537,22 @@ export function HistoryPlanPanel({
   const [editId, setEditId] = useState("");
   const [screen, setScreen] = useState<"home" | "now" | "plan" | "log">("home");
   const [menuId, setMenuId] = useState("");
-  const nextLine = useMemo(() => {
-    if (!policy.planEnabled) return "синхронизация расписания выкл — слоты не стартуют";
+  const run = Boolean(job?.running) && !job?.stop;
+  const head = useMemo(() => {
+    if (run) return { k: "Сейчас", t: job?.cur || "Работаем", s: `${job?.n || 0} из ${job?.total || 0}` };
+    if (!policy.planEnabled) return { k: "Пауза", t: "Расписание выключено", s: "Слоты лежат и сами не стартуют" };
     const soon = policy.plan
       .filter((r) => r.on)
       .map((r) => ({ r, at: nextSlotAt(r) }))
       .filter((x) => x.at)
       .sort((a, b) => (a.at!.getTime() || 0) - (b.at!.getTime() || 0))[0];
-    if (!soon) return "расписаний нет";
-    return `следующее: ${soon.r.label || planModeMeta(soon.r.mode).label} · ${fmtSlot(soon.r)}`;
-  }, [policy]);
-  const run = Boolean(job?.running) && !job?.stop;
+    if (!soon) return { k: "Пусто", t: "Расписаний нет", s: "Ночью ничего не поедет" };
+    return {
+      k: "Ближайший",
+      t: soon.r.label || planModeMeta(soon.r.mode).label,
+      s: `${whenLabel(soon.r.when)} · ${fmtSlot(soon.r)}`,
+    };
+  }, [policy, run, job?.cur, job?.n, job?.total]);
   const editing = editId ? policy.plan.find((r) => r.id === editId) || null : null;
   const formOpen = adding || Boolean(editing);
 
@@ -537,30 +572,20 @@ export function HistoryPlanPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={policy.planEnabled}
-          disabled={busy}
-          onClick={() => patch({ ...policy, planEnabled: !policy.planEnabled })}
-          className={cn(
-            "relative h-6 w-11 shrink-0 appearance-none border-0 p-0 rounded-full transition disabled:opacity-50",
-            policy.planEnabled ? "bg-emerald-700" : "bg-black/15",
-          )}
-        >
-          <span className={cn("pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", policy.planEnabled && "translate-x-5")} />
-        </button>
+      <div className="flex items-center gap-4 rounded-[1.25rem] bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.04]">
+        <Switch on={policy.planEnabled} disabled={busy} onClick={() => patch({ ...policy, planEnabled: !policy.planEnabled })} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{run ? `Сейчас: ${job?.cur || "работаем"} · ${job?.n || 0}/${job?.total || 0}` : nextLine}</p>
-          {historyWorker?.silent ? <p className="text-[0.75rem] text-red-800">Процесс истории молчит — ночные слоты не поедут.</p> : null}
+          <p className="text-[0.68rem] font-medium uppercase tracking-[0.14em] text-muted">{head.k}</p>
+          <p className="truncate font-display text-[1.2rem] leading-tight">{head.t}</p>
+          <p className="truncate text-[0.78rem] text-muted">{head.s}</p>
+          {historyWorker?.silent ? <p className="mt-1 text-[0.75rem] text-red-800">Процесс истории молчит — ночные слоты не поедут.</p> : null}
         </div>
         {screen !== "home" ? (
-          <button type="button" className="h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => { setScreen("home"); setAdding(false); setEditId(""); }}>
-            К пульту
+          <button type="button" className="shrink-0 text-[0.78rem] font-medium text-muted hover:text-black" onClick={() => { setScreen("home"); setAdding(false); setEditId(""); }}>
+            Назад
           </button>
         ) : (
-          <button type="button" className="h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold text-red-700 ring-1 ring-red-200" disabled={busy} onClick={() => {
+          <button type="button" className="shrink-0 text-[0.78rem] font-medium text-muted hover:text-red-700" disabled={busy} onClick={() => {
             if (!window.confirm("Сбросить настройки пульта? Синхронизация расписания выкл, расписания удалятся. Текущая загрузка не остановится.")) return;
             patch({ planEnabled: false, plan: [] });
           }}>
@@ -578,9 +603,12 @@ export function HistoryPlanPanel({
               ["log", "Журнал", "Последние синхронизации и сбои."],
             ] as const
           ).map(([id, title, hint]) => (
-            <button key={id} type="button" onClick={() => setScreen(id)} className="rounded-2xl bg-surface-2 px-4 py-3 text-left ring-1 ring-black/5 hover:bg-black/[0.03]">
-              <span className="block text-sm font-semibold">{title}</span>
-              <span className="mt-0.5 block text-[0.78rem] text-muted">{hint}</span>
+            <button key={id} type="button" onClick={() => setScreen(id)} className="group flex items-center justify-between rounded-[1.25rem] bg-white px-4 py-4 text-left shadow-sm ring-1 ring-black/[0.04] transition hover:ring-black/15">
+              <span>
+                <span className="block font-display text-[1.15rem] leading-tight">{title}</span>
+                <span className="mt-1 block text-[0.78rem] text-muted">{hint}</span>
+              </span>
+              <span className="text-lg text-black/25 transition group-hover:text-black">→</span>
             </button>
           ))}
         </div>
@@ -589,7 +617,7 @@ export function HistoryPlanPanel({
       {screen === "now" ? <NowWizard busy={busy} run={run} onRunAuto={onRunAuto} onRunOne={onRunOne} /> : null}
 
       {screen === "log" ? (
-        <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
+        <div className="rounded-[1.25rem] bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.04]">
           <p className="text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Последние синхронизации</p>
           {(() => {
             const rows = planLogSessions(planLog || [], 10);
@@ -662,43 +690,38 @@ export function HistoryPlanPanel({
                   ))}
                 </ul>
               ) : null}
-              <ul className="divide-y divide-black/5 rounded-2xl px-4 ring-1 ring-black/8">
+              <ul className="space-y-2">
                 {policy.plan.map((r) => (
-                  <li key={r.id} className="py-3">
-                    <div className="flex items-start gap-3">
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={r.on}
-                        disabled={busy}
-                        onClick={() => patch({ ...policy, plan: policy.plan.map((x) => (x.id === r.id ? { ...x, on: !x.on } : x)) })}
-                        className={cn("relative mt-0.5 h-6 w-11 shrink-0 rounded-full", r.on ? "bg-emerald-700" : "bg-black/15")}
-                      >
-                        <span className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", r.on && "translate-x-5")} />
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{r.label || planModeMeta(r.mode).label}</p>
-                        <p className="truncate text-[0.75rem] text-muted">
-                          {r.when.kind === "ymd"
-                            ? `${whenLabel(r.when)} · ${r.at} · один раз`
-                            : `${whenLabel(r.when)} · ${r.at} · без конца · ближайший ${fmtSlot(r)}`}
+                  <li key={r.id} className="rounded-[1.25rem] bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.04]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-display text-[2rem] leading-none tracking-tight">{r.at}</p>
+                        <p className="mt-2 truncate text-sm font-medium">{r.label || planModeMeta(r.mode).label}</p>
+                        <p className="mt-0.5 text-[0.78rem] text-muted">
+                          {r.when.kind === "ymd" ? `${whenLabel(r.when)} · один раз` : `${whenLabel(r.when)} · без конца`}
                           {r.study === "2" ? " · архив" : ""}
+                        </p>
+                        <p className="mt-2 text-[0.75rem] text-black/70">
+                          Ближайший {fmtSlot(r)}
                           {r.lastSkip === "hands" ? " · руки заняли" : ""}
                           {r.lastSkip === "expired" ? " · слот сгорел" : ""}
                         </p>
                       </div>
-                      <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" disabled={busy} onClick={() => { setMenuId(""); setEditId(r.id); setAdding(false); }}>
+                      <Switch on={r.on} disabled={busy} onClick={() => patch({ ...policy, plan: policy.plan.map((x) => (x.id === r.id ? { ...x, on: !x.on } : x)) })} />
+                    </div>
+                    <div className="mt-3 flex gap-4 text-[0.78rem]">
+                      <button type="button" className="font-medium underline decoration-black/20 underline-offset-4 hover:decoration-black" disabled={busy} onClick={() => { setMenuId(""); setEditId(r.id); setAdding(false); }}>
                         Править
                       </button>
-                      <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setMenuId(menuId === r.id ? "" : r.id)}>
-                        Ещё
+                      <button type="button" className="font-medium text-muted hover:text-black" onClick={() => setMenuId(menuId === r.id ? "" : r.id)}>
+                        {menuId === r.id ? "Скрыть" : "Ещё"}
                       </button>
                     </div>
                     {menuId === r.id ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5 pl-14">
-                        <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] ring-1 ring-black/10" disabled={busy} onClick={() => move(r.id, -1)}>Выше</button>
-                        <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] ring-1 ring-black/10" disabled={busy} onClick={() => move(r.id, 1)}>Ниже</button>
-                        <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] ring-1 ring-black/10" disabled={busy} onClick={() => {
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className="h-8 rounded-full bg-black/[0.04] px-3 text-[0.78rem]" disabled={busy} onClick={() => move(r.id, -1)}>Выше</button>
+                        <button type="button" className="h-8 rounded-full bg-black/[0.04] px-3 text-[0.78rem]" disabled={busy} onClick={() => move(r.id, 1)}>Ниже</button>
+                        <button type="button" className="h-8 rounded-full bg-black/[0.04] px-3 text-[0.78rem]" disabled={busy} onClick={() => {
                           const id = `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
                           patch({
                             ...policy,
@@ -706,7 +729,7 @@ export function HistoryPlanPanel({
                           });
                           setMenuId("");
                         }}>Копия</button>
-                        <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] font-semibold text-red-700 ring-1 ring-red-200" disabled={busy} onClick={() => {
+                        <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] text-red-700" disabled={busy} onClick={() => {
                           if (!window.confirm("Удалить это расписание?")) return;
                           patch({ ...policy, plan: policy.plan.filter((x) => x.id !== r.id) });
                           setMenuId("");
@@ -717,8 +740,8 @@ export function HistoryPlanPanel({
                 ))}
               </ul>
               {!policy.plan.length ? <p className="text-sm text-muted">Расписаний нет. Ночью пульт молчит.</p> : null}
-              <button type="button" className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white" onClick={() => { setEditId(""); setAdding(true); }}>
-                + Добавить расписание
+              <button type="button" className="h-12 w-full rounded-full bg-black text-sm font-medium text-white" onClick={() => { setEditId(""); setAdding(true); }}>
+                Добавить расписание
               </button>
             </>
           )}
@@ -761,24 +784,21 @@ export function HistoryPlanModal({
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-3 sm:items-center" onClick={onClose} role="presentation">
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/35 p-3 backdrop-blur-[2px] sm:items-center" onClick={onClose} role="presentation">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="history-plan-title"
-        className="max-h-[min(92vh,56rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-black/10"
+        className="max-h-[min(92vh,56rem)] w-full max-w-lg overflow-y-auto rounded-[1.6rem] bg-[#f4f3f1] p-4 shadow-2xl sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <p id="history-plan-title" className="font-display text-[1.2rem] leading-tight">
-              Пульт синхронизации
-            </p>
-            <p className="mt-1 text-[0.82rem] text-muted">Три входа: сейчас, расписание, журнал. Запуск и новый слот — по шагам.</p>
-          </div>
+        <div className="mb-4 flex items-center justify-between gap-3 px-1">
+          <p id="history-plan-title" className="font-display text-[1.45rem] leading-none">
+            Пульт
+          </p>
           <button
             type="button"
-            className="inline-flex h-8 shrink-0 items-center justify-center rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10 hover:bg-black/5"
+            className="h-8 rounded-full px-3 text-[0.78rem] text-muted hover:bg-black/5 hover:text-black"
             onClick={onClose}
             aria-label="Закрыть"
           >
