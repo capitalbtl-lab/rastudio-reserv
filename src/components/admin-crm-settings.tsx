@@ -2215,11 +2215,13 @@ function AuditFillList({
   busy,
   loadingCid,
   onRecheck,
+  onPlanOne,
 }: {
   rows: AuditUiRow[];
   busy?: boolean;
   loadingCid?: number;
   onRecheck: (row: AuditUiRow) => void;
+  onPlanOne?: (row: { cid: number; name: string }) => void;
 }) {
   const [open, setOpen] = useState("");
   const [query, setQuery] = useState("");
@@ -2366,6 +2368,18 @@ function AuditFillList({
           {` · ${money}`}
         </p>
         {full || !recOnCard ? null : <p className="mt-1 text-[0.78rem] leading-snug">{seg.rec}</p>}
+        {row.seen && !full && onPlanOne ? (
+          <button
+            type="button"
+            className="mt-2 h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlanOne({ cid: row.cid, name: row.name });
+            }}
+          >
+            Перепроверить этого
+          </button>
+        ) : null}
         {shown ? (
           <div className="mt-3 border-t border-black/5 pt-3">
             {recOnCard ? null : <p className="text-[0.78rem] leading-snug font-medium">{seg.rec}</p>}
@@ -2841,6 +2855,7 @@ export function AdminCrmSettings() {
   const [histTab, setHistTab] = useState<HistTab>("roster");
   const [loadGuide, setLoadGuide] = useState<HistTab | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  const [planFocus, setPlanFocus] = useState<{ cid: number; name: string } | null>(null);
   const [logStep, setLogStep] = useState<null | 0 | 1 | 2 | 3 | 4 | 5>(null);
   const crmTabsRef = useRef<HTMLDivElement>(null);
   const histTabsRef = useRef<HTMLDivElement>(null);
@@ -4268,7 +4283,10 @@ export function AdminCrmSettings() {
                     "h-8 rounded-full px-3 text-[0.78rem] font-semibold",
                     syncPolicy.planEnabled ? "bg-emerald-700 text-white" : "bg-white ring-1 ring-black/10",
                   )}
-                  onClick={() => setPlanOpen(true)}
+                  onClick={() => {
+                    setPlanFocus(null);
+                    setPlanOpen(true);
+                  }}
                 >
                   Пульт синхронизации{syncPolicy.planEnabled ? " · вкл" : ""}
                 </button>,
@@ -4300,13 +4318,17 @@ export function AdminCrmSettings() {
               {loadGuide ? <LoadGuideModal tab={loadGuide} onClose={() => setLoadGuide(null)} /> : null}
               <HistoryPlanModal
                 open={planOpen}
-                onClose={() => setPlanOpen(false)}
+                onClose={() => {
+                  setPlanOpen(false);
+                  setPlanFocus(null);
+                }}
                 policy={syncPolicy}
                 job={journal?.job}
                 busy={busy}
                 planLog={journal?.planLog}
                 historyWorker={journal?.historyWorker}
                 people={[...(journal?.progress?.live?.people || []), ...(journal?.progress?.archive?.people || [])].map((p) => ({ cid: p.cid, name: p.name }))}
+                focus={planFocus}
                 onSave={(next) => void saveSyncPolicy(next)}
                 onRunAuto={(opts) =>
                   void startHistJob({
@@ -5193,6 +5215,10 @@ export function AdminCrmSettings() {
                         busy={offline || run}
                         loadingCid={run ? fillLoading?.customerId : undefined}
                         onRecheck={(row) => void pullAudit({ customerId: row.cid, branchId: row.branchId, name: row.name })}
+                        onPlanOne={(row) => {
+                          setPlanFocus(row);
+                          setPlanOpen(true);
+                        }}
                       />
                     </>
                   );

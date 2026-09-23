@@ -402,20 +402,22 @@ function NowWizard({
   busy,
   run,
   people,
+  seed,
   onRunAuto,
   onRunOne,
 }: {
   busy?: boolean;
   run?: boolean;
   people?: PlanPerson[];
+  seed?: PlanPerson | null;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
   onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
 }) {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(seed?.cid ? 1 : 0);
   const [whoKind, setWhoKind] = useState<"one" | "live" | "arch">("one");
   const [act, setAct] = useState<"audit" | "calendar" | "all">("audit");
-  const [who, setWho] = useState("");
-  const [picked, setPicked] = useState<PlanPerson | null>(null);
+  const [who, setWho] = useState(seed?.name || "");
+  const [picked, setPicked] = useState<PlanPerson | null>(seed?.cid ? seed : null);
   const [from, setFrom] = useState<PlanFromId>("1");
   const [leads, setLeads] = useState(true);
   const [archGroups, setArchGroups] = useState(true);
@@ -486,6 +488,7 @@ function NowWizard({
       {step === 1 ? (
         one ? (
           <div className="mt-3 grid gap-2">
+            {pickedName ? <p className="text-sm">{pickedName} · №{cid}</p> : null}
             <button type="button" onClick={() => setAct("audit")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "audit" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
               <span className="block text-sm font-semibold">Шаг 5 · сверка</span>
               <span className={cn("mt-0.5 block text-[0.75rem]", act === "audit" ? "text-white/75" : "text-muted")}>Календарь и кассу не трогает.</span>
@@ -593,6 +596,7 @@ export function HistoryPlanPanel({
   onRunAuto,
   onRunOne,
   people,
+  focus,
 }: {
   policy: CrmSyncPolicy;
   job?: JobSnap | null;
@@ -600,13 +604,14 @@ export function HistoryPlanPanel({
   planLog?: PlanLogRow[];
   historyWorker?: { at?: string; silent?: boolean };
   people?: PlanPerson[];
+  focus?: PlanPerson | null;
   onSave: (next: CrmSyncPolicy) => void;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
   onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState("");
-  const [screen, setScreen] = useState<"home" | "now" | "plan" | "log">("home");
+  const [screen, setScreen] = useState<"home" | "now" | "plan" | "log">(focus?.cid ? "now" : "home");
   const [menuId, setMenuId] = useState("");
   const run = Boolean(job?.running) && !job?.stop;
   const head = useMemo(() => {
@@ -685,7 +690,7 @@ export function HistoryPlanPanel({
         </div>
       ) : null}
 
-      {screen === "now" ? <NowWizard busy={busy} run={run} people={people} onRunAuto={onRunAuto} onRunOne={onRunOne} /> : null}
+      {screen === "now" ? <NowWizard busy={busy} run={run} people={people} seed={focus} onRunAuto={onRunAuto} onRunOne={onRunOne} /> : null}
 
       {screen === "log" ? (
         <div className="rounded-[1.25rem] bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.04]">
@@ -832,6 +837,7 @@ export function HistoryPlanModal({
   onRunAuto,
   onRunOne,
   people,
+  focus,
   planLog,
   historyWorker,
 }: {
@@ -844,6 +850,7 @@ export function HistoryPlanModal({
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
   onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
   people?: PlanPerson[];
+  focus?: PlanPerson | null;
   planLog?: PlanLogRow[];
   historyWorker?: { at?: string; silent?: boolean };
 }) {
@@ -878,7 +885,7 @@ export function HistoryPlanModal({
             Закрыть
           </button>
         </div>
-        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} historyWorker={historyWorker} people={people} onSave={onSave} onRunAuto={onRunAuto} onRunOne={onRunOne} />
+        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} historyWorker={historyWorker} people={people} focus={focus} onSave={onSave} onRunAuto={onRunAuto} onRunOne={onRunOne} />
       </div>
     </div>
   );
