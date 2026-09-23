@@ -96,7 +96,7 @@ function Switch({ on, disabled, onClick }: { on: boolean; disabled?: boolean; on
       aria-checked={on}
       disabled={disabled}
       onClick={onClick}
-      className={cn("relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-40", on ? "bg-black" : "bg-black/15")}
+      className={cn("relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-40", on ? "bg-emerald-600" : "bg-black/15")}
     >
       <span className={cn("absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform", on && "translate-x-5")} />
     </button>
