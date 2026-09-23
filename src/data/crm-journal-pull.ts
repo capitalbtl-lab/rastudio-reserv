@@ -2041,8 +2041,13 @@ export async function journalPull(opts: {
     });
     const wanted = Number(opts.customerId) || 0;
     const fromList = wanted ? rankedStudentIds(study).find((p) => p.cid === wanted) : null;
+    const dossier = wanted ? findDossier({ crmId: wanted }) : null;
     const fallback = wanted
-      ? { cid: wanted, branchId: Number(opts.branchId) || 1, study: study === "2" ? 2 : 1 }
+      ? {
+          cid: wanted,
+          branchId: Number(fromList?.branchId) || Number(dossier?.branchId) || Number(opts.branchId) || 1,
+          study: study === "2" ? 2 : 1,
+        }
       : null;
     const idx = Number(store.lastAudit?.idx) || 0;
     const one = fromList || fallback || pickSlice(people, idx, 1).slice[0];

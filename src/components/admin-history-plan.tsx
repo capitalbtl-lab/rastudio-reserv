@@ -415,7 +415,7 @@ export function HistoryPlanPanel({
   const run = Boolean(job?.running) && !job?.stop;
   const horizon = useMemo(() => planHorizon(policy.plan, 14), [policy.plan]);
   const horizonDays = horizon.filter((d) => d.hits.length);
-  const whoCid = Number(String(who).replace(/\D/g, "")) || 0;
+  const whoCid = Number(String(who).match(/\d+/)?.[0] || 0);
   const editing = editId ? policy.plan.find((r) => r.id === editId) || null : null;
   const formOpen = adding || Boolean(editing);
 

@@ -542,7 +542,7 @@ export function mergePolicyRunStamps(disk: CrmSyncPolicy, run: HistorySchedule[]
   };
 }
 
-/** Экран не затирает due/lastFiredAt, которые поставил воркер. */
+/** Экран не затирает due/lastFiredAt, которые поставил воркер. Смена часа, дня или шага — due снимаем, иначе ночью поедет старое время. */
 export function mergePolicyKeepRun(disk: CrmSyncPolicy, incoming: CrmSyncPolicy): CrmSyncPolicy {
   const byId = new Map(disk.plan.map((r) => [r.id, r]));
   return {
@@ -550,6 +550,24 @@ export function mergePolicyKeepRun(disk: CrmSyncPolicy, incoming: CrmSyncPolicy)
     plan: incoming.plan.map((s) => {
       const prev = byId.get(s.id);
       if (!prev) return s;
+      const same =
+        prev.mode === s.mode &&
+        prev.at === s.at &&
+        prev.study === s.study &&
+        prev.dateFromId === s.dateFromId &&
+        prev.recheckDays === s.recheckDays &&
+        prev.leads === s.leads &&
+        prev.archGroups === s.archGroups &&
+        JSON.stringify(prev.when) === JSON.stringify(s.when);
+      if (!same) {
+        return {
+          ...s,
+          dueAt: "",
+          lastFiredAt: prev.lastFiredAt,
+          lastJobId: prev.lastJobId,
+          lastSkip: prev.lastSkip === "run" ? "run" : "",
+        };
+      }
       return {
         ...s,
         dueAt: prev.dueAt,

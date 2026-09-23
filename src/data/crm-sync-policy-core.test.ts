@@ -169,6 +169,14 @@ describe("пульт Истории", () => {
     assert.equal(merged.plan[0].on, false);
     assert.equal(merged.plan[0].dueAt, "2026-09-15T01:00:00.000Z");
     assert.equal(merged.plan[0].lastFiredAt, "prev");
+    const moved = policyOf({
+      planEnabled: true,
+      plan: [{ id: "n", on: false, mode: "people-recheck", when: { kind: "daily" }, at: "18:00" }],
+    });
+    const shifted = mergePolicyKeepRun(disk, moved);
+    assert.equal(shifted.plan[0].at, "18:00");
+    assert.equal(shifted.plan[0].dueAt, "");
+    assert.equal(shifted.plan[0].lastFiredAt, "prev");
   });
 
   it("воркер не затирает тумблер и новые карточки", () => {

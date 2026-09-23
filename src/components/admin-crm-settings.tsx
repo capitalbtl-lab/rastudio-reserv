@@ -4318,9 +4318,22 @@ export function AdminCrmSettings() {
                   })
                 }
                 onRunOne={(opts) => {
+                  const people = [
+                    ...(journal?.progress?.live?.people || []),
+                    ...(journal?.progress?.archive?.people || []),
+                  ];
+                  const hit = people.find((p) => p.cid === opts.cid);
                   const from = planFromIdOf("1", opts.dateFromId);
+                  const name = hit?.name || `№${opts.cid}`;
+                  const branchId = Number(hit?.branchId) || undefined;
                   if (opts.kind === "audit") {
-                    void pullAudit({ customerId: opts.cid, name: `№${opts.cid}` });
+                    void startHistJob({
+                      jobMode: "audit",
+                      study: "1",
+                      customerId: opts.cid,
+                      branchId,
+                      name,
+                    });
                     return;
                   }
                   void startHistJob({
@@ -4329,7 +4342,8 @@ export function AdminCrmSettings() {
                     study: "1",
                     recheck: true,
                     customerId: opts.cid,
-                    name: `№${opts.cid}`,
+                    branchId,
+                    name,
                     dateFrom: planDateFrom(from),
                     recheckDays: planFromIdToRecheckDays(from),
                   });
