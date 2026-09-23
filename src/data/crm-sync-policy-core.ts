@@ -39,6 +39,10 @@ export const PLAN_FROM_OPTS = [
   { id: "3", label: "3 года" },
   { id: "2", label: "2 года" },
   { id: "1", label: "1 год" },
+  { id: "m6", label: "6 месяцев" },
+  { id: "m4", label: "4 месяца" },
+  { id: "m2", label: "2 месяца" },
+  { id: "m1", label: "1 месяц" },
 ] as const;
 
 export type PlanFromId = (typeof PLAN_FROM_OPTS)[number]["id"];
@@ -250,8 +254,19 @@ export function canSavePolicy(p: CrmSyncPolicy): { ok: true } | { ok: false; err
 
 export function planDateFrom(id: string, now = new Date()): string {
   if (id === "2015") return "2015-01-01";
-  const years = id === "1" ? 1 : id === "2" ? 2 : id === "3" ? 3 : 7;
   const w = mskWall(now);
+  const months = id === "m1" ? 1 : id === "m2" ? 2 : id === "m4" ? 4 : id === "m6" ? 6 : 0;
+  if (months) {
+    let mo = w.mo - months;
+    let y = w.y;
+    while (mo < 1) {
+      mo += 12;
+      y -= 1;
+    }
+    const d = Math.min(w.d, monthLen(y, mo));
+    return `${y}-${pad2(mo)}-${pad2(d)}`;
+  }
+  const years = id === "1" ? 1 : id === "2" ? 2 : id === "3" ? 3 : 7;
   const y = w.y - years;
   const d = Math.min(w.d, monthLen(y, w.mo));
   return `${y}-${pad2(w.mo)}-${pad2(d)}`;
@@ -267,6 +282,10 @@ export function planFromIdToRecheckDays(id: string): number {
   if (id === "3") return 1095;
   if (id === "2") return 730;
   if (id === "1") return 365;
+  if (id === "m6") return 182;
+  if (id === "m4") return 122;
+  if (id === "m2") return 62;
+  if (id === "m1") return 32;
   return 4000;
 }
 

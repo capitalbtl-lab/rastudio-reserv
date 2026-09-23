@@ -154,6 +154,11 @@ describe("пульт Истории", () => {
     assert.equal(job.dateFrom, "2015-01-01");
     const two = scheduleOf({ id: "b", mode: "people", study: "2", when: { kind: "daily" }, at: "04:00", dateFromId: "2" });
     assert.equal(planRuleToJob(two, msk(2026, 8, 15, 12, 0)).dateFrom, "2024-09-15");
+    const six = scheduleOf({ id: "c", mode: "auto", when: { kind: "daily" }, at: "04:00", dateFromId: "m6" });
+    assert.equal(planRuleToJob(six, msk(2026, 8, 15, 12, 0)).dateFrom, "2026-03-15");
+    assert.equal(planRuleToJob(six, msk(2026, 8, 15, 12, 0)).recheckDays, 182);
+    const one = scheduleOf({ id: "d", mode: "people", when: { kind: "daily" }, at: "04:00", dateFromId: "m1" });
+    assert.equal(planRuleToJob(one, msk(2026, 2, 31, 12, 0)).dateFrom, "2026-02-28");
   });
 
   it("сохранение с экрана не затирает due воркера", () => {
