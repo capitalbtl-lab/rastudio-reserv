@@ -4306,6 +4306,7 @@ export function AdminCrmSettings() {
                 busy={busy}
                 planLog={journal?.planLog}
                 historyWorker={journal?.historyWorker}
+                people={[...(journal?.progress?.live?.people || []), ...(journal?.progress?.archive?.people || [])].map((p) => ({ cid: p.cid, name: p.name }))}
                 onSave={(next) => void saveSyncPolicy(next)}
                 onRunAuto={(opts) =>
                   void startHistJob({

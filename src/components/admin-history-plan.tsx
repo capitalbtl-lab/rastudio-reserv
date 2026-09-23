@@ -21,6 +21,31 @@ import {
   type PlanUnit,
 } from "@/data/crm-sync-policy-core";
 
+type PlanPerson = { cid: number; name: string };
+
+function foldName(s: string) {
+  return s.toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
+}
+
+function matchPeople(people: PlanPerson[], raw: string) {
+  const q = foldName(raw);
+  if (q.length < 2 && !/^\d+$/.test(q)) return [];
+  const words = q.split(" ").filter(Boolean);
+  const digits = /^\d+$/.test(q);
+  const out: PlanPerson[] = [];
+  const seen = new Set<number>();
+  for (const p of people) {
+    if (!p.cid || seen.has(p.cid)) continue;
+    const name = foldName(p.name || "");
+    const ok = digits ? String(p.cid).includes(q) : words.every((w) => name.includes(w) || String(p.cid).includes(w));
+    if (!ok) continue;
+    seen.add(p.cid);
+    out.push(p);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 type JobSnap = {
   running?: boolean;
   stop?: boolean;
@@ -376,11 +401,13 @@ function DraftForm({
 function NowWizard({
   busy,
   run,
+  people,
   onRunAuto,
   onRunOne,
 }: {
   busy?: boolean;
   run?: boolean;
+  people?: PlanPerson[];
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
   onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
 }) {
@@ -388,22 +415,29 @@ function NowWizard({
   const [whoKind, setWhoKind] = useState<"one" | "live" | "arch">("one");
   const [act, setAct] = useState<"audit" | "calendar" | "all">("audit");
   const [who, setWho] = useState("");
+  const [picked, setPicked] = useState<PlanPerson | null>(null);
   const [from, setFrom] = useState<PlanFromId>("1");
   const [leads, setLeads] = useState(true);
   const [archGroups, setArchGroups] = useState(true);
-  const cid = Number(String(who).match(/\d+/)?.[0] || 0);
+  const hits = matchPeople(people || [], who);
+  const q = who.trim();
+  const numeric = /^\d+$/.test(q);
+  const exact = numeric ? (people || []).find((p) => String(p.cid) === q) : undefined;
+  const typedId = exact ? exact.cid : numeric && hits.length === 0 && q.length >= 3 ? Number(q) : 0;
+  const cid = typedId || (picked && foldName(picked.name) === foldName(who) ? picked.cid : 0) || (!numeric && hits.length === 1 ? hits[0].cid : 0);
+  const pickedName = picked && picked.cid === cid ? picked.name : hits.find((p) => p.cid === cid)?.name || "";
   const titles = ["Кого", "Что сделать", "Окно", "Запуск"];
   const one = whoKind === "one";
   const canNext =
-    (step !== 0 || true) &&
     (step !== 1 || (one ? act === "audit" || act === "calendar" : true)) &&
-    (step !== 2 || true);
+    (step !== 2 || !one || cid > 0);
 
   function go() {
     if (one) {
       if (!onRunOne || !cid) return;
       const kind = act === "calendar" ? "calendar" : "audit";
-      const ask = kind === "audit" ? `Шаг 5 только №${cid}? Календарь и кассу не трогаем.` : `Календарь №${cid}? Кассу не трогаем.`;
+      const whoLine = pickedName ? `${pickedName} · №${cid}` : `№${cid}`;
+      const ask = kind === "audit" ? `Шаг 5 только ${whoLine}? Календарь и кассу не трогаем.` : `Календарь ${whoLine}? Кассу не трогаем.`;
       if (!window.confirm(ask)) return;
       onRunOne({ cid, kind, dateFromId: from });
       return;
@@ -426,7 +460,7 @@ function NowWizard({
         <div className="mt-3 grid gap-2">
           {(
             [
-              ["one", "Один человек", "Номер. Шаг 5 или календарь."],
+              ["one", "Один человек", "Фамилия, имя или номер."],
               ["live", "Сейчас ходят", "Шаги 1–5 по живым."],
               ["arch", "Архив клиентов", "Шаги 1–5 по архиву."],
             ] as const
@@ -468,12 +502,42 @@ function NowWizard({
       {step === 2 ? (
         <>
           {one ? (
-            <input
-              className="mt-3 h-10 w-full rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
-              placeholder="номер, например 4324"
-              value={who}
-              onChange={(e) => setWho(e.target.value)}
-            />
+            <div className="relative mt-3">
+              <input
+                className="h-10 w-full rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
+                placeholder="фамилия, имя, отчество или номер"
+                value={who}
+                onChange={(e) => {
+                  setWho(e.target.value);
+                  setPicked(null);
+                }}
+              />
+              {who.trim() && hits.length > 1 ? (
+                <ul className="absolute z-10 mt-1 max-h-52 w-full overflow-y-auto rounded-xl bg-white py-1 shadow-lg ring-1 ring-black/10">
+                  {hits.map((p) => (
+                    <li key={p.cid}>
+                      <button
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-black/[0.04]"
+                        onClick={() => {
+                          setPicked(p);
+                          setWho(p.name);
+                        }}
+                      >
+                        {p.name} <span className="text-muted">№{p.cid}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {who.trim() && !cid ? (
+                <p className="mt-2 text-[0.75rem] text-muted">
+                  {(people || []).length ? "Несколько людей. Выберите строку." : "Список шага ещё не загружен — введите номер."}
+                </p>
+              ) : cid && pickedName ? (
+                <p className="mt-2 text-[0.75rem] text-muted">{pickedName} · №{cid}</p>
+              ) : null}
+            </div>
           ) : null}
           {one && act === "audit" ? <p className="mt-3 text-sm text-muted">Окно лет шагу 5 не нужно.</p> : (
             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -493,7 +557,7 @@ function NowWizard({
       {step === 3 ? (
         <p className="mt-3 text-sm">
           {one
-            ? `№${cid || "—"} · ${act === "calendar" ? "календарь" : "шаг 5"}${act === "calendar" ? ` · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}` : ""}`
+            ? `${pickedName ? `${pickedName} · ` : ""}№${cid || "—"} · ${act === "calendar" ? "календарь" : "шаг 5"}${act === "calendar" ? ` · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}` : ""}`
             : `${whoKind === "arch" ? "Архив" : "Сейчас ходят"} · шаги 1–5 · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}`}
         </p>
       ) : null}
@@ -528,12 +592,14 @@ export function HistoryPlanPanel({
   onSave,
   onRunAuto,
   onRunOne,
+  people,
 }: {
   policy: CrmSyncPolicy;
   job?: JobSnap | null;
   busy?: boolean;
   planLog?: PlanLogRow[];
   historyWorker?: { at?: string; silent?: boolean };
+  people?: PlanPerson[];
   onSave: (next: CrmSyncPolicy) => void;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
   onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
@@ -619,7 +685,7 @@ export function HistoryPlanPanel({
         </div>
       ) : null}
 
-      {screen === "now" ? <NowWizard busy={busy} run={run} onRunAuto={onRunAuto} onRunOne={onRunOne} /> : null}
+      {screen === "now" ? <NowWizard busy={busy} run={run} people={people} onRunAuto={onRunAuto} onRunOne={onRunOne} /> : null}
 
       {screen === "log" ? (
         <div className="rounded-[1.25rem] bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.04]">
@@ -765,6 +831,7 @@ export function HistoryPlanModal({
   onSave,
   onRunAuto,
   onRunOne,
+  people,
   planLog,
   historyWorker,
 }: {
@@ -776,6 +843,7 @@ export function HistoryPlanModal({
   onSave: (next: CrmSyncPolicy) => void;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
   onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
+  people?: PlanPerson[];
   planLog?: PlanLogRow[];
   historyWorker?: { at?: string; silent?: boolean };
 }) {
@@ -810,7 +878,7 @@ export function HistoryPlanModal({
             Закрыть
           </button>
         </div>
-        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} historyWorker={historyWorker} onSave={onSave} onRunAuto={onRunAuto} onRunOne={onRunOne} />
+        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} historyWorker={historyWorker} people={people} onSave={onSave} onRunAuto={onRunAuto} onRunOne={onRunOne} />
       </div>
     </div>
   );
