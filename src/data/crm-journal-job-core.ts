@@ -119,6 +119,7 @@ export type JournalJob = {
   archived: boolean;
   pipe: string[];
   skipLeads: boolean;
+  oneName?: string;
 };
 
 export function emptyJournalJob(): JournalJob {

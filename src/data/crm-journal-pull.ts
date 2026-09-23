@@ -553,6 +553,23 @@ function groupsOfStudent(cid: number) {
   return (d?.groupLinks || []).map((g) => String(g.name || "").trim()).filter(Boolean);
 }
 
+/** Группы этого человека. Чужие группы школы сюда не попадают. */
+export function studentGroupItems(cid: number): { groupId: number; branchId: number; name: string }[] {
+  const d = findDossier({ crmId: cid });
+  const out: { groupId: number; branchId: number; name: string }[] = [];
+  const seen = new Set<string>();
+  for (const g of d?.groupLinks || []) {
+    const groupId = Number(g.id) || 0;
+    if (!groupId || g.active === false) continue;
+    const branchId = Number(g.branchId) || 1;
+    const key = `${branchId}:${groupId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ groupId, branchId, name: String(g.name || "").trim() || `группа ${groupId}` });
+  }
+  return out;
+}
+
 /** Клиенты Alfa без живого cgi. Не архив, не лид, не «сейчас ходят». */
 export function peopleWithoutLiveGroup() {
   const live = new Set(rankedStudentIds("1").map((x) => x.cid));
@@ -1724,6 +1741,7 @@ export async function journalPull(opts: {
   dateFrom?: string;
   dateTo?: string;
   recheckDays?: number;
+  steps?: string;
   prune?: boolean;
   jobMode?: string;
   take?: number;
@@ -1737,7 +1755,7 @@ export async function journalPull(opts: {
 }) {
   const kind = opts.kind;
   if (kind === "jobStart" || kind === "jobStop" || kind === "jobStatus") {
-    const { startJournalJob, stopJournalJob, resumeJournalJob } = await import("./crm-journal-job");
+    const { startJournalJob, stopJournalJob, resumeJournalJob, startOnePersonStep } = await import("./crm-journal-job");
     if (kind === "jobStatus") {
       resumeJournalJob();
       return journalJobView();
@@ -1766,6 +1784,27 @@ export async function journalPull(opts: {
         name: raw,
         src: "hands",
         skipLeads: /(?:^|&)leads=0(?:&|$)/.test(raw),
+      });
+      return journalJobView();
+    }
+    if (opts.jobMode === "person-steps") {
+      const want = String(opts.steps || "1,2,3,4,5")
+        .split(",")
+        .map((x) => Number(x))
+        .filter((n) => n >= 1 && n <= 5);
+      const order = [1, 2, 3, 4, 5].filter((n) => want.includes(n));
+      const cid = Number(opts.customerId) || 0;
+      if (!cid || !order.length) return journalJobView();
+      const [first, ...rest] = order;
+      startOnePersonStep({
+        step: first,
+        pipe: rest.map((n) => `one:${n}`),
+        customerId: cid,
+        branchId: Number(opts.branchId) || 1,
+        oneName: String(opts.name || `№${cid}`),
+        study: opts.study === "2" ? "2" : "1",
+        dateFrom: opts.dateFrom || "",
+        recheckDays: opts.recheckDays,
       });
       return journalJobView();
     }

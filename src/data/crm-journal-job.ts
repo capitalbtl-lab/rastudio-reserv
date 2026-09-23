@@ -1,6 +1,6 @@
 /** Фон «Истории из Alfa»: один шаг, пауза, следующий. Вкладка только смотрит. В Alfa не пишет. */
 
-import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } from "./crm-journal-pull.ts";
+import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups, studentGroupItems } from "./crm-journal-pull.ts";
 import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
 import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd, groupJournalGreen } from "./crm-inbound-core.ts";
@@ -207,6 +207,7 @@ export type StartJournalJobOpts = {
   src?: "hands" | "plan";
   fromPipe?: boolean;
   skipLeads?: boolean;
+  oneName?: string;
   id?: string;
 };
 
@@ -235,10 +236,18 @@ function emptyMsg(mode: JournalJobMode, recheck: boolean) {
 
 function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
   const mode = opts.mode;
+  const pinnedGroups = (opts.items || [])
+    .map((r) => ({
+      groupId: Number(r.groupId) || 0,
+      branchId: Number(r.branchId) || 0,
+      name: String(r.name || ""),
+    }))
+    .filter((r) => r.groupId);
+  if ((pinnedGroups.length || String(opts.oneName || "").trim()) && (mode === "roster-recheck" || mode === "groups-recheck")) return pinnedGroups;
   if (mode === "person") {
     const cid = Number(opts.customerId) || 0;
     if (!cid) return [];
-    return [{ cid, branchId: Number(opts.branchId) || 1, name: opts.name || `№${cid}` }];
+    return [{ cid, branchId: Number(opts.branchId) || 1, name: opts.name || opts.oneName || `№${cid}` }];
   }
   if (mode === "count") return [{ name: "отбор архива" }];
   if (mode === "people" || mode === "people-recheck" || mode === "people-slow" || mode === "probe" || mode === "audit") {
@@ -468,6 +477,8 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
                 : opts.kind || "students";
   const study = opts.study === "2" ? "2" : "1";
   const skipLeads = Boolean(opts.skipLeads) || /(?:^|&)leads=0(?:&|$)/.test(String(opts.name || ""));
+  const personOnly = Boolean(String(opts.oneName || "").trim()) && (mode === "roster-recheck" || mode === "groups-recheck");
+  const pinnedGroups = personOnly || (opts.items || []).some((r) => Number(r.groupId));
   let recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
   const span = Boolean(String(opts.dateFrom || "").trim() && String(opts.dateTo || "").trim());
   const freezeIce = Boolean(recheck) || span;
@@ -481,13 +492,13 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     wave = nxt.wave;
     follow = nxt.follow;
     recheck = nxt.recheck;
-  } else if (mode === "groups-recheck") {
+  } else if (mode === "groups-recheck" && !pinnedGroups) {
     const nxt = groupsRecheckAdvance(groupRowsFor({ school: opts.school, archived, grain: opts.grain }), "", [], false);
     items = nxt.items;
     wave = nxt.wave;
     follow = nxt.follow;
     recheck = nxt.recheck;
-  } else if (mode === "roster-recheck") {
+  } else if (mode === "roster-recheck" && !pinnedGroups) {
     const nxt = groupsRecheckAdvance(rosterRowsFor({ school: opts.school, archived }), "", [], true);
     items = nxt.items;
     wave = nxt.wave;
@@ -505,6 +516,9 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
       archived,
       skipLeads,
       pipe: Array.isArray(opts.pipe) ? opts.pipe.map(String).filter(Boolean) : [],
+      customerId: Number(opts.customerId) || 0,
+      branchId: Number(opts.branchId) || 0,
+      oneName: String(opts.oneName || opts.name || ""),
       msg: emptyMsg(mode, recheck),
       lastAt: nowIso(),
     });
@@ -550,6 +564,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     groupId: Number(opts.groupId) || Number(first?.groupId) || 0,
     branchId: Number(opts.branchId) || Number(first?.branchId) || 0,
     customerId: Number(opts.customerId) || Number(first?.cid) || 0,
+    oneName: String(opts.oneName || opts.name || ""),
     take: Number(opts.take) || 0,
     filter: String(opts.filter || ""),
     catalogFirst: mode === "catalog",
@@ -646,6 +661,55 @@ function closePlanSlot(job: JournalJob, ok: boolean) {
   });
 }
 
+/** Один человек: выбранные шаги по очереди. Состав и группы — только его группы. */
+export function startOnePersonStep(p: {
+  step: number;
+  pipe?: string[];
+  customerId: number;
+  branchId?: number;
+  oneName?: string;
+  study?: "1" | "2";
+  dateFrom?: string;
+  recheckDays?: number;
+  id?: string;
+  fromPipe?: boolean;
+}) {
+  const cid = Number(p.customerId) || 0;
+  const name = String(p.oneName || `№${cid}`);
+  const common = {
+    study: p.study === "2" ? ("2" as const) : ("1" as const),
+    customerId: cid,
+    branchId: Number(p.branchId) || 1,
+    name,
+    oneName: name,
+    dateFrom: p.dateFrom || "",
+    recheckDays: p.recheckDays,
+    recheck: true,
+    pipe: p.pipe || [],
+    src: "hands" as const,
+    fromPipe: p.fromPipe,
+    id: p.id,
+    archived: p.study === "2",
+  };
+  if (p.step === 1) {
+    startJournalJob({ ...common, mode: "roster-recheck", kind: "roster", items: studentGroupItems(cid) });
+    return;
+  }
+  if (p.step === 2) {
+    startJournalJob({ ...common, mode: "person", kind: "students" });
+    return;
+  }
+  if (p.step === 3) {
+    startJournalJob({ ...common, mode: "groups-recheck", kind: "group", items: studentGroupItems(cid) });
+    return;
+  }
+  if (p.step === 4) {
+    startJournalJob({ ...common, mode: "person", kind: "balance" });
+    return;
+  }
+  startJournalJob({ ...common, mode: "audit", kind: "audit", recheck: false });
+}
+
 function continueAutoPipe(job: JournalJob) {
   const rest = (job.pipe || []).map(String).filter(Boolean);
   if (!rest.length) {
@@ -663,6 +727,22 @@ function continueAutoPipe(job: JournalJob) {
   const next = rest[0];
   if (!next) {
     closePlanSlot(job, true);
+    return;
+  }
+  if (String(next).startsWith("one:")) {
+    const step = Number(String(next).slice(4));
+    startOnePersonStep({
+      step,
+      pipe: rest.slice(1),
+      customerId: job.customerId,
+      branchId: job.branchId,
+      oneName: job.oneName || job.cur,
+      study: job.study,
+      dateFrom: job.dateFrom,
+      recheckDays: job.recheckDays,
+      id: job.id,
+      fromPipe: true,
+    });
     return;
   }
   notePlan({

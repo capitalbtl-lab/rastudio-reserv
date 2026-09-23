@@ -2203,6 +2203,47 @@ function asAuditRow(
   };
 }
 
+function AuditStepPick({ busy, active, onRun }: { busy?: boolean; active?: boolean; onRun: (steps: number[]) => void }) {
+  const [steps, setSteps] = useState<number[]>([1, 2, 3, 4, 5]);
+  const labels: [number, string][] = [
+    [1, "1 состав"],
+    [2, "2 календарь"],
+    [3, "3 группы"],
+    [4, "4 касса"],
+    [5, "5 сверка"],
+  ];
+  return (
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+      <span className="text-[0.72rem] font-medium text-muted">Какие шаги</span>
+      {labels.map(([n, label]) => {
+        const on = steps.includes(n);
+        return (
+          <button
+            key={n}
+            type="button"
+            aria-pressed={on}
+            className={cn("h-8 rounded-full px-3 text-[0.75rem] font-semibold", on ? "bg-black text-white" : "bg-white text-muted ring-1 ring-black/10")}
+            onClick={() => setSteps((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort((a, b) => a - b)))}
+          >
+            {label}
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        disabled={busy || !steps.length}
+        className={cn(BTN_LOAD_SM, "w-fit shrink-0 px-4", active && "ra-progress-run", (!steps.length || busy) && "opacity-50")}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRun(steps);
+        }}
+      >
+        Запустить
+      </button>
+    </div>
+  );
+}
+
 function alfaRoleLabel(role?: string) {
   if (role === "лид") return "лид в Альфе";
   if (role === "архив") return "архив в Альфе";
@@ -2220,7 +2261,7 @@ function AuditFillList({
   rows: AuditUiRow[];
   busy?: boolean;
   loadingCid?: number;
-  onRecheck: (row: AuditUiRow) => void;
+  onRecheck: (row: AuditUiRow, steps: number[]) => void;
   onPlanOne?: (row: { cid: number; name: string }) => void;
 }) {
   const [open, setOpen] = useState("");
@@ -2431,20 +2472,7 @@ function AuditFillList({
               {row.extra ? ` ${row.extra}.` : ""}
             </p>
             <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">
-              {withHint(
-                <button
-                  type="button"
-                  disabled={busy && !active}
-                  className={cn(BTN_LOAD_SM, "min-w-[12.5rem] w-fit shrink-0 px-4", active && "ra-progress-run")}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRecheck(row);
-                  }}
-                >
-                  Перепроверить
-                </button>,
-                HINT.auditRecheck,
-              )}
+              <AuditStepPick busy={busy && !active} active={active} onRun={(steps) => onRecheck(row, steps)} />
             </div>
           </div>
         ) : null}
@@ -3255,6 +3283,7 @@ export function AdminCrmSettings() {
     peopleKind?: "students" | "balance";
     jobItems?: { cid?: number; branchId?: number; name?: string; groupId?: number; periodKey?: string; periodLabel?: string }[];
     archived?: boolean;
+    steps?: string;
   }) {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
@@ -3289,6 +3318,7 @@ export function AdminCrmSettings() {
             periodLabel: opts.periodLabel || "",
             jobItems: opts.jobItems || [],
             archived: Boolean(opts.archived),
+            steps: opts.steps || "",
           } as never,
         }),
         new Promise<never>((_, rej) =>
@@ -3398,6 +3428,7 @@ export function AdminCrmSettings() {
     periodLabel?: string;
     jobItems?: { cid?: number; branchId?: number; name?: string; groupId?: number; periodKey?: string; periodLabel?: string }[];
     archived?: boolean;
+    steps?: string;
   }) {
     if (journal?.job?.running && !journal.job.stop && !stopSchool.current) {
       paintJob(journal.job);
@@ -3429,6 +3460,7 @@ export function AdminCrmSettings() {
       periodLabel: opts.periodLabel,
       jobItems: opts.jobItems,
       archived: opts.archived,
+      steps: opts.steps,
     });
     const job = (res as { job?: Parameters<typeof paintJob>[0] })?.job;
     if (job?.running) {
@@ -5214,7 +5246,19 @@ export function AdminCrmSettings() {
                         rows={rows}
                         busy={offline || run}
                         loadingCid={run ? fillLoading?.customerId : undefined}
-                        onRecheck={(row) => void pullAudit({ customerId: row.cid, branchId: row.branchId, name: row.name })}
+                        onRecheck={(row, steps) =>
+                          void startHistJob({
+                            jobMode: "person-steps",
+                            study: peopleStudy,
+                            customerId: row.cid,
+                            branchId: row.branchId,
+                            name: row.name,
+                            recheck: true,
+                            dateFrom: peopleDateFrom(peopleFromId),
+                            recheckDays: peopleRecheckDays,
+                            steps: steps.join(","),
+                          })
+                        }
                         onPlanOne={(row) => {
                           setPlanFocus(row);
                           setPlanOpen(true);

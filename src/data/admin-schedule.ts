@@ -3215,6 +3215,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         probe: Boolean((data as { probe?: boolean }).probe),
         dateFrom: String((data as { dateFrom?: string }).dateFrom || "").trim(),
         recheckDays: Number((data as { recheckDays?: number }).recheckDays) || 0,
+        steps: String((data as { steps?: string }).steps || ""),
         jobMode: String((data as { jobMode?: string }).jobMode || ""),
         take: Number((data as { take?: number }).take) || 0,
         name: String((data as { name?: string }).name || ""),
