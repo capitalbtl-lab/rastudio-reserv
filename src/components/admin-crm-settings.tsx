@@ -2203,6 +2203,20 @@ function asAuditRow(
   };
 }
 
+function FoldNames({ names }: { names?: string[] }) {
+  const [open, setOpen] = useState(false);
+  const list = (names || []).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div className="mt-1">
+      <button type="button" className="text-[0.72rem] font-semibold text-muted hover:underline" onClick={() => setOpen((v) => !v)}>
+        {open ? "скрыть имена" : `имена · ${list.length}`}
+      </button>
+      {open ? <p className="mt-1 max-h-24 overflow-auto text-[0.72rem] leading-snug text-muted">{list.join(", ")}</p> : null}
+    </div>
+  );
+}
+
 function AuditStepPick({ busy, active, onRun }: { busy?: boolean; active?: boolean; onRun: (steps: number[]) => void }) {
   const [steps, setSteps] = useState<number[]>([2, 4, 5]);
   const labels: [number, string][] = [
@@ -4607,85 +4621,64 @@ export function AdminCrmSettings() {
                   {journalSchool ? `Школа «${journalSchool}»: загрузка завершена ${schoolDone} из ${schoolRows.length}` : "Все школы. Выберите школу — счётчик только по ней"}
                   {schoolNeed ? ` · требуют загрузки ${schoolNeed}` : ""}.
                 </p>
-                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="mt-3 grid items-start gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {journal?.lastArchivesPupils ? (
-                    <div className="min-w-0 rounded-2xl bg-white px-4 py-3 text-sm leading-snug ring-1 ring-black/10">
-                      <p className="font-semibold">
-                        {journal.lastArchivesPupils.need
-                          ? `В архив по карточкам ${journal.lastArchivesPupils.need}`
-                          : "Новых архивных групп по карточкам нет"}
-                      </p>
-                      <ul className="mt-2 space-y-0.5 text-[0.92rem]">
-                        <li>клиентов в выборке {journal.lastArchivesPupils.clients}</li>
-                        <li>уникальных groupId на карточках {journal.lastArchivesPupils.uniqueIds}</li>
-                        <li>уже в живых {journal.lastArchivesPupils.live}</li>
-                        <li>уйдёт в архив (нет в живых) {journal.lastArchivesPupils.need}</li>
-                        <li>уже в списке архивных на сайте {journal.lastArchivesPupils.already}</li>
-                        {journal.lastArchivesPupils?.added ? <li>+{journal.lastArchivesPupils.added} прочитали в Alfa</li> : null}
-                      </ul>
-                      {journal.lastArchivesPupils.names?.length ? (
-                        <p className="mt-1 break-words text-[0.78rem] text-muted">{journal.lastArchivesPupils.names.join(", ")}</p>
-                      ) : null}
+                    <div className="min-w-0 rounded-2xl bg-white px-3 py-2 text-sm leading-snug ring-1 ring-black/10">
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                        <p className="font-semibold">
+                          {journal.lastArchivesPupils.need
+                            ? `В архив по карточкам ${journal.lastArchivesPupils.need}`
+                            : "Новых архивных групп по карточкам нет"}
+                        </p>
+                        <p className="text-[0.75rem] text-muted">
+                          клиентов {journal.lastArchivesPupils.clients} · id {journal.lastArchivesPupils.uniqueIds} · живых {journal.lastArchivesPupils.live} · уже в архиве {journal.lastArchivesPupils.already}
+                          {journal.lastArchivesPupils?.added ? ` · +${journal.lastArchivesPupils.added} из Alfa` : ""}
+                        </p>
+                      </div>
+                      <FoldNames names={journal.lastArchivesPupils.names} />
                       {journal.lastArchivesPupils.missing?.length ? (
-                        <p className="mt-1 break-words text-[0.78rem] text-rose-800">не нашли: {journal.lastArchivesPupils.missing.slice(0, 8).join(", ")}</p>
+                        <p className="mt-1 text-[0.72rem] text-rose-800">не нашли: {journal.lastArchivesPupils.missing.slice(0, 8).join(", ")}</p>
                       ) : null}
-                      <p className="mt-2 text-[0.72rem] text-muted">
+                      <p className="mt-1 text-[0.72rem] text-muted">
                         {journal.lastArchivesPupils.more
-                          ? `Ещё ${journal.lastArchivesPupils.left} — очередь по одной, пауза 5 с. Журнал кварталов не стартовал.`
-                          : "Список по карточкам закрыт. Дальше кварталы, как у живых групп."}
+                          ? `Ещё ${journal.lastArchivesPupils.left} — очередь по одной, пауза 5 с.`
+                          : "Список закрыт. Дальше кварталы, как у живых групп."}
                       </p>
                     </div>
                   ) : null}
                   {journal?.lastArchives ? (
-                    <div className="min-w-0 rounded-2xl bg-white px-4 py-3 text-sm leading-snug ring-1 ring-black/10">
+                    <div className="min-w-0 rounded-2xl bg-white px-3 py-2 text-sm leading-snug ring-1 ring-black/10">
                       <p className="font-semibold">
                         Архив «{journal.lastArchives.branch}»: {journal.lastArchives.added ? `+${journal.lastArchives.added}` : "новых нет"}
+                        <span className="ml-2 text-[0.75rem] font-normal text-muted">на диске {journal.lastArchives.total}</span>
                       </p>
-                      <p className="mt-1 text-[0.92rem]">
-                        На диске {journal.lastArchives.total} архивных групп. Живое расписание не трогали.
-                      </p>
-                      {journal.lastArchives.names?.length ? (
-                        <p className="mt-1 break-words text-[0.78rem] text-muted">{journal.lastArchives.names.join(", ")}</p>
-                      ) : null}
-                      <p className="mt-2 text-[0.72rem] text-muted">
-                        {journal.lastArchives.more ? "Дальше следующий филиал, пауза 5 с." : "Четыре филиала просмотрены. Дальше — сроки и явки, как у живых."}
+                      <FoldNames names={journal.lastArchives.names} />
+                      <p className="mt-1 text-[0.72rem] text-muted">
+                        {journal.lastArchives.more ? "Дальше следующий филиал, пауза 5 с." : "Четыре филиала просмотрены."}
                       </p>
                     </div>
                   ) : null}
                   {journal?.lastLife ? (
-                    <div className="min-w-0 rounded-2xl bg-white px-4 py-3 text-sm leading-snug ring-1 ring-black/10">
-                      <p className="font-semibold">
-                        Определено {journal.lastLife.total} {journal.lastLife.total === 1 ? "группа" : journal.lastLife.total < 5 ? "группы" : "групп"}
-                        {journal.lastLife.school ? ` в «${journal.lastLife.school}»` : ""}
-                      </p>
-                      <ul className="mt-2 space-y-2 text-[0.92rem]">
-                        <li>
-                          <p className="font-semibold text-sky-900">молодых {journal.lastLife.young}</p>
-                          {journal.lastLife.youngNames?.length ? <p className="mt-0.5 break-words text-[0.78rem] leading-snug text-muted">{journal.lastLife.youngNames.join(", ")}</p> : null}
-                        </li>
-                        <li>
-                          <p className="font-semibold text-amber-900">средних {journal.lastLife.mid}</p>
-                          {journal.lastLife.midNames?.length ? <p className="mt-0.5 break-words text-[0.78rem] leading-snug text-muted">{journal.lastLife.midNames.join(", ")}</p> : null}
-                        </li>
-                        <li>
-                          <p className="font-semibold text-zinc-800">старых {journal.lastLife.old}</p>
-                          {journal.lastLife.oldNames?.length ? <p className="mt-0.5 break-words text-[0.78rem] leading-snug text-muted">{journal.lastLife.oldNames.join(", ")}</p> : null}
-                        </li>
-                        {journal.lastLife.unknown ? (
-                          <li>
-                            <p className="font-semibold text-rose-800">без срока {journal.lastLife.unknown}</p>
-                            {journal.lastLife.unknownNames?.length ? <p className="mt-0.5 break-words text-[0.78rem] leading-snug text-muted">{journal.lastLife.unknownNames.join(", ")}</p> : null}
-                          </li>
-                        ) : null}
-                      </ul>
-                      <p className="mt-2 text-[0.72rem] text-muted">
+                    <div className="min-w-0 rounded-2xl bg-white px-3 py-2 text-sm leading-snug ring-1 ring-black/10 md:col-span-2 xl:col-span-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="mr-1 font-semibold">
+                          Определено {journal.lastLife.total} {journal.lastLife.total === 1 ? "группа" : journal.lastLife.total < 5 ? "группы" : "групп"}
+                          {journal.lastLife.school ? ` в «${journal.lastLife.school}»` : ""}
+                        </p>
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[0.72rem] font-semibold text-sky-950">молодых {journal.lastLife.young}</span>
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">средних {journal.lastLife.mid}</span>
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[0.72rem] font-semibold text-zinc-800">старых {journal.lastLife.old}</span>
+                        {journal.lastLife.unknown ? <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">без срока {journal.lastLife.unknown}</span> : null}
+                      </div>
+                      <FoldNames names={[...(journal.lastLife.youngNames || []), ...(journal.lastLife.midNames || []), ...(journal.lastLife.oldNames || []), ...(journal.lastLife.unknownNames || [])]} />
+                      <p className="mt-1 text-[0.72rem] text-muted">
                         {journal.lastLife.probed
                           ? `Срок из Alfa уточнили у ${journal.lastLife.probed}${journal.lastLife.left ? `, осталось ${journal.lastLife.left}` : ""}.`
-                          : "Дальше грузите только видимые кварталы у каждой группы."}
+                          : "Дальше только видимые кварталы у каждой группы."}
                       </p>
                     </div>
                   ) : (
-                    <p className="self-start text-sm text-muted md:col-span-2 xl:col-span-1">После «Определить сроки» здесь появится отчёт: сколько молодых, средних и старых.</p>
+                    <p className="text-[0.78rem] text-muted md:col-span-2">После «Определить сроки» здесь счёт: молодые, средние, старые.</p>
                   )}
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
