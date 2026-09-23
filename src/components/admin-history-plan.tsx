@@ -10,7 +10,6 @@ import {
   nextSlotAt,
   pad2,
   planFromIdToRecheckDays,
-  planHorizon,
   planModeMeta,
   planLogSessions,
   whenLabel,
@@ -519,8 +518,6 @@ export function HistoryPlanPanel({
     return `следующее: ${soon.r.label || planModeMeta(soon.r.mode).label} · ${fmtSlot(soon.r)}`;
   }, [policy]);
   const run = Boolean(job?.running) && !job?.stop;
-  const horizon = useMemo(() => planHorizon(policy.plan, 14), [policy.plan]);
-  const horizonDays = horizon.filter((d) => d.hits.length);
   const editing = editId ? policy.plan.find((r) => r.id === editId) || null : null;
   const formOpen = adding || Boolean(editing);
 
@@ -577,7 +574,7 @@ export function HistoryPlanPanel({
           {(
             [
               ["now", "Сейчас", "Один человек или шаги 1–5."],
-              ["plan", "Расписание", policy.plan.length ? `${policy.plan.filter((r) => r.on).length} вкл · ближайшие 14 дней` : "Слотов нет"],
+              ["plan", "Расписание", policy.plan.length ? `${policy.plan.filter((r) => r.on).length} вкл · само, без конца` : "Слотов нет"],
               ["log", "Журнал", "Последние синхронизации и сбои."],
             ] as const
           ).map(([id, title, hint]) => (
@@ -655,33 +652,16 @@ export function HistoryPlanPanel({
             />
           ) : (
             <>
-              <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
-                <p className="text-[0.75rem] font-semibold text-muted">14 дней · МСК</p>
-                {horizonDays.length ? (
-                  <ul className="mt-2 space-y-1.5">
-                    {horizonDays.map((d) => {
-                      const [, mo, da] = d.ymd.split("-");
-                      const names = ["", "пн", "вт", "ср", "чт", "пт", "сб", "вс"];
-                      return (
-                        <li key={d.ymd} className="text-[0.78rem]">
-                          <span className="font-semibold">{names[d.dow]} {da}.{mo}</span>
-                          {d.hits.filter((h) => h.on).length > 1 ? <span className="text-amber-800"> · очередь одна</span> : null}
-                          {d.hits.map((h) => {
-                            const w = mskWall(h.at);
-                            return (
-                              <span key={`${h.id}-${h.at.getTime()}`} className={cn(h.on ? "" : "text-muted line-through")}>
-                                {" "}· {pad2(w.h)}:{pad2(w.min)} {h.label}{h.on ? "" : " · пауза"}
-                              </span>
-                            );
-                          })}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-[0.78rem] text-muted">На 14 дней слотов нет.</p>
-                )}
-              </div>
+              {policy.plan.some((r) => r.when.kind === "ymd") ? (
+                <ul className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
+                  {policy.plan.filter((r) => r.when.kind === "ymd").map((r) => (
+                    <li key={r.id} className="text-[0.78rem]">
+                      {r.when.kind === "ymd" ? r.when.date : ""} · {r.at} · {r.label || planModeMeta(r.mode).label}
+                      {r.on ? "" : " · пауза"}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <ul className="divide-y divide-black/5 rounded-2xl px-4 ring-1 ring-black/8">
                 {policy.plan.map((r) => (
                   <li key={r.id} className="py-3">
@@ -699,7 +679,10 @@ export function HistoryPlanPanel({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold">{r.label || planModeMeta(r.mode).label}</p>
                         <p className="truncate text-[0.75rem] text-muted">
-                          {whenLabel(r.when)} · {r.at} · {r.study === "2" ? "архив" : "живые"} · {fmtSlot(r)}
+                          {r.when.kind === "ymd"
+                            ? `${whenLabel(r.when)} · ${r.at} · один раз`
+                            : `${whenLabel(r.when)} · ${r.at} · без конца · ближайший ${fmtSlot(r)}`}
+                          {r.study === "2" ? " · архив" : ""}
                           {r.lastSkip === "hands" ? " · руки заняли" : ""}
                           {r.lastSkip === "expired" ? " · слот сгорел" : ""}
                         </p>
