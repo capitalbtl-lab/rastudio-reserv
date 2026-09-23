@@ -95,6 +95,8 @@ function Chip({ on, children, onClick }: { on?: boolean; children: string; onCli
 
 export function StepRunLogPanel({ step, tick, compact }: Props) {
   const [open, setOpen] = useState(true);
+  const [namesOpen, setNamesOpen] = useState(false);
+  const [purgeDays, setPurgeDays] = useState(7);
   const [runs, setRuns] = useState<RunMeta[]>([]);
   const [runId, setRunId] = useState("");
   const [otherId, setOtherId] = useState("");
@@ -371,22 +373,33 @@ export function StepRunLogPanel({ step, tick, compact }: Props) {
             <p className="mt-2 text-[0.78rem] text-muted">Прыжков нет: у одних и тех же людей результат не сменился.</p>
           ) : null}
           {named.length ? (
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
-              {named.map((b) => (
-                <section key={b.result} className="rounded-xl bg-surface-2 px-3 py-2">
-                  <p className={cn("text-[0.78rem] font-semibold", resultTone(b.result))}>
-                    {b.label} · {b.names.length}
-                  </p>
-                  <ul className="mt-1 max-h-36 space-y-0.5 overflow-y-auto text-[0.75rem] leading-snug">
-                    {b.names.map((n) => (
-                      <li key={`${n.who}-${n.cid || n.groupId || ""}`}>
-                        <span className="font-medium">{n.who}</span>
-                        {n.detail ? <span className="text-muted"> · {n.detail}</span> : null}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
+            <div className="mt-3">
+              <button
+                type="button"
+                className="h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
+                onClick={() => setNamesOpen((v) => !v)}
+              >
+                {namesOpen ? "Скрыть сводку" : `Сводка · ${named.reduce((n, b) => n + b.names.length, 0)}`}
+              </button>
+              {namesOpen ? (
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  {named.map((b) => (
+                    <section key={b.result} className="rounded-xl bg-surface-2 px-3 py-2">
+                      <p className={cn("text-[0.78rem] font-semibold", resultTone(b.result))}>
+                        {b.label} · {b.names.length}
+                      </p>
+                      <ul className="mt-1 max-h-36 space-y-0.5 overflow-y-auto text-[0.75rem] leading-snug">
+                        {b.names.map((n) => (
+                          <li key={`${n.who}-${n.cid || n.groupId || ""}`}>
+                            <span className="font-medium">{n.who}</span>
+                            {n.detail ? <span className="text-muted"> · {n.detail}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : (
             <p className="mt-3 text-[0.78rem] text-muted">Пока пусто. Запустите шаг — сюда попадут ФИО и результат, шаг сам не меняется.</p>
@@ -449,13 +462,47 @@ export function StepRunLogPanel({ step, tick, compact }: Props) {
             })}
           </ul>
           {rows.length && !shown.length ? <p className="mt-2 text-[0.78rem] text-muted">По этому фильтру никого.</p> : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/5 pt-3">
+            <span className="text-[0.75rem] text-muted">Старые прогоны</span>
+            <select
+              className="h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
+              value={purgeDays}
+              onChange={(e) => setPurgeDays(Number(e.target.value) || 7)}
+              aria-label="Удалять логи старше"
+            >
+              <option value={7}>старше недели</option>
+              <option value={14}>старше 2 недель</option>
+              <option value={30}>старше месяца</option>
+            </select>
+            <button
+              type="button"
+              className="h-8 rounded-full px-3 text-[0.78rem] font-semibold text-red-800 ring-1 ring-red-200"
+              disabled={busy}
+              onClick={() => {
+                const label = purgeDays === 7 ? "недели" : purgeDays === 14 ? "2 недель" : "месяца";
+                if (!window.confirm(`Удалить прогоны старше ${label}? Шаги, касса и карточки не трогаются.`)) return;
+                setBusy(true);
+                void call({ kind: "purge", days: purgeDays })
+                  .then((res) => {
+                    const n = Number(res.removed) || 0;
+                    setMsg(n ? `Удалено прогонов: ${n}.` : "Таких старых прогонов нет.");
+                    setRun(null);
+                    setRunId("");
+                    void loadList();
+                  })
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Удалить старые
+            </button>
+          </div>
         </>
       )}
     </div>
   );
 }
 
-export function StepRunLogModal({ open, onClose, tick }: { open: boolean; onClose: () => void; tick?: string }) {
+export function StepRunLogModal({ open, onClose, tick, step = 0 }: { open: boolean; onClose: () => void; tick?: string; step?: 0 | StepN }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -465,32 +512,30 @@ export function StepRunLogModal({ open, onClose, tick }: { open: boolean; onClos
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
   if (!open) return null;
+  const title = step ? STEP_RU[step] : "Лог всей обработки";
   return (
-    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-3 sm:items-center" onClick={onClose} role="presentation">
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/35 p-3 backdrop-blur-[2px] sm:items-center" onClick={onClose} role="presentation">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="step-run-log-title"
-        className="max-h-[min(92vh,56rem)] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-black/10"
+        className="max-h-[min(92vh,56rem)] w-full max-w-3xl overflow-y-auto rounded-[1.4rem] bg-[#f4f3f1] p-4 shadow-2xl sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <p id="step-run-log-title" className="font-display text-[1.2rem] leading-tight">
-              Лог всей обработки
-            </p>
-            <p className="mt-1 text-[0.82rem] text-muted">Все шаги 1–5, поименно. Редактировать, копировать, скачать, удалить. Сами шаги не трогает.</p>
-          </div>
+        <div className="mb-3 flex items-center justify-between gap-3 px-1">
+          <p id="step-run-log-title" className="font-display text-[1.35rem] leading-none">
+            {title}
+          </p>
           <button
             type="button"
-            className="inline-flex h-8 shrink-0 items-center justify-center rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10 hover:bg-black/5"
+            className="h-8 rounded-full px-3 text-[0.78rem] text-muted hover:bg-black/5 hover:text-black"
             onClick={onClose}
             aria-label="Закрыть"
           >
             Закрыть
           </button>
         </div>
-        <StepRunLogPanel step={0} tick={tick} compact />
+        <StepRunLogPanel step={step} tick={tick} compact />
       </div>
     </div>
   );

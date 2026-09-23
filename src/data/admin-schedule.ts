@@ -3098,6 +3098,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         patchStepRun,
         deleteStepRow,
         deleteStepRun,
+        deleteStepRunsOlderThan,
         closeStepRun,
         compareRuns,
         rowsToCsv,
@@ -3134,6 +3135,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
       if (op === "deleteRun") {
         return { ok: deleteStepRun(runId) };
+      }
+      if (op === "purge") {
+        const removed = deleteStepRunsOlderThan(Number(data.days) || 7);
+        return { ok: true as const, removed };
       }
       if (op === "close") {
         const run = closeStepRun(runId);

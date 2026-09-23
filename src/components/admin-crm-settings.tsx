@@ -16,7 +16,7 @@ import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 import { RECHECK_DAY_OPTS, clampRecheckDays, groupJournalGreen, type RecheckDays } from "@/data/crm-inbound-core";
 import { POLICY_FACTORY, planDateFrom, planFromIdOf, planFromIdToRecheckDays, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
 import { HistoryPlanModal } from "@/components/admin-history-plan";
-import { StepRunLogModal, StepRunLogPanel } from "@/components/admin-step-run-log";
+import { StepRunLogModal } from "@/components/admin-step-run-log";
 import { step5Close, step5FitRemainder, step5ReviveEmptySkip } from "@/data/crm-step5-canon";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
@@ -2841,7 +2841,7 @@ export function AdminCrmSettings() {
   const [histTab, setHistTab] = useState<HistTab>("roster");
   const [loadGuide, setLoadGuide] = useState<HistTab | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
-  const [procLogOpen, setProcLogOpen] = useState(false);
+  const [logStep, setLogStep] = useState<null | 0 | 1 | 2 | 3 | 4 | 5>(null);
   const crmTabsRef = useRef<HTMLDivElement>(null);
   const histTabsRef = useRef<HTMLDivElement>(null);
   const tabLockY = useRef<number | null>(null);
@@ -4277,8 +4277,8 @@ export function AdminCrmSettings() {
                 {withHint(
                 <button
                   type="button"
-                  className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", procLogOpen ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
-                  onClick={() => setProcLogOpen(true)}
+                  className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", logStep === 0 ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+                  onClick={() => setLogStep(0)}
                 >
                   Лог обработки
                 </button>,
@@ -4349,13 +4349,14 @@ export function AdminCrmSettings() {
                   });
                 }}
               />
-              <StepRunLogModal open={procLogOpen} onClose={() => setProcLogOpen(false)} tick={journal?.job?.cur || journal?.at} />
+              <StepRunLogModal open={logStep != null} step={logStep ?? 0} onClose={() => setLogStep(null)} tick={journal?.job?.cur || journal?.at} />
               {histTab === "roster" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                <div className="flex items-center gap-2 font-display text-[1.15rem]">
                   Группы и состав
                   <LoadGuideBtn tab="roster" onOpen={setLoadGuide} />
-                </p>
+                  <button type="button" className="ml-auto h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setLogStep(1)}>Лог шага</button>
+                </div>
                 <p className="mt-1 text-sm text-muted">
                   Основа для календаря и кассы. Одна группа, пауза 5 с. В Alfa не пишем.{" "}
                   <HintI text={HINT.tabRoster} />
@@ -4550,16 +4551,16 @@ export function AdminCrmSettings() {
                     </>
                   );
                 })()}
-                <StepRunLogPanel step={1} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
 
               {histTab === "groups" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                <div className="flex items-center gap-2 font-display text-[1.15rem]">
                   Занятия в группах
                   <LoadGuideBtn tab="groups" onOpen={setLoadGuide} />
-                </p>
+                  <button type="button" className="ml-auto h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setLogStep(3)}>Лог шага</button>
+                </div>
                 <p className="mt-1 text-sm text-muted">
                   Сначала красная «по одному», потом размер порции. Архив и сроки — отдельные кнопки ниже.{" "}
                   <HintI text={HINT.tabGroups} />
@@ -4831,16 +4832,16 @@ export function AdminCrmSettings() {
                 <p className="mt-2 text-[0.72rem] text-muted">
                   Название группы раскрывает карточку на месте, без прыжка вверх. Другая группа — эта закрывается. Список без внутреннего скролла.
                 </p>
-                <StepRunLogPanel step={3} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
 
               {histTab === "students" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                <div className="flex items-center gap-2 font-display text-[1.15rem]">
                   Календарь ученика
                   <LoadGuideBtn tab="students" onOpen={setLoadGuide} />
-                </p>
+                  <button type="button" className="ml-auto h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setLogStep(2)}>Лог шага</button>
+                </div>
                 <p className="mt-1 text-sm text-muted">
                   Красная рамка — загрузка. Синяя — перепроверка. Списки внутри своей рамки.{" "}
                   <HintI text={HINT.tabStudents} />
@@ -4994,16 +4995,16 @@ export function AdminCrmSettings() {
                     </>
                   );
                 })()}
-                <StepRunLogPanel step={2} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
 
               {histTab === "money" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                <div className="flex items-center gap-2 font-display text-[1.15rem]">
                   Деньги на карточке
                   <LoadGuideBtn tab="money" onOpen={setLoadGuide} />
-                </p>
+                  <button type="button" className="ml-auto h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setLogStep(4)}>Лог шага</button>
+                </div>
                 <p className="mt-1 text-sm text-muted">
                   Как шаг 2: красная «по одному», потом годы. Товары не грузим. Сумма — шаг 5.{" "}
                   <HintI text={HINT.tabMoney} />
@@ -5094,16 +5095,16 @@ export function AdminCrmSettings() {
                     </>
                   );
                 })()}
-                <StepRunLogPanel step={4} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
 
               {histTab === "audit" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                <div className="flex items-center gap-2 font-display text-[1.15rem]">
                   Сверка остатка с Alfa
                   <LoadGuideBtn tab="audit" onOpen={setLoadGuide} />
-                </p>
+                  <button type="button" className="ml-auto h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setLogStep(5)}>Лог шага</button>
+                </div>
                 <p className="mt-1 text-sm text-muted">
                   Текущие и рабочий архив шага 2 — разные таблетки. Alfa = общий остаток шапки. Совпало — справа.{" "}
                   <HintI text={HINT.tabAudit} />
@@ -5195,7 +5196,6 @@ export function AdminCrmSettings() {
                     </>
                   );
                 })()}
-                <StepRunLogPanel step={5} tick={journal?.job?.cur || journal?.at} compact />
               </section>
               ) : null}
             </div>

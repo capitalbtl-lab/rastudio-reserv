@@ -136,10 +136,12 @@ describe("лог прогонов шагов", () => {
     assert.doesNotMatch(ui, /crm-step-run-log"/);
     assert.match(ui, /crm-step-run-log-core/);
     const settings = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
-    assert.match(settings, /StepRunLogPanel/);
+    assert.match(settings, /StepRunLogModal/);
+    assert.match(settings, /Лог шага/);
     assert.match(settings, /Лог обработки/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /"stepLog"/);
+    assert.match(api, /deleteStepRunsOlderThan/);
     assert.match(api, /diskPersonSnap/);
     assert.doesNotMatch(api, /job\.running \? job\.id/);
     const begin = disk.indexOf("export function beginStepRun");

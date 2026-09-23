@@ -221,6 +221,30 @@ export function deleteStepRun(id: string) {
   return true;
 }
 
+/** Снимает прогоны старше N дней. Клиентов, кассу и шаги не трогает. */
+export function deleteStepRunsOlderThan(days: number, now = Date.now()) {
+  const n = Math.max(1, Math.min(3650, Number(days) || 7));
+  const cut = now - n * 86400000;
+  const idx = listRunIndex();
+  const drop: string[] = [];
+  const keep = [];
+  for (const m of idx) {
+    const t = Date.parse(String(m.at || ""));
+    if (Number.isFinite(t) && t < cut) drop.push(m.id);
+    else keep.push(m);
+  }
+  for (const id of drop) {
+    try {
+      const p = runFile(id);
+      if (existsSync(p)) unlinkSync(p);
+    } catch {
+      /* нет файла */
+    }
+  }
+  if (drop.length) saveIndex(keep);
+  return drop.length;
+}
+
 export function listRunsByStep(step?: StepN | 0) {
   const idx = listRunIndex();
   if (!step) return idx;

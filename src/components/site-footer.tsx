@@ -13,7 +13,7 @@ export function SiteFooter() {
               alt="Студия Развивайся — искусства и интеллектуальное развитие"
               width={1200}
               height={289}
-              className="h-12 w-auto max-w-[17rem] object-contain object-left outline-none"
+              className="brand-logo h-11 w-auto max-w-[16rem] object-contain object-left outline-none"
               decoding="async"
             />
           </PageLink>

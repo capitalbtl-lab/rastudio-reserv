@@ -39,7 +39,7 @@ export function SiteHeader() {
             alt="Студия Развивайся — искусства и интеллектуальное развитие"
             width={1200}
             height={289}
-            className="h-8 w-auto max-w-[10.25rem] object-contain object-left outline-none sm:h-11 sm:max-w-[16rem] md:h-[3.35rem] md:max-w-[20rem]"
+            className="brand-logo h-8 w-auto max-w-[11.5rem] object-contain object-left outline-none sm:h-10 sm:max-w-[15.5rem] md:h-12 md:max-w-[18.5rem]"
             loading="eager"
             fetchPriority="high"
             decoding="async"

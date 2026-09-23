@@ -697,6 +697,10 @@
   animation-duration: 32s;
 }
 
+.brand-logo {
+  mix-blend-mode: lighten;
+}
+
 .ink {
   position: relative;
   isolation: isolate;
