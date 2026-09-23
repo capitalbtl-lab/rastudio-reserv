@@ -308,6 +308,11 @@ describe("пульт Истории", () => {
     const withHits = days.filter((d) => d.hits.some((h) => h.id === "night"));
     assert.equal(withHits.length, 14);
     assert.ok(days.some((d) => d.hits.some((h) => h.id === "off" && h.on === false)));
+    const interval = [
+      scheduleOf({ id: "slow", on: true, mode: "people-recheck", when: { kind: "interval", every: 6, unit: "month" }, at: "04:00" }),
+    ];
+    const bare = planHorizon(interval, 14, msk(2026, 8, 14, 3, 0));
+    assert.equal(bare.reduce((n, d) => n + d.hits.length, 0), 0);
   });
 
   it("руки не сжигают слот: due снимается, на завтра due снова", () => {

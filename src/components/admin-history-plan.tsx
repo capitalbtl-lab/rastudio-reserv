@@ -656,7 +656,7 @@ export function HistoryPlanPanel({
                   <li key={d.ymd}>
                     <p className="text-[0.78rem] font-semibold">
                       {names[d.dow]} {da}.{mo}.{y}
-                      {d.hits.filter((h) => h.on).length > 1 ? <span className="font-medium text-amber-800"> · два слота, очередь одна</span> : null}
+                      {d.hits.filter((h) => h.on).length > 1 ? <span className="font-medium text-amber-800"> · несколько слотов, очередь одна</span> : null}
                     </p>
                     <ul className="mt-0.5 space-y-0.5">
                       {d.hits.map((h) => {

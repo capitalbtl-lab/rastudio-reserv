@@ -673,12 +673,13 @@ export function planHorizon(plan: HistorySchedule[], days = 14, now = new Date()
       list.push({ id: rule.id, at, on: rule.on, label, modeLabel });
     };
     if (rule.when.kind === "interval") {
-      let cursor = now;
-      for (let n = 0; n < 24; n += 1) {
-        const at = nextSlotAt(rule, cursor);
-        if (!at || at.getTime() > end) break;
-        push(at);
-        cursor = new Date(at.getTime() + 60_000);
+      if (!rule.lastFiredAt) continue;
+      let cursor = nextSlotAt(rule, now);
+      const every = rule.when.every;
+      const unit = rule.when.unit;
+      for (let n = 0; n < 24 && cursor && cursor.getTime() <= end; n += 1) {
+        push(cursor);
+        cursor = addInterval(cursor, every, unit, rule.at);
       }
       continue;
     }
