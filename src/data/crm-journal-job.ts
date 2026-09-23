@@ -261,10 +261,16 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     const side = journalPeopleSide(study, opts.skipLeads ? { skipLeads: true } : undefined);
     const people = (side.people || []) as PeopleJobRow[];
     if (mode === "audit") {
-      let queue = [...people];
       const one = Number(opts.customerId) || 0;
-      if (one) queue = queue.filter((r) => r.cid === one);
-      return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
+      if (one) {
+        const hit = people.find((r) => r.cid === one);
+        return [{
+          cid: one,
+          branchId: Number(hit?.branchId) || Number(opts.branchId) || 1,
+          name: String(hit?.name || opts.name || `№${one}`),
+        }];
+      }
+      return people.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
     }
     if (mode === "probe") {
       const queue = peopleNeedProbe(people);

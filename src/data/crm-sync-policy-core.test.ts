@@ -13,6 +13,7 @@ import {
   mskWall,
   nextSlotAt,
   pickDueRule,
+  planHorizon,
   planFireDecision,
   planRuleToJob,
   stampPlanSkip,
@@ -296,6 +297,17 @@ describe("пульт Истории", () => {
     const on = scheduleOf({ id: "b", mode: "auto", when: { kind: "daily" }, at: "04:00" });
     assert.equal(on.leads, true);
     assert.equal(Boolean(planRuleToJob(on).skipLeads), false);
+  });
+
+  it("14 дней: ежедневный слот и пауза видны", () => {
+    const plan = [
+      scheduleOf({ id: "night", on: true, label: "Ночь", mode: "audit", when: { kind: "daily" }, at: "04:00" }),
+      scheduleOf({ id: "off", on: false, label: "Пауза", mode: "people-recheck", when: { kind: "weekly", days: [1] }, at: "05:00" }),
+    ];
+    const days = planHorizon(plan, 14, msk(2026, 8, 14, 3, 0));
+    const withHits = days.filter((d) => d.hits.some((h) => h.id === "night"));
+    assert.equal(withHits.length, 14);
+    assert.ok(days.some((d) => d.hits.some((h) => h.id === "off" && h.on === false)));
   });
 
   it("руки не сжигают слот: due снимается, на завтра due снова", () => {

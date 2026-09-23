@@ -6,11 +6,11 @@ import {
   HISTORY_PLAN_MODES,
   PLAN_FROM_OPTS,
   PLAN_RECHECK_OPTS,
-  emptyDraft,
   mskWall,
   nextSlotAt,
   pad2,
   planFromIdToRecheckDays,
+  planHorizon,
   planModeMeta,
   planLogSessions,
   whenLabel,
@@ -101,31 +101,54 @@ function isRecheck(mode: string) {
   return Boolean(planModeMeta(mode).recheck);
 }
 
+function draftBits(seed?: HistorySchedule | null) {
+  const when = seed?.when;
+  return {
+    label: seed?.label || "",
+    mode: (seed?.mode || "auto") as HistoryPlanMode,
+    kind: (when?.kind || "daily") as HistoryWhen["kind"],
+    days: when?.kind === "weekly" && when.days.length ? when.days : [1],
+    every: when?.kind === "interval" ? when.every : 6,
+    unit: (when?.kind === "interval" ? when.unit : "month") as PlanUnit,
+    nth: when?.kind === "nthWeekday" ? when.n : 1,
+    nthDay: when?.kind === "nthWeekday" ? when.day : 1,
+    date: when?.kind === "ymd" ? when.date : "",
+    at: seed?.at || "04:00",
+    recheckDays: seed?.recheckDays || 7,
+    fromId: (seed?.dateFromId || "2015") as PlanFromId,
+    study: (seed?.study || "1") as "1" | "2",
+    leads: seed ? seed.leads !== false : true,
+    archGroups: seed ? seed.archGroups !== false : true,
+  };
+}
+
 function DraftForm({
   busy,
+  seed,
   onCancel,
   onSave,
 }: {
   busy?: boolean;
+  seed?: HistorySchedule | null;
   onCancel: () => void;
   onSave: (row: Omit<HistorySchedule, "id" | "dueAt" | "lastFiredAt" | "lastJobId" | "lastSkip">) => void;
 }) {
-  const base = emptyDraft();
-  const [label, setLabel] = useState(base.label);
-  const [mode, setMode] = useState<HistoryPlanMode>(base.mode);
-  const [kind, setKind] = useState<HistoryWhen["kind"]>("daily");
-  const [days, setDays] = useState<number[]>([1]);
-  const [every, setEvery] = useState(6);
-  const [unit, setUnit] = useState<PlanUnit>("month");
-  const [nth, setNth] = useState(1);
-  const [nthDay, setNthDay] = useState(1);
-  const [date, setDate] = useState("");
-  const [at, setAt] = useState("04:00");
-  const [recheckDays, setRecheckDays] = useState(7);
-  const [fromId, setFromId] = useState<PlanFromId>("2015");
-  const [study, setStudy] = useState<"1" | "2">("1");
-  const [leads, setLeads] = useState(true);
-  const [archGroups, setArchGroups] = useState(true);
+  const init = draftBits(seed);
+  const [label, setLabel] = useState(init.label);
+  const [mode, setMode] = useState<HistoryPlanMode>(init.mode);
+  const [kind, setKind] = useState<HistoryWhen["kind"]>(init.kind);
+  const [days, setDays] = useState<number[]>(init.days);
+  const [every, setEvery] = useState(init.every);
+  const [unit, setUnit] = useState<PlanUnit>(init.unit);
+  const [nth, setNth] = useState(init.nth);
+  const [nthDay, setNthDay] = useState(init.nthDay);
+  const [date, setDate] = useState(init.date);
+  const [at, setAt] = useState(init.at);
+  const [recheckDays, setRecheckDays] = useState(init.recheckDays);
+  const [fromId, setFromId] = useState<PlanFromId>(init.fromId);
+  const [study, setStudy] = useState<"1" | "2">(init.study);
+  const [leads, setLeads] = useState(init.leads);
+  const [archGroups, setArchGroups] = useState(init.archGroups);
 
   function when(): HistoryWhen {
     if (kind === "weekly") return { kind: "weekly", days };
@@ -142,7 +165,7 @@ function DraftForm({
 
   return (
     <div className="mt-3 rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-      <p className="font-display text-[1.05rem]">Новое расписание</p>
+      <p className="font-display text-[1.05rem]">{seed ? "Править расписание" : "Новое расписание"}</p>
       <label className="mt-3 block text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">
         Подпись
         <input
@@ -342,7 +365,7 @@ function DraftForm({
             });
           }}
         >
-          Сохранить расписание
+          {seed ? "Сохранить" : "Сохранить расписание"}
         </button>
       </div>
       <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. Автомат: сначала дырки слева, потом перепроверка. Окно — чипы лет на этой карточке. Лиды ночью — чип на карточке, галку шага 1 не трогает. Архив «с 2015» качает с 2015.</p>
@@ -358,6 +381,7 @@ export function HistoryPlanPanel({
   historyWorker,
   onSave,
   onRunAuto,
+  onRunOne,
 }: {
   policy: CrmSyncPolicy;
   job?: JobSnap | null;
@@ -366,13 +390,18 @@ export function HistoryPlanPanel({
   historyWorker?: { at?: string; silent?: boolean };
   onSave: (next: CrmSyncPolicy) => void;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
+  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState("");
+  const [view, setView] = useState<"cards" | "days">("days");
   const [logOpen, setLogOpen] = useState(false);
   const [runStudy, setRunStudy] = useState<"1" | "2">("1");
   const [runFrom, setRunFrom] = useState<PlanFromId>("2015");
   const [runLeads, setRunLeads] = useState(true);
   const [runArchGroups, setRunArchGroups] = useState(true);
+  const [who, setWho] = useState("");
+  const [whoFrom, setWhoFrom] = useState<PlanFromId>("1");
   const nextLine = useMemo(() => {
     if (!policy.planEnabled) return "синхронизация расписания выкл — слоты не стартуют";
     const soon = policy.plan
@@ -384,6 +413,11 @@ export function HistoryPlanPanel({
     return `следующее: ${soon.r.label || planModeMeta(soon.r.mode).label} · ${fmtSlot(soon.r)}`;
   }, [policy]);
   const run = Boolean(job?.running) && !job?.stop;
+  const horizon = useMemo(() => planHorizon(policy.plan, 14), [policy.plan]);
+  const horizonDays = horizon.filter((d) => d.hits.length);
+  const whoCid = Number(String(who).replace(/\D/g, "")) || 0;
+  const editing = editId ? policy.plan.find((r) => r.id === editId) || null : null;
+  const formOpen = adding || Boolean(editing);
 
   function patch(next: CrmSyncPolicy) {
     onSave(next);
@@ -560,7 +594,95 @@ export function HistoryPlanPanel({
         </button>
       </div>
 
-      {!policy.plan.length && !adding ? (
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2.5 ring-1 ring-black/8">
+        <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Один человек</p>
+        <input
+          className="h-9 min-w-[10rem] flex-1 rounded-full bg-surface-2 px-3 text-sm font-semibold ring-1 ring-black/8"
+          placeholder="номер, например 4324"
+          value={who}
+          onChange={(e) => setWho(e.target.value)}
+        />
+        {PLAN_FROM_OPTS.map((o) => (
+          <Chip key={`who-${o.id}`} on={whoFrom === o.id} onClick={() => setWhoFrom(o.id)}>
+            {o.label}
+          </Chip>
+        ))}
+        <button
+          type="button"
+          className="h-9 rounded-full bg-black px-3 text-sm font-semibold text-white disabled:opacity-50"
+          disabled={busy || run || !whoCid || !onRunOne}
+          onClick={() => {
+            if (!onRunOne || !whoCid) return;
+            if (!window.confirm(`Шаг 5 только №${whoCid}? Календарь и кассу не трогаем.`)) return;
+            onRunOne({ cid: whoCid, kind: "audit", dateFromId: whoFrom });
+          }}
+        >
+          Шаг 5
+        </button>
+        <button
+          type="button"
+          className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10 disabled:opacity-50"
+          disabled={busy || run || !whoCid || !onRunOne}
+          onClick={() => {
+            if (!onRunOne || !whoCid) return;
+            if (!window.confirm(`Перепроверить календарь №${whoCid}? Окно — чипы лет. Кассу не трогаем.`)) return;
+            onRunOne({ cid: whoCid, kind: "calendar", dateFromId: whoFrom });
+          }}
+        >
+          Календарь
+        </button>
+        <p className="w-full text-[0.72rem] text-muted">Та же очередь, не вторая. Если уже идёт загрузка — сначала Стоп.</p>
+      </div>
+
+      <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Ближайшие 14 дней · МСК</p>
+          <div className="flex gap-1">
+            <Chip on={view === "days"} onClick={() => setView("days")}>
+              Дни
+            </Chip>
+            <Chip on={view === "cards"} onClick={() => setView("cards")}>
+              Карточки
+            </Chip>
+          </div>
+        </div>
+        {view === "days" ? (
+          horizonDays.length ? (
+            <ul className="mt-2 space-y-2">
+              {horizonDays.map((d) => {
+                const [y, mo, da] = d.ymd.split("-");
+                const names = ["", "пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+                return (
+                  <li key={d.ymd}>
+                    <p className="text-[0.78rem] font-semibold">
+                      {names[d.dow]} {da}.{mo}.{y}
+                      {d.hits.filter((h) => h.on).length > 1 ? <span className="font-medium text-amber-800"> · два слота, очередь одна</span> : null}
+                    </p>
+                    <ul className="mt-0.5 space-y-0.5">
+                      {d.hits.map((h) => {
+                        const w = mskWall(h.at);
+                        return (
+                          <li key={`${h.id}-${h.at.getTime()}`} className={cn("text-[0.78rem]", h.on ? "" : "text-muted line-through")}>
+                            {pad2(w.h)}:{pad2(w.min)} · {h.label}
+                            {h.label !== h.modeLabel ? <span className="text-muted"> · {h.modeLabel}</span> : null}
+                            {h.on ? null : " · пауза"}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-2 text-[0.78rem] text-muted">На 14 дней слотов нет.</p>
+          )
+        ) : (
+          <p className="mt-2 text-[0.78rem] text-muted">Карточки ниже. Дни — когда что встанет.</p>
+        )}
+      </div>
+
+      {!policy.plan.length && !formOpen ? (
         <p className="text-sm text-muted">Расписаний нет. Синхронизация расписания молчит. Кнопки шагов как были.</p>
       ) : null}
 
@@ -579,6 +701,42 @@ export function HistoryPlanPanel({
               </button>
               <button type="button" className="h-8 rounded-full px-2 text-sm ring-1 ring-black/10" onClick={() => move(r.id, 1)} disabled={busy}>
                 ↓
+              </button>
+              <button
+                type="button"
+                className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
+                disabled={busy}
+                onClick={() => {
+                  setAdding(false);
+                  setEditId(r.id);
+                }}
+              >
+                Править
+              </button>
+              <button
+                type="button"
+                className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
+                disabled={busy}
+                onClick={() => {
+                  const id = `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+                  patch({
+                    ...policy,
+                    plan: [
+                      ...policy.plan,
+                      {
+                        ...r,
+                        id,
+                        label: r.label ? `${r.label} · копия` : "копия",
+                        dueAt: "",
+                        lastFiredAt: "",
+                        lastJobId: "",
+                        lastSkip: "",
+                      },
+                    ],
+                  });
+                }}
+              >
+                Копия
               </button>
               <label className="flex items-center gap-1.5 px-2 text-[0.78rem] font-semibold">
                 <input type="checkbox" checked={r.on} disabled={busy} onChange={(e) => patch({ ...policy, plan: policy.plan.map((x) => (x.id === r.id ? { ...x, on: e.target.checked } : x)) })} />
@@ -651,24 +809,52 @@ export function HistoryPlanPanel({
         </div>
       ))}
 
-      {adding ? (
+      {formOpen ? (
         <DraftForm
+          key={editing?.id || "new"}
           busy={busy}
-          onCancel={() => setAdding(false)}
-          onSave={(row) => {
-            const id = `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-            patch({
-              ...policy,
-              plan: [...policy.plan, { ...row, id, dueAt: "", lastFiredAt: "", lastJobId: "", lastSkip: "" }],
-            });
+          seed={editing}
+          onCancel={() => {
             setAdding(false);
+            setEditId("");
+          }}
+          onSave={(row) => {
+            if (editing) {
+              patch({
+                ...policy,
+                plan: policy.plan.map((x) =>
+                  x.id === editing.id
+                    ? {
+                        ...x,
+                        ...row,
+                        on: x.on,
+                        dueAt: x.dueAt,
+                        lastFiredAt: x.lastFiredAt,
+                        lastJobId: x.lastJobId,
+                        lastSkip: x.lastSkip,
+                      }
+                    : x,
+                ),
+              });
+            } else {
+              const id = `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+              patch({
+                ...policy,
+                plan: [...policy.plan, { ...row, id, dueAt: "", lastFiredAt: "", lastJobId: "", lastSkip: "" }],
+              });
+            }
+            setAdding(false);
+            setEditId("");
           }}
         />
       ) : (
         <button
           type="button"
           className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white"
-          onClick={() => setAdding(true)}
+          onClick={() => {
+            setEditId("");
+            setAdding(true);
+          }}
         >
           + Добавить расписание
         </button>
@@ -685,6 +871,7 @@ export function HistoryPlanModal({
   busy,
   onSave,
   onRunAuto,
+  onRunOne,
   planLog,
   historyWorker,
 }: {
@@ -695,6 +882,7 @@ export function HistoryPlanModal({
   busy?: boolean;
   onSave: (next: CrmSyncPolicy) => void;
   onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
+  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
   planLog?: PlanLogRow[];
   historyWorker?: { at?: string; silent?: boolean };
 }) {
@@ -721,7 +909,7 @@ export function HistoryPlanModal({
             <p id="history-plan-title" className="font-display text-[1.2rem] leading-tight">
               Пульт синхронизации
             </p>
-            <p className="mt-1 text-[0.82rem] text-muted">Расписание — само в слот. Кнопка — перепроверка всех на диске, не только дырок слева. Тумблер для кнопки не нужен. Лиды — как на шаге 1, галку не затираем.</p>
+            <p className="mt-1 text-[0.82rem] text-muted">Расписание на 14 дней. Карточку можно править и копировать. Один человек — шаг 5 или календарь, та же очередь.</p>
           </div>
           <button
             type="button"
@@ -732,7 +920,7 @@ export function HistoryPlanModal({
             Закрыть
           </button>
         </div>
-        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} historyWorker={historyWorker} onSave={onSave} onRunAuto={onRunAuto} />
+        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} historyWorker={historyWorker} onSave={onSave} onRunAuto={onRunAuto} onRunOne={onRunOne} />
       </div>
     </div>
   );

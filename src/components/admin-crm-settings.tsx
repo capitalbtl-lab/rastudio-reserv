@@ -4317,6 +4317,23 @@ export function AdminCrmSettings() {
                     name: `leads=${opts.leads ? 1 : 0}&archGroups=${opts.archGroups ? 1 : 0}`,
                   })
                 }
+                onRunOne={(opts) => {
+                  const from = planFromIdOf("1", opts.dateFromId);
+                  if (opts.kind === "audit") {
+                    void pullAudit({ customerId: opts.cid, name: `№${opts.cid}` });
+                    return;
+                  }
+                  void startHistJob({
+                    jobMode: "person",
+                    peopleKind: "students",
+                    study: "1",
+                    recheck: true,
+                    customerId: opts.cid,
+                    name: `№${opts.cid}`,
+                    dateFrom: planDateFrom(from),
+                    recheckDays: planFromIdToRecheckDays(from),
+                  });
+                }}
               />
               <StepRunLogModal open={procLogOpen} onClose={() => setProcLogOpen(false)} tick={journal?.job?.cur || journal?.at} />
               {histTab === "roster" ? (

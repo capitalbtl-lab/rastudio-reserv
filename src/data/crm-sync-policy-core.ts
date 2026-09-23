@@ -637,6 +637,71 @@ export function whenLabel(when: HistoryWhen): string {
   return when.date || "дата";
 }
 
+export type PlanDayHit = {
+  id: string;
+  at: Date;
+  on: boolean;
+  label: string;
+  modeLabel: string;
+};
+
+/** Ближайшие дни МСК: какие слоты встанут, включая выключенные. */
+export function planHorizon(plan: HistorySchedule[], days = 14, now = new Date()): { ymd: string; dow: number; hits: PlanDayHit[] }[] {
+  const start = mskWall(now);
+  const span: { ymd: string; dow: number }[] = [];
+  const bucket = new Map<string, PlanDayHit[]>();
+  for (let i = 0; i < days; i += 1) {
+    const day = shiftDays(start.y, start.mo, start.d, i);
+    const ymd = `${day.y}-${pad2(day.mo)}-${pad2(day.d)}`;
+    span.push({ ymd, dow: day.dow });
+    bucket.set(ymd, []);
+  }
+  const end = span.length ? fromMsk(...(() => {
+    const last = span[span.length - 1];
+    const [y, mo, d] = last.ymd.split("-").map(Number);
+    return [y, mo, d, 23, 59] as [number, number, number, number, number];
+  })()).getTime() : now.getTime();
+  for (const rule of plan || []) {
+    const label = rule.label || planModeMeta(rule.mode).label;
+    const modeLabel = planModeMeta(rule.mode).label;
+    const push = (at: Date) => {
+      if (at.getTime() <= now.getTime() || at.getTime() > end) return;
+      const ymd = ymdOf(at);
+      const list = bucket.get(ymd);
+      if (!list) return;
+      if (list.some((h) => h.id === rule.id && h.at.getTime() === at.getTime())) return;
+      list.push({ id: rule.id, at, on: rule.on, label, modeLabel });
+    };
+    if (rule.when.kind === "interval") {
+      let cursor = now;
+      for (let n = 0; n < 24; n += 1) {
+        const at = nextSlotAt(rule, cursor);
+        if (!at || at.getTime() > end) break;
+        push(at);
+        cursor = new Date(at.getTime() + 60_000);
+      }
+      continue;
+    }
+    const { h, m } = parsePlanAt(rule.at);
+    for (const day of span) {
+      const [y, mo, d] = day.ymd.split("-").map(Number);
+      const at = fromMsk(y, mo, d, h, m);
+      const wall = mskWall(at);
+      const w = rule.when;
+      let hit = false;
+      if (w.kind === "daily") hit = true;
+      else if (w.kind === "weekly") hit = w.days.includes(wall.dow);
+      else if (w.kind === "ymd") hit = w.date === day.ymd;
+      else if (w.kind === "nthWeekday") hit = nthWeekdayDate(fromMsk(y, mo, 15, 12, 0), w.n, w.day) === day.ymd;
+      if (hit) push(at);
+    }
+  }
+  return span.map((d) => ({
+    ...d,
+    hits: (bucket.get(d.ymd) || []).sort((a, b) => a.at.getTime() - b.at.getTime()),
+  }));
+}
+
 export function emptyDraft(): Omit<HistorySchedule, "id" | "dueAt" | "lastFiredAt" | "lastJobId" | "lastSkip"> {
   return {
     on: true,
