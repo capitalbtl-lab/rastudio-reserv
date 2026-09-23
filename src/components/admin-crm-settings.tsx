@@ -2204,11 +2204,9 @@ function asAuditRow(
 }
 
 function AuditStepPick({ busy, active, onRun }: { busy?: boolean; active?: boolean; onRun: (steps: number[]) => void }) {
-  const [steps, setSteps] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [steps, setSteps] = useState<number[]>([2, 4, 5]);
   const labels: [number, string][] = [
-    [1, "1 состав"],
     [2, "2 календарь"],
-    [3, "3 группы"],
     [4, "4 касса"],
     [5, "5 сверка"],
   ];

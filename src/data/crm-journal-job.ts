@@ -1,6 +1,6 @@
 /** Фон «Истории из Alfa»: один шаг, пауза, следующий. Вкладка только смотрит. В Alfa не пишет. */
 
-import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups, studentGroupItems } from "./crm-journal-pull.ts";
+import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } from "./crm-journal-pull.ts";
 import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
 import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd, groupJournalGreen } from "./crm-inbound-core.ts";
@@ -661,7 +661,7 @@ function closePlanSlot(job: JournalJob, ok: boolean) {
   });
 }
 
-/** Один человек: выбранные шаги по очереди. Состав и группы — только его группы. */
+/** Один человек: календарь, касса, сверка. Состав и группы школы сюда не входят. */
 export function startOnePersonStep(p: {
   step: number;
   pipe?: string[];
@@ -676,6 +676,13 @@ export function startOnePersonStep(p: {
 }) {
   const cid = Number(p.customerId) || 0;
   const name = String(p.oneName || `№${cid}`);
+  if (p.step !== 2 && p.step !== 4 && p.step !== 5) {
+    const rest = (p.pipe || []).map(String);
+    const i = rest.findIndex((x) => /^one:[245]$/.test(x));
+    if (i < 0) return;
+    startOnePersonStep({ ...p, step: Number(rest[i].slice(4)), pipe: rest.slice(i + 1) });
+    return;
+  }
   const common = {
     study: p.study === "2" ? ("2" as const) : ("1" as const),
     customerId: cid,
@@ -691,16 +698,8 @@ export function startOnePersonStep(p: {
     id: p.id,
     archived: p.study === "2",
   };
-  if (p.step === 1) {
-    startJournalJob({ ...common, mode: "roster-recheck", kind: "roster", items: studentGroupItems(cid) });
-    return;
-  }
   if (p.step === 2) {
     startJournalJob({ ...common, mode: "person", kind: "students" });
-    return;
-  }
-  if (p.step === 3) {
-    startJournalJob({ ...common, mode: "groups-recheck", kind: "group", items: studentGroupItems(cid) });
     return;
   }
   if (p.step === 4) {

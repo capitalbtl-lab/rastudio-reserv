@@ -1788,11 +1788,11 @@ export async function journalPull(opts: {
       return journalJobView();
     }
     if (opts.jobMode === "person-steps") {
-      const want = String(opts.steps || "1,2,3,4,5")
+      const want = String(opts.steps || "2,4,5")
         .split(",")
         .map((x) => Number(x))
-        .filter((n) => n >= 1 && n <= 5);
-      const order = [1, 2, 3, 4, 5].filter((n) => want.includes(n));
+        .filter((n) => n === 2 || n === 4 || n === 5);
+      const order = [2, 4, 5].filter((n) => want.includes(n));
       const cid = Number(opts.customerId) || 0;
       if (!cid || !order.length) return journalJobView();
       const [first, ...rest] = order;
