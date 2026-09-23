@@ -163,212 +163,324 @@ function DraftForm({
     (kind !== "weekly" || days.length > 0) &&
     (kind !== "ymd" || Boolean(date));
 
+  const [step, setStep] = useState(0);
+  const titles = ["Что запускать", "Когда", "Кого", "Сохранить"];
+
   return (
-    <div className="mt-3 rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-      <p className="font-display text-[1.05rem]">{seed ? "Править расписание" : "Новое расписание"}</p>
-      <label className="mt-3 block text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">
-        Подпись
-        <input
-          className="mt-1 h-9 w-full rounded-full bg-white px-3 text-sm font-medium ring-1 ring-black/8"
-          value={label}
-          placeholder="необязательно"
-          onChange={(e) => setLabel(e.target.value)}
-        />
-      </label>
-      <label className="mt-3 block text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">
-        Режим
-        <select
-          className="mt-1 h-9 w-full rounded-full bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
-          value={mode}
-          onChange={(e) => setMode(e.target.value as HistoryPlanMode)}
-        >
-          {HISTORY_PLAN_MODES.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">День запуска</p>
-      <div className="mt-1 flex flex-wrap gap-1.5">
-        <Chip on={kind === "weekly"} onClick={() => setKind("weekly")}>
-          Дни недели
-        </Chip>
-        <Chip on={kind === "daily"} onClick={() => setKind("daily")}>
-          Каждый день
-        </Chip>
-        <Chip on={kind === "interval"} onClick={() => setKind("interval")}>
-          Каждые N
-        </Chip>
-        <Chip on={kind === "nthWeekday"} onClick={() => setKind("nthWeekday")}>
-          N-й день месяца
-        </Chip>
-        <Chip on={kind === "ymd"} onClick={() => setKind("ymd")}>
-          Дата
-        </Chip>
-      </div>
-      {kind === "weekly" ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {DAYS.map((d) => (
-            <Chip
-              key={d.n}
-              on={days.includes(d.n)}
-              onClick={() => setDays(days.includes(d.n) ? days.filter((x) => x !== d.n) : [...days, d.n].sort((a, b) => a - b))}
-            >
-              {d.t}
-            </Chip>
-          ))}
-        </div>
-      ) : null}
-      {kind === "interval" ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold">каждые</span>
-          <input
-            type="number"
-            min={1}
-            max={36}
-            className="h-9 w-16 rounded-full bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
-            value={every}
-            onChange={(e) => setEvery(Math.max(1, Number(e.target.value) || 1))}
-          />
+    <div className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
+      <p className="text-[0.72rem] font-semibold text-muted">
+        {step + 1} из {titles.length} · {seed ? "правка" : "новое"}
+      </p>
+      <p className="font-display text-[1.05rem]">{titles[step]}</p>
+      {step === 0 ? (
+        <label className="mt-3 block text-sm font-semibold">
+          Режим
           <select
-            className="h-9 rounded-full bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
-            value={unit}
-            onChange={(e) => setUnit(e.target.value as PlanUnit)}
+            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as HistoryPlanMode)}
           >
-            <option value="day">дней</option>
-            <option value="week">недель</option>
-            <option value="month">месяцев</option>
-          </select>
-          <span className="text-[0.75rem] text-muted">полгода — 6 месяцев</span>
-        </div>
-      ) : null}
-      {kind === "nthWeekday" ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <select
-            className="h-9 rounded-full bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
-            value={nth}
-            onChange={(e) => setNth(Number(e.target.value))}
-          >
-            <option value={1}>1-й</option>
-            <option value={2}>2-й</option>
-            <option value={3}>3-й</option>
-            <option value={4}>4-й</option>
-            <option value={5}>5-й</option>
-            <option value={-1}>последний</option>
-          </select>
-          <select
-            className="h-9 rounded-full bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
-            value={nthDay}
-            onChange={(e) => setNthDay(Number(e.target.value))}
-          >
-            {DAYS.map((d) => (
-              <option key={d.n} value={d.n}>
-                {d.t}
+            {HISTORY_PLAN_MODES.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
               </option>
             ))}
           </select>
-          <span className="text-[0.75rem] text-muted">месяца</span>
+        </label>
+      ) : null}
+      {step === 1 ? (
+        <>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <Chip on={kind === "daily"} onClick={() => setKind("daily")}>Каждый день</Chip>
+            <Chip on={kind === "weekly"} onClick={() => setKind("weekly")}>Дни недели</Chip>
+            <Chip on={kind === "interval"} onClick={() => setKind("interval")}>Каждые N</Chip>
+            <Chip on={kind === "nthWeekday"} onClick={() => setKind("nthWeekday")}>День месяца</Chip>
+            <Chip on={kind === "ymd"} onClick={() => setKind("ymd")}>Одна дата</Chip>
+          </div>
+          {kind === "weekly" ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {DAYS.map((d) => (
+                <Chip
+                  key={d.n}
+                  on={days.includes(d.n)}
+                  onClick={() => setDays(days.includes(d.n) ? days.filter((x) => x !== d.n) : [...days, d.n].sort((a, b) => a - b))}
+                >
+                  {d.t}
+                </Chip>
+              ))}
+            </div>
+          ) : null}
+          {kind === "interval" ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm">каждые</span>
+              <input
+                type="number"
+                min={1}
+                max={36}
+                className="h-9 w-16 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
+                value={every}
+                onChange={(e) => setEvery(Math.max(1, Number(e.target.value) || 1))}
+              />
+              <select
+                className="h-9 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value as PlanUnit)}
+              >
+                <option value="day">дней</option>
+                <option value="week">недель</option>
+                <option value="month">месяцев</option>
+              </select>
+            </div>
+          ) : null}
+          {kind === "nthWeekday" ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <select className="h-9 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={nth} onChange={(e) => setNth(Number(e.target.value))}>
+                <option value={1}>1-й</option>
+                <option value={2}>2-й</option>
+                <option value={3}>3-й</option>
+                <option value={4}>4-й</option>
+                <option value={5}>5-й</option>
+                <option value={-1}>последний</option>
+              </select>
+              <select className="h-9 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={nthDay} onChange={(e) => setNthDay(Number(e.target.value))}>
+                {DAYS.map((d) => (
+                  <option key={d.n} value={d.n}>{d.t}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {kind === "ymd" ? (
+            <input type="date" className="mt-2 h-9 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={date} onChange={(e) => setDate(e.target.value)} />
+          ) : null}
+          <label className="mt-3 block text-sm font-semibold">
+            Время · МСК
+            <input type="time" step={900} className="mt-1 h-10 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={at} onChange={(e) => setAt(e.target.value)} />
+          </label>
+        </>
+      ) : null}
+      {step === 2 ? (
+        <>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <Chip on={study === "1"} onClick={() => setStudy("1")}>Сейчас ходят</Chip>
+            <Chip on={study === "2"} onClick={() => setStudy("2")}>Архив</Chip>
+          </div>
+          {mode === "auto" || isRecheck(mode) || mode === "people" || mode === "people-slow" || mode === "balance" ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {(mode === "auto" || mode === "people" || mode === "people-slow" || mode === "balance" ? PLAN_FROM_OPTS : PLAN_RECHECK_OPTS).map((o) =>
+                "id" in o ? (
+                  <Chip key={o.id} on={fromId === o.id} onClick={() => setFromId(o.id)}>{o.label}</Chip>
+                ) : (
+                  <Chip key={o.days} on={recheckDays === o.days} onClick={() => setRecheckDays(o.days)}>{o.label}</Chip>
+                ),
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted">Окно лет этому шагу не нужно.</p>
+          )}
+          {study === "1" && mode === "auto" ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <Chip on={leads} onClick={() => setLeads((v) => !v)}>Лиды действующих групп</Chip>
+              <Chip on={archGroups} onClick={() => setArchGroups((v) => !v)}>Архив действующих групп</Chip>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {step === 3 ? (
+        <>
+          <label className="mt-3 block text-sm font-semibold">
+            Подпись
+            <input
+              className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium ring-1 ring-black/8"
+              value={label}
+              placeholder="например, Ночь · сверка"
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </label>
+          <p className="mt-3 text-sm">
+            {planModeMeta(mode).label}. {whenLabel(when())}, {at} МСК. {study === "2" ? "Архив." : "Сейчас ходят."}
+          </p>
+          <p className="mt-1 text-[0.75rem] text-muted">Пока общий тумблер выкл — слот лежит и ночью не стартует.</p>
+        </>
+      ) : null}
+      <div className="mt-4 flex gap-2">
+        <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10" onClick={() => (step === 0 ? onCancel() : setStep(step - 1))}>
+          {step === 0 ? "Отмена" : "Назад"}
+        </button>
+        {step < 3 ? (
+          <button
+            type="button"
+            className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+            disabled={step === 1 && !canSave}
+            onClick={() => setStep(step + 1)}
+          >
+            Дальше
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy || !canSave}
+            className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+            onClick={() => {
+              onSave({
+                on: true,
+                mode,
+                when: when(),
+                at,
+                recheckDays: mode === "auto" ? planFromIdToRecheckDays(fromId) : recheckDays,
+                dateFromId: fromId,
+                study,
+                label,
+                leads: study === "1" && leads,
+                archGroups: study === "1" && archGroups,
+              });
+            }}
+          >
+            {seed ? "Сохранить" : "Сохранить расписание"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NowWizard({
+  busy,
+  run,
+  onRunAuto,
+  onRunOne,
+}: {
+  busy?: boolean;
+  run?: boolean;
+  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
+  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
+}) {
+  const [step, setStep] = useState(0);
+  const [whoKind, setWhoKind] = useState<"one" | "live" | "arch">("one");
+  const [act, setAct] = useState<"audit" | "calendar" | "all">("audit");
+  const [who, setWho] = useState("");
+  const [from, setFrom] = useState<PlanFromId>("1");
+  const [leads, setLeads] = useState(true);
+  const [archGroups, setArchGroups] = useState(true);
+  const cid = Number(String(who).match(/\d+/)?.[0] || 0);
+  const titles = ["Кого", "Что сделать", "Окно", "Запуск"];
+  const one = whoKind === "one";
+  const canNext =
+    (step !== 0 || true) &&
+    (step !== 1 || (one ? act === "audit" || act === "calendar" : true)) &&
+    (step !== 2 || true);
+
+  function go() {
+    if (one) {
+      if (!onRunOne || !cid) return;
+      const kind = act === "calendar" ? "calendar" : "audit";
+      const ask = kind === "audit" ? `Шаг 5 только №${cid}? Календарь и кассу не трогаем.` : `Календарь №${cid}? Кассу не трогаем.`;
+      if (!window.confirm(ask)) return;
+      onRunOne({ cid, kind, dateFromId: from });
+      return;
+    }
+    if (!onRunAuto) return;
+    if (!window.confirm("Перепроверить шаги 1–5 сейчас? Сначала дырки слева, потом все справа. Та же очередь.")) return;
+    onRunAuto({
+      study: whoKind === "arch" ? "2" : "1",
+      dateFromId: from,
+      leads: whoKind === "live" && leads,
+      archGroups: whoKind === "live" && archGroups,
+    });
+  }
+
+  return (
+    <div className="rounded-2xl bg-surface-2 p-4">
+      <p className="text-[0.72rem] font-semibold text-muted">{step + 1} из 4 · {titles[step]}</p>
+      {step === 0 ? (
+        <div className="mt-3 grid gap-2">
+          {(
+            [
+              ["one", "Один человек", "Номер. Шаг 5 или календарь."],
+              ["live", "Сейчас ходят", "Шаги 1–5 по живым."],
+              ["arch", "Архив клиентов", "Шаги 1–5 по архиву."],
+            ] as const
+          ).map(([id, title, hint]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setWhoKind(id);
+                if (id !== "one") setAct("all");
+              }}
+              className={cn("rounded-xl px-3 py-2.5 text-left ring-1", whoKind === id ? "bg-black text-white ring-black" : "bg-white ring-black/10")}
+            >
+              <span className="block text-sm font-semibold">{title}</span>
+              <span className={cn("mt-0.5 block text-[0.75rem]", whoKind === id ? "text-white/75" : "text-muted")}>{hint}</span>
+            </button>
+          ))}
         </div>
       ) : null}
-      {kind === "ymd" ? (
-        <input
-          type="date"
-          className="mt-2 h-9 rounded-full bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
+      {step === 1 ? (
+        one ? (
+          <div className="mt-3 grid gap-2">
+            <button type="button" onClick={() => setAct("audit")} className={cn("rounded-xl px-3 py-2.5 text-left ring-1", act === "audit" ? "bg-black text-white ring-black" : "bg-white ring-black/10")}>
+              <span className="block text-sm font-semibold">Шаг 5 · сверка</span>
+              <span className={cn("mt-0.5 block text-[0.75rem]", act === "audit" ? "text-white/75" : "text-muted")}>Календарь и кассу не трогает.</span>
+            </button>
+            <button type="button" onClick={() => setAct("calendar")} className={cn("rounded-xl px-3 py-2.5 text-left ring-1", act === "calendar" ? "bg-black text-white ring-black" : "bg-white ring-black/10")}>
+              <span className="block text-sm font-semibold">Календарь</span>
+              <span className={cn("mt-0.5 block text-[0.75rem]", act === "calendar" ? "text-white/75" : "text-muted")}>Синяя перепроверка только его.</span>
+            </button>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm">Шаги 1–5: состав, календарь, группы, касса, сверка. Очередь одна.</p>
+        )
       ) : null}
-      <label className="mt-3 block text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">
-        Время запуска · МСК
-        <input
-          type="time"
-          step={900}
-          className="mt-1 h-9 rounded-full bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
-          value={at}
-          onChange={(e) => setAt(e.target.value)}
-        />
-      </label>
-      {mode === "auto" ? (
+      {step === 2 ? (
         <>
-          <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Окно перепроверки</p>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {PLAN_FROM_OPTS.map((o) => (
-              <Chip key={o.id} on={fromId === o.id} onClick={() => setFromId(o.id)}>
-                {o.label}
-              </Chip>
-            ))}
-          </div>
-        </>
-      ) : isRecheck(mode) ? (
-        <>
-          <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Окно</p>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {PLAN_RECHECK_OPTS.map((o) => (
-              <Chip key={o.days} on={recheckDays === o.days} onClick={() => setRecheckDays(o.days)}>
-                {o.label}
-              </Chip>
-            ))}
-          </div>
-        </>
-      ) : mode === "people" || mode === "people-slow" || mode === "balance" ? (
-        <>
-          <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Годы (красная качка)</p>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {PLAN_FROM_OPTS.map((o) => (
-              <Chip key={o.id} on={fromId === o.id} onClick={() => setFromId(o.id)}>
-                {o.label}
-              </Chip>
-            ))}
-          </div>
+          {one ? (
+            <input
+              className="mt-3 h-10 w-full rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
+              placeholder="номер, например 4324"
+              value={who}
+              onChange={(e) => setWho(e.target.value)}
+            />
+          ) : null}
+          {one && act === "audit" ? <p className="mt-3 text-sm text-muted">Окно лет шагу 5 не нужно.</p> : (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {PLAN_FROM_OPTS.map((o) => (
+                <Chip key={o.id} on={from === o.id} onClick={() => setFrom(o.id)}>{o.label}</Chip>
+              ))}
+            </div>
+          )}
+          {whoKind === "live" ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <Chip on={leads} onClick={() => setLeads((v) => !v)}>Лиды действующих групп</Chip>
+              <Chip on={archGroups} onClick={() => setArchGroups((v) => !v)}>Архив действующих групп</Chip>
+            </div>
+          ) : null}
         </>
       ) : null}
-      <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Кого</p>
-      <div className="mt-1 flex flex-wrap gap-1.5">
-        <Chip on={study === "1"} onClick={() => setStudy("1")}>
-          Сейчас ходят
-        </Chip>
-        <Chip on={study === "2"} onClick={() => setStudy("2")}>
-          Архив
-        </Chip>
-        {study === "1" && mode === "auto" ? (
-          <>
-            <Chip on={leads} onClick={() => setLeads((v) => !v)}>
-              Лиды действующих групп
-            </Chip>
-            <Chip on={archGroups} onClick={() => setArchGroups((v) => !v)}>
-              Архив действующих групп
-            </Chip>
-          </>
+      {step === 3 ? (
+        <p className="mt-3 text-sm">
+          {one
+            ? `№${cid || "—"} · ${act === "calendar" ? "календарь" : "шаг 5"}${act === "calendar" ? ` · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}` : ""}`
+            : `${whoKind === "arch" ? "Архив" : "Сейчас ходят"} · шаги 1–5 · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}`}
+        </p>
+      ) : null}
+      <div className="mt-4 flex gap-2">
+        {step > 0 ? (
+          <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10" onClick={() => setStep(step - 1)}>Назад</button>
         ) : null}
+        {step < 3 ? (
+          <button type="button" disabled={!canNext} className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white" onClick={() => setStep(step + 1)}>Дальше</button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy || run || (one ? !cid || !onRunOne : !onRunAuto)}
+            className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+            onClick={go}
+          >
+            Запустить
+          </button>
+        )}
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10" onClick={onCancel}>
-          Отмена
-        </button>
-        <button
-          type="button"
-          disabled={busy || !canSave}
-          className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
-          onClick={() => {
-            onSave({
-              on: true,
-              mode,
-              when: when(),
-              at,
-              recheckDays: mode === "auto" ? planFromIdToRecheckDays(fromId) : recheckDays,
-              dateFromId: fromId,
-              study,
-              label,
-              leads: study === "1" && leads,
-              archGroups: study === "1" && archGroups,
-            });
-          }}
-        >
-          {seed ? "Сохранить" : "Сохранить расписание"}
-        </button>
-      </div>
-      <p className="mt-2 text-[0.75rem] text-muted">Пока синхронизация расписания выкл — карточка лежит и не стартует. Автомат: сначала дырки слева, потом перепроверка. Окно — чипы лет на этой карточке. Лиды ночью — чип на карточке, галку шага 1 не трогает. Архив «с 2015» качает с 2015.</p>
+      {run ? <p className="mt-2 text-[0.75rem] text-amber-800">Уже идёт загрузка. Сначала Стоп на шаге.</p> : null}
     </div>
   );
 }
@@ -394,14 +506,8 @@ export function HistoryPlanPanel({
 }) {
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState("");
-  const [view, setView] = useState<"cards" | "days">("days");
-  const [logOpen, setLogOpen] = useState(false);
-  const [runStudy, setRunStudy] = useState<"1" | "2">("1");
-  const [runFrom, setRunFrom] = useState<PlanFromId>("2015");
-  const [runLeads, setRunLeads] = useState(true);
-  const [runArchGroups, setRunArchGroups] = useState(true);
-  const [who, setWho] = useState("");
-  const [whoFrom, setWhoFrom] = useState<PlanFromId>("1");
+  const [screen, setScreen] = useState<"home" | "now" | "plan" | "log">("home");
+  const [menuId, setMenuId] = useState("");
   const nextLine = useMemo(() => {
     if (!policy.planEnabled) return "синхронизация расписания выкл — слоты не стартуют";
     const soon = policy.plan
@@ -415,7 +521,6 @@ export function HistoryPlanPanel({
   const run = Boolean(job?.running) && !job?.stop;
   const horizon = useMemo(() => planHorizon(policy.plan, 14), [policy.plan]);
   const horizonDays = horizon.filter((d) => d.hits.length);
-  const whoCid = Number(String(who).match(/\d+/)?.[0] || 0);
   const editing = editId ? policy.plan.find((r) => r.id === editId) || null : null;
   const formOpen = adding || Boolean(editing);
 
@@ -435,7 +540,7 @@ export function HistoryPlanPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3 py-2.5">
+      <div className="flex items-center gap-3">
         <button
           type="button"
           role="switch"
@@ -447,60 +552,46 @@ export function HistoryPlanPanel({
             policy.planEnabled ? "bg-emerald-700" : "bg-black/15",
           )}
         >
-          <span
-            className={cn(
-              "pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
-              policy.planEnabled && "translate-x-5",
-            )}
-          />
+          <span className={cn("pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", policy.planEnabled && "translate-x-5")} />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-tight">Синхронизация расписания</p>
-        {historyWorker?.silent ? (
-          <p className="text-[0.75rem] text-amber-800">Процесс истории молчит — ночные слоты не поедут, пока не жив воркер.</p>
-        ) : null}
-          <p
-            className={cn(
-              "h-5 truncate text-[0.72rem] leading-5",
-              historyWorker?.silent ? "font-semibold text-red-800" : "text-muted",
-            )}
-          >
-            {historyWorker?.silent
-              ? "процесс истории молчит больше 2 мин"
-              : run
-                ? `Сейчас: ${job?.cur || job?.mode || "работаем"} · ${job?.n || 0}/${job?.total || 0}`
-                : policy.planEnabled
-                  ? policy.plan.some((r) => r.dueAt)
-                    ? "вкл · ждёт слот"
-                    : policy.plan.some((r) => r.on)
-                      ? `вкл · ${nextLine.replace(/^следующее:\s*/i, "")}`
-                      : "вкл · расписаний нет"
-                  : "выкл · только руками"}
-          </p>
+          <p className="truncate text-sm font-semibold">{run ? `Сейчас: ${job?.cur || "работаем"} · ${job?.n || 0}/${job?.total || 0}` : nextLine}</p>
+          {historyWorker?.silent ? <p className="text-[0.75rem] text-red-800">Процесс истории молчит — ночные слоты не поедут.</p> : null}
         </div>
-        <button
-          type="button"
-          className={cn(
-            "h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10",
-            logOpen ? "bg-black text-white ring-black" : "",
-          )}
-          onClick={() => setLogOpen((v) => !v)}
-        >
-          Лог
-        </button>
-        <button
-          type="button"
-          className="h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
-          disabled={busy}
-          onClick={() => {
+        {screen !== "home" ? (
+          <button type="button" className="h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => { setScreen("home"); setAdding(false); setEditId(""); }}>
+            К пульту
+          </button>
+        ) : (
+          <button type="button" className="h-8 shrink-0 rounded-full px-3 text-[0.78rem] font-semibold text-red-700 ring-1 ring-red-200" disabled={busy} onClick={() => {
             if (!window.confirm("Сбросить настройки пульта? Синхронизация расписания выкл, расписания удалятся. Текущая загрузка не остановится.")) return;
             patch({ planEnabled: false, plan: [] });
-          }}
-        >
-          Сброс настроек
-        </button>
+          }}>
+            Сброс
+          </button>
+        )}
       </div>
-      {logOpen ? (
+
+      {screen === "home" ? (
+        <div className="grid gap-2">
+          {(
+            [
+              ["now", "Сейчас", "Один человек или шаги 1–5."],
+              ["plan", "Расписание", policy.plan.length ? `${policy.plan.filter((r) => r.on).length} вкл · ближайшие 14 дней` : "Слотов нет"],
+              ["log", "Журнал", "Последние синхронизации и сбои."],
+            ] as const
+          ).map(([id, title, hint]) => (
+            <button key={id} type="button" onClick={() => setScreen(id)} className="rounded-2xl bg-surface-2 px-4 py-3 text-left ring-1 ring-black/5 hover:bg-black/[0.03]">
+              <span className="block text-sm font-semibold">{title}</span>
+              <span className="mt-0.5 block text-[0.78rem] text-muted">{hint}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {screen === "now" ? <NowWizard busy={busy} run={run} onRunAuto={onRunAuto} onRunOne={onRunOne} /> : null}
+
+      {screen === "log" ? (
         <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
           <p className="text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Последние синхронизации</p>
           {(() => {
@@ -514,7 +605,6 @@ export function HistoryPlanPanel({
                     <span className="text-muted"> · {LOG_KIND[e.kind || ""] || e.kind}</span>
                     {e.src === "plan" ? <span className="text-muted"> · слот</span> : e.src === "hands" ? <span className="text-muted"> · руками</span> : null}
                     <span> · {e.text}</span>
-                    {e.who ? <span className="text-muted"> · {e.who}{e.cid ? ` №${e.cid}` : ""}</span> : null}
                   </li>
                 ))}
               </ul>
@@ -522,21 +612,14 @@ export function HistoryPlanPanel({
           })()}
           <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">События</p>
           {!(planLog || []).length ? (
-            <p className="mt-2 text-[0.78rem] text-muted">Пусто. Почему соскочило — будет строкой: ребёнок, причина, шаг.</p>
+            <p className="mt-2 text-[0.78rem] text-muted">Пусто.</p>
           ) : (
             <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">
               {(planLog || []).slice(0, 24).map((e, i) => (
-                <li
-                  key={`${e.at}-${e.kind}-ev-${i}`}
-                  className={cn(
-                    "text-[0.78rem] leading-snug",
-                    e.kind === "fail" || e.kind === "stop" ? "text-red-800" : e.kind === "skip" ? "text-amber-800" : "",
-                  )}
-                >
+                <li key={`${e.at}-${e.kind}-ev-${i}`} className={cn("text-[0.78rem] leading-snug", e.kind === "fail" || e.kind === "stop" ? "text-red-800" : e.kind === "skip" ? "text-amber-800" : "")}>
                   <span className="font-semibold">{logWhen(e.at)}</span>
                   <span className="text-muted"> · {LOG_KIND[e.kind || ""] || e.kind}</span>
                   <span> · {e.text}</span>
-                  {e.who && !String(e.text || "").includes(e.who) ? <span> · {e.who}{e.cid ? ` №${e.cid}` : ""}</span> : null}
                 </li>
               ))}
             </ul>
@@ -544,321 +627,120 @@ export function HistoryPlanPanel({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2.5 ring-1 ring-black/8">
-        <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Ручной запуск</p>
-        <Chip on={runStudy === "1"} onClick={() => setRunStudy("1")}>
-          Сейчас ходят
-        </Chip>
-        <Chip
-          on={runStudy === "2"}
-          onClick={() => setRunStudy("2")}
-        >
-          Архив клиентов
-        </Chip>
-        {runStudy === "1" ? (
-          <>
-            <Chip on>
-              Активные группы
-            </Chip>
-            <Chip on={runLeads} onClick={() => setRunLeads((v) => !v)}>
-              Лиды действующих групп
-            </Chip>
-            <Chip on={runArchGroups} onClick={() => setRunArchGroups((v) => !v)}>
-              Архив действующих групп
-            </Chip>
-          </>
-        ) : null}
-        <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Окно перепроверки</p>
-        {PLAN_FROM_OPTS.map((o) => (
-          <Chip key={o.id} on={runFrom === o.id} onClick={() => setRunFrom(o.id)}>
-            {o.label}
-          </Chip>
-        ))}
-        <button
-          type="button"
-          className="h-9 rounded-full bg-red-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
-          disabled={busy || run || !onRunAuto}
-          onClick={() => {
-            if (!onRunAuto) return;
-            if (run) return;
-            if (!window.confirm("Перепроверить сейчас? Сначала доберёт дырки слева, потом всех справа. Окно — чипы лет. Чип «Лиды действующих групп» режет только этот прогон, галку шага 1 не трогает.")) return;
-            onRunAuto({
-              study: runStudy,
-              dateFromId: runFrom,
-              leads: runStudy === "1" && runLeads,
-              archGroups: runStudy === "1" && runArchGroups,
-            });
-          }}
-        >
-          Перепроверить шаги 1–5 сейчас
-        </button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2.5 ring-1 ring-black/8">
-        <p className="w-full text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Один человек</p>
-        <input
-          className="h-9 min-w-[10rem] flex-1 rounded-full bg-surface-2 px-3 text-sm font-semibold ring-1 ring-black/8"
-          placeholder="номер, например 4324"
-          value={who}
-          onChange={(e) => setWho(e.target.value)}
-        />
-        {PLAN_FROM_OPTS.map((o) => (
-          <Chip key={`who-${o.id}`} on={whoFrom === o.id} onClick={() => setWhoFrom(o.id)}>
-            {o.label}
-          </Chip>
-        ))}
-        <button
-          type="button"
-          className="h-9 rounded-full bg-black px-3 text-sm font-semibold text-white disabled:opacity-50"
-          disabled={busy || run || !whoCid || !onRunOne}
-          onClick={() => {
-            if (!onRunOne || !whoCid) return;
-            if (!window.confirm(`Шаг 5 только №${whoCid}? Календарь и кассу не трогаем.`)) return;
-            onRunOne({ cid: whoCid, kind: "audit", dateFromId: whoFrom });
-          }}
-        >
-          Шаг 5
-        </button>
-        <button
-          type="button"
-          className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10 disabled:opacity-50"
-          disabled={busy || run || !whoCid || !onRunOne}
-          onClick={() => {
-            if (!onRunOne || !whoCid) return;
-            if (!window.confirm(`Перепроверить календарь №${whoCid}? Окно — чипы лет. Кассу не трогаем.`)) return;
-            onRunOne({ cid: whoCid, kind: "calendar", dateFromId: whoFrom });
-          }}
-        >
-          Календарь
-        </button>
-        <p className="w-full text-[0.72rem] text-muted">Та же очередь, не вторая. Если уже идёт загрузка — сначала Стоп.</p>
-      </div>
-
-      <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted">Ближайшие 14 дней · МСК</p>
-          <div className="flex gap-1">
-            <Chip on={view === "days"} onClick={() => setView("days")}>
-              Дни
-            </Chip>
-            <Chip on={view === "cards"} onClick={() => setView("cards")}>
-              Карточки
-            </Chip>
-          </div>
-        </div>
-        {view === "days" ? (
-          horizonDays.length ? (
-            <ul className="mt-2 space-y-2">
-              {horizonDays.map((d) => {
-                const [y, mo, da] = d.ymd.split("-");
-                const names = ["", "пн", "вт", "ср", "чт", "пт", "сб", "вс"];
-                return (
-                  <li key={d.ymd}>
-                    <p className="text-[0.78rem] font-semibold">
-                      {names[d.dow]} {da}.{mo}.{y}
-                      {d.hits.filter((h) => h.on).length > 1 ? <span className="font-medium text-amber-800"> · несколько слотов, очередь одна</span> : null}
-                    </p>
-                    <ul className="mt-0.5 space-y-0.5">
-                      {d.hits.map((h) => {
-                        const w = mskWall(h.at);
-                        return (
-                          <li key={`${h.id}-${h.at.getTime()}`} className={cn("text-[0.78rem]", h.on ? "" : "text-muted line-through")}>
-                            {pad2(w.h)}:{pad2(w.min)} · {h.label}
-                            {h.label !== h.modeLabel ? <span className="text-muted"> · {h.modeLabel}</span> : null}
-                            {h.on ? null : " · пауза"}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="mt-2 text-[0.78rem] text-muted">На 14 дней слотов нет.</p>
-          )
-        ) : (
-          <p className="mt-2 text-[0.78rem] text-muted">Карточки ниже. Дни — когда что встанет.</p>
-        )}
-      </div>
-
-      {!policy.plan.length && !formOpen ? (
-        <p className="text-sm text-muted">Расписаний нет. Синхронизация расписания молчит. Кнопки шагов как были.</p>
-      ) : null}
-
-      {policy.plan.map((r) => (
-        <div key={r.id} className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <p className="text-sm font-semibold">{r.label || planModeMeta(r.mode).label}</p>
-              <p className="mt-0.5 text-[0.78rem] text-muted">
-                {whenLabel(r.when)} · {r.at} МСК
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-1">
-              <button type="button" className="h-8 rounded-full px-2 text-sm ring-1 ring-black/10" onClick={() => move(r.id, -1)} disabled={busy}>
-                ↑
-              </button>
-              <button type="button" className="h-8 rounded-full px-2 text-sm ring-1 ring-black/10" onClick={() => move(r.id, 1)} disabled={busy}>
-                ↓
-              </button>
-              <button
-                type="button"
-                className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
-                disabled={busy}
-                onClick={() => {
-                  setAdding(false);
-                  setEditId(r.id);
-                }}
-              >
-                Править
-              </button>
-              <button
-                type="button"
-                className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10"
-                disabled={busy}
-                onClick={() => {
-                  const id = `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      {screen === "plan" ? (
+        <>
+          {formOpen ? (
+            <DraftForm
+              key={editing?.id || "new"}
+              busy={busy}
+              seed={editing}
+              onCancel={() => { setAdding(false); setEditId(""); }}
+              onSave={(row) => {
+                if (editing) {
                   patch({
                     ...policy,
-                    plan: [
-                      ...policy.plan,
-                      {
-                        ...r,
-                        id,
-                        label: r.label ? `${r.label} · копия` : "копия",
-                        dueAt: "",
-                        lastFiredAt: "",
-                        lastJobId: "",
-                        lastSkip: "",
-                      },
-                    ],
+                    plan: policy.plan.map((x) =>
+                      x.id === editing.id
+                        ? { ...x, ...row, on: x.on, dueAt: x.dueAt, lastFiredAt: x.lastFiredAt, lastJobId: x.lastJobId, lastSkip: x.lastSkip }
+                        : x,
+                    ),
                   });
-                }}
-              >
-                Копия
-              </button>
-              <label className="flex items-center gap-1.5 px-2 text-[0.78rem] font-semibold">
-                <input type="checkbox" checked={r.on} disabled={busy} onChange={(e) => patch({ ...policy, plan: policy.plan.map((x) => (x.id === r.id ? { ...x, on: e.target.checked } : x)) })} />
-                вкл
-              </label>
-              <button
-                type="button"
-                className="h-8 rounded-full px-3 text-[0.78rem] font-semibold text-red-700 ring-1 ring-red-200"
-                disabled={busy}
-                onClick={() => {
-                  if (!window.confirm("Удалить это расписание?")) return;
-                  patch({ ...policy, plan: policy.plan.filter((x) => x.id !== r.id) });
-                }}
-              >
-                Удалить
-              </button>
-            </div>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className="h-7 rounded-full bg-black px-2.5 text-[0.72rem] font-semibold leading-7 text-white">{planModeMeta(r.mode).label}</span>
-            {isRecheck(r.mode) ? (
-              <span className="h-7 rounded-full bg-sky-50 px-2.5 text-[0.72rem] font-semibold leading-7">
-                {PLAN_RECHECK_OPTS.find((o) => o.days === r.recheckDays)?.label || `± ${r.recheckDays}`}
-              </span>
-            ) : r.mode === "auto" || r.mode === "people" || r.mode === "people-slow" || r.mode === "balance" ? (
-              <span className="h-7 rounded-full bg-sky-50 px-2.5 text-[0.72rem] font-semibold leading-7">
-                {PLAN_FROM_OPTS.find((o) => o.id === r.dateFromId)?.label || r.dateFromId}
-              </span>
-            ) : null}
-            <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">{r.study === "2" ? "Архив" : "Сейчас ходят"}</span>
-            {r.study === "1" && r.mode === "auto" ? (
-              <button
-                type="button"
-                className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7"
-                disabled={busy}
-                onClick={() =>
-                  patch({
-                    ...policy,
-                    plan: policy.plan.map((x) => (x.id === r.id ? { ...x, leads: x.leads === false } : x)),
-                  })
+                } else {
+                  const id = `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+                  patch({ ...policy, plan: [...policy.plan, { ...row, id, dueAt: "", lastFiredAt: "", lastJobId: "", lastSkip: "" }] });
                 }
-              >
-                {r.leads === false ? "без лидов" : "лиды вкл"}
+                setAdding(false);
+                setEditId("");
+              }}
+            />
+          ) : (
+            <>
+              <div className="rounded-2xl px-4 py-3 ring-1 ring-black/8">
+                <p className="text-[0.75rem] font-semibold text-muted">14 дней · МСК</p>
+                {horizonDays.length ? (
+                  <ul className="mt-2 space-y-1.5">
+                    {horizonDays.map((d) => {
+                      const [, mo, da] = d.ymd.split("-");
+                      const names = ["", "пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+                      return (
+                        <li key={d.ymd} className="text-[0.78rem]">
+                          <span className="font-semibold">{names[d.dow]} {da}.{mo}</span>
+                          {d.hits.filter((h) => h.on).length > 1 ? <span className="text-amber-800"> · очередь одна</span> : null}
+                          {d.hits.map((h) => {
+                            const w = mskWall(h.at);
+                            return (
+                              <span key={`${h.id}-${h.at.getTime()}`} className={cn(h.on ? "" : "text-muted line-through")}>
+                                {" "}· {pad2(w.h)}:{pad2(w.min)} {h.label}{h.on ? "" : " · пауза"}
+                              </span>
+                            );
+                          })}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-[0.78rem] text-muted">На 14 дней слотов нет.</p>
+                )}
+              </div>
+              <ul className="divide-y divide-black/5 rounded-2xl px-4 ring-1 ring-black/8">
+                {policy.plan.map((r) => (
+                  <li key={r.id} className="py-3">
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={r.on}
+                        disabled={busy}
+                        onClick={() => patch({ ...policy, plan: policy.plan.map((x) => (x.id === r.id ? { ...x, on: !x.on } : x)) })}
+                        className={cn("relative mt-0.5 h-6 w-11 shrink-0 rounded-full", r.on ? "bg-emerald-700" : "bg-black/15")}
+                      >
+                        <span className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", r.on && "translate-x-5")} />
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{r.label || planModeMeta(r.mode).label}</p>
+                        <p className="truncate text-[0.75rem] text-muted">
+                          {whenLabel(r.when)} · {r.at} · {r.study === "2" ? "архив" : "живые"} · {fmtSlot(r)}
+                          {r.lastSkip === "hands" ? " · руки заняли" : ""}
+                          {r.lastSkip === "expired" ? " · слот сгорел" : ""}
+                        </p>
+                      </div>
+                      <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" disabled={busy} onClick={() => { setMenuId(""); setEditId(r.id); setAdding(false); }}>
+                        Править
+                      </button>
+                      <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setMenuId(menuId === r.id ? "" : r.id)}>
+                        Ещё
+                      </button>
+                    </div>
+                    {menuId === r.id ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5 pl-14">
+                        <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] ring-1 ring-black/10" disabled={busy} onClick={() => move(r.id, -1)}>Выше</button>
+                        <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] ring-1 ring-black/10" disabled={busy} onClick={() => move(r.id, 1)}>Ниже</button>
+                        <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] ring-1 ring-black/10" disabled={busy} onClick={() => {
+                          const id = `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+                          patch({
+                            ...policy,
+                            plan: [...policy.plan, { ...r, id, label: r.label ? `${r.label} · копия` : "копия", dueAt: "", lastFiredAt: "", lastJobId: "", lastSkip: "" }],
+                          });
+                          setMenuId("");
+                        }}>Копия</button>
+                        <button type="button" className="h-8 rounded-full px-3 text-[0.78rem] font-semibold text-red-700 ring-1 ring-red-200" disabled={busy} onClick={() => {
+                          if (!window.confirm("Удалить это расписание?")) return;
+                          patch({ ...policy, plan: policy.plan.filter((x) => x.id !== r.id) });
+                          setMenuId("");
+                        }}>Удалить</button>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              {!policy.plan.length ? <p className="text-sm text-muted">Расписаний нет. Ночью пульт молчит.</p> : null}
+              <button type="button" className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white" onClick={() => { setEditId(""); setAdding(true); }}>
+                + Добавить расписание
               </button>
-            ) : null}
-            {r.study === "1" && r.mode === "auto" ? (
-              <button
-                type="button"
-                className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7"
-                disabled={busy}
-                onClick={() =>
-                  patch({
-                    ...policy,
-                    plan: policy.plan.map((x) => (x.id === r.id ? { ...x, archGroups: x.archGroups === false } : x)),
-                  })
-                }
-              >
-                {r.archGroups === false ? "без архива групп" : "архив групп вкл"}
-              </button>
-            ) : null}
-            {r.mode !== "auto" ? (
-              <span className="h-7 rounded-full bg-amber-50 px-2.5 text-[0.72rem] font-semibold leading-7 text-amber-900">один шаг, не 1–5</span>
-            ) : null}
-          </div>
-          <p className="mt-2 text-[0.72rem] text-muted">
-            следующий слот {fmtSlot(r)}
-            {r.lastSkip === "hands" ? " · пропуск: руки заняли" : ""}
-            {r.lastSkip === "expired" ? " · слот сгорел (старше 36 ч)" : ""}
-          </p>
-        </div>
-      ))}
-
-      {formOpen ? (
-        <DraftForm
-          key={editing?.id || "new"}
-          busy={busy}
-          seed={editing}
-          onCancel={() => {
-            setAdding(false);
-            setEditId("");
-          }}
-          onSave={(row) => {
-            if (editing) {
-              patch({
-                ...policy,
-                plan: policy.plan.map((x) =>
-                  x.id === editing.id
-                    ? {
-                        ...x,
-                        ...row,
-                        on: x.on,
-                        dueAt: x.dueAt,
-                        lastFiredAt: x.lastFiredAt,
-                        lastJobId: x.lastJobId,
-                        lastSkip: x.lastSkip,
-                      }
-                    : x,
-                ),
-              });
-            } else {
-              const id = `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-              patch({
-                ...policy,
-                plan: [...policy.plan, { ...row, id, dueAt: "", lastFiredAt: "", lastJobId: "", lastSkip: "" }],
-              });
-            }
-            setAdding(false);
-            setEditId("");
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white"
-          onClick={() => {
-            setEditId("");
-            setAdding(true);
-          }}
-        >
-          + Добавить расписание
-        </button>
-      )}
+            </>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -909,7 +791,7 @@ export function HistoryPlanModal({
             <p id="history-plan-title" className="font-display text-[1.2rem] leading-tight">
               Пульт синхронизации
             </p>
-            <p className="mt-1 text-[0.82rem] text-muted">Расписание на 14 дней. Карточку можно править и копировать. Один человек — шаг 5 или календарь, та же очередь.</p>
+            <p className="mt-1 text-[0.82rem] text-muted">Три входа: сейчас, расписание, журнал. Запуск и новый слот — по шагам.</p>
           </div>
           <button
             type="button"
