@@ -396,6 +396,16 @@ async function peekAlfaLessonCommission(
   return { ok: true as const, alfaWoSum: n, alfaWoN: k };
 }
 
+function archiveEdateClosed(raw: unknown, today: string) {
+  let ymd = step5Ymd(raw);
+  if (!ymd) {
+    const m = String(raw ?? "").trim().match(/^(\d{2})\.(\d{2})\.(\d{4})/);
+    if (m) ymd = `${m[3]}-${m[2]}-${m[1]}`;
+  }
+  if (!ymd || ymd === "2030-12-31" || ymd === "0000-00-00") return false;
+  return ymd <= today;
+}
+
 async function alfaShow(branch: number, cid: number, study = Number.NaN) {
   const { token, request } = await import("./alfacrm");
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
@@ -475,64 +485,73 @@ async function alfaShow(branch: number, cid: number, study = Number.NaN) {
     }
   }
   if (!found && !authStop && !stopped) {
+    const archiveBodies: Record<string, unknown>[] = [
+      { id: cid, page: 0, pageSize: 1, removed: 2, is_study: 0 },
+      { id: cid, page: 0, pageSize: 1, removed: 2, is_study: 1 },
+      { id: cid, page: 0, pageSize: 1, removed: 1, is_study: 2 },
+    ];
     archiveScan: for (const bid of branches) {
       if (step5SessionStopped()) {
         stopped = true;
         break;
       }
-      let retried = false;
-      for (;;) {
-        try {
-          const json = await request(`/v2api/${bid}/customer/index`, { id: cid, page: 0, removed: 2 }, t);
-          const items = crmUnwrapIndex(json).items;
-          const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
-          if (hit) {
-            const rem = Number(hit.removed);
-            const eDate = step5Ymd(hit.e_date);
-            const today = step5MoscowDay();
-            const closed = Boolean(eDate) && eDate !== "2030-12-31" && eDate <= today;
-            if (rem === 2 || (rem !== 1 && closed)) {
-              return {
-                ok: false as const,
-                alfa: 0,
-                headerOk: false,
-                miss: "id" as const,
-                archived: true as const,
-                archiveStudy: step5StudyNum(hit.is_study),
-                lessonCount: null as number | null,
-                branch: bid,
-                switched: bid !== (Number(branch) || 1),
-                token: t,
-                request,
-                study: Number.NaN,
-                removed: rem,
-                authStop: false,
-                rejectCid: false,
-                stopped: false,
-              };
-            }
-            break archiveScan;
-          }
-          break;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          if (/\b401\b|\b403\b/.test(msg)) {
-            authStop = true;
-            break archiveScan;
-          }
-          if (/\b400\b|\b422\b/.test(msg)) {
-            break;
-          }
-          if (/\b429\b/.test(msg) && !retried) {
-            retried = true;
-            const go = await step5WaitOrStop(120000);
-            if (!go) {
-              stopped = true;
+      for (const body of archiveBodies) {
+        let retried = false;
+        for (;;) {
+          try {
+            const json = await request(`/v2api/${bid}/customer/index`, body, t);
+            const items = crmUnwrapIndex(json).items;
+            const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
+            if (hit) {
+              const rem = step5RemovedNum(hit.removed);
+              const closed = archiveEdateClosed(hit.e_date, step5MoscowDay());
+              const onlyArchive = Number(body.removed) === 2;
+              if (rem !== 1 && (rem === 2 || closed || onlyArchive)) {
+                return {
+                  ok: false as const,
+                  alfa: 0,
+                  headerOk: false,
+                  miss: "id" as const,
+                  archived: true as const,
+                  archiveStudy: step5StudyNum(hit.is_study),
+                  lessonCount: null as number | null,
+                  branch: bid,
+                  switched: bid !== (Number(branch) || 1),
+                  token: t,
+                  request,
+                  study: Number.NaN,
+                  removed: rem,
+                  authStop: false,
+                  rejectCid: false,
+                  stopped: false,
+                };
+              }
+              found = hit;
+              used = bid;
+              switched = bid !== (Number(branch) || 1);
               break archiveScan;
             }
-            continue;
+            break;
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (/\b401\b|\b403\b/.test(msg)) {
+              authStop = true;
+              break archiveScan;
+            }
+            if (/\b400\b|\b422\b/.test(msg)) {
+              break;
+            }
+            if (/\b429\b/.test(msg) && !retried) {
+              retried = true;
+              const go = await step5WaitOrStop(120000);
+              if (!go) {
+                stopped = true;
+                break archiveScan;
+              }
+              continue;
+            }
+            break;
           }
-          break;
         }
       }
     }
