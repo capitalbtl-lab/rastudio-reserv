@@ -107,18 +107,23 @@ function stampLink(cid: number, branchId: number, groupId: number, name: string,
   });
 }
 
-async function groupArchivedInAlfa(branchId: number, gid: number, t: string) {
-  const bodies = [
-    { page: 0, pageSize: 1, id: gid },
-    { page: 0, pageSize: 1, id: gid, status_id: 3 },
-  ];
-  for (const body of bodies) {
+async function groupOffRecheck(branchId: number, gid: number, t: string) {
+  const ask = async (body: Record<string, unknown>) => {
     const json = await request(`/v2api/${branchId}/group/index`, body, t).catch(() => null);
-    const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === gid);
-    if (!hit) continue;
-    return Number(hit.status_id) === 3;
-  }
-  return false;
+    if (!json) return null;
+    const pack = crmUnwrapIndex(json);
+    const hit = pack.items.find((x) => Number(x.id) === gid);
+    const total = Number(pack.total ?? pack.count);
+    const empty = !pack.items.length || total === 0;
+    return { hit, empty };
+  };
+  const live = await ask({ page: 0, pageSize: 1, id: gid });
+  if (!live) return false;
+  if (live.hit) return Number(live.hit.status_id) === 3;
+  if (!live.empty) return false;
+  const arch = await ask({ page: 0, pageSize: 1, id: gid, status_id: 3 });
+  if (arch?.hit) return true;
+  return true;
 }
 
 export async function pullGroupRoster(opts: { groupId: number; branchId: number; name?: string; force?: boolean }) {
@@ -129,10 +134,10 @@ export async function pullGroupRoster(opts: { groupId: number; branchId: number;
   if (!gid || !bid) return { ok: false as const, error: "Нет номера группы.", cgi: 0, added: 0, disk: 0, extra: "Нет номера группы.", archived: false };
   const t = await alfaToken().catch(() => "");
   if (!t) return { ok: false as const, error: "Нет входа в AlfaCRM.", cgi: 0, added: 0, disk: 0, extra: "Нет входа в AlfaCRM.", archived: false };
-  if (await groupArchivedInAlfa(bid, gid, t)) {
+  if (await groupOffRecheck(bid, gid, t)) {
     const { dropAdminGroup } = await import("./alfacrm-schedule");
     dropAdminGroup(bid, gid);
-    return { ok: true as const, error: "", cgi: 0, added: 0, disk: 0, extra: `${name} в архиве Alfa. Из перепроверки убрана.`, archived: true };
+    return { ok: true as const, error: "", cgi: 0, added: 0, disk: 0, extra: `${name} в архиве Alfa или её уже нет. Из перепроверки убрана.`, archived: true };
   }
   const live = new Set<number>();
   await pagedIndex(

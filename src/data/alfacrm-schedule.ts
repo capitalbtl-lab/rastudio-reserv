@@ -2,7 +2,7 @@
  * Загрузка групп из AlfaCRM. subjectId = group.subject_id || lesson.subject_id.
  * courseId = карта предмета (schedule-map), иначе assign / слот. Имя и хэштеги не склеивают курс.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
@@ -376,12 +376,29 @@ export function crmScheduleMeta() {
 }
 
 let listed: { at: number; slots: CrmSlot[] } | null = null;
+let snapSeen = 0;
+
+function snapStamp() {
+  try {
+    return existsSync(snapFile()) ? statSync(snapFile()).mtimeMs : 0;
+  } catch {
+    return 0;
+  }
+}
 
 export function resetSlotCache() {
   listed = null;
+  snapSeen = 0;
 }
 
 export function listAdminSlots(): CrmSlot[] {
+  const stamp = snapStamp();
+  if (!cache || stamp !== snapSeen) {
+    const disk = readSnap();
+    if (disk) cache = disk;
+    snapSeen = stamp;
+    listed = null;
+  }
   const snap = cache || readSnap();
   const at = snap?.at || 0;
   if (listed && listed.at === at && listed.slots.length) return listed.slots;
