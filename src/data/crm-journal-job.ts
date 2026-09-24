@@ -1052,6 +1052,7 @@ function peekJobWave(job: JournalJob): ReturnType<typeof peopleRecheckAdvance> |
     return groupsRecheckAdvance(groupRowsFor({ school: job.school, archived: job.archived, grain: job.grain }), job.wave, job.follow, false, job.defer, job.skip);
   }
   if (mode === "roster-recheck") {
+    if (String(job.oneName || "").trim()) return null;
     return groupsRecheckAdvance(rosterRowsFor({ school: job.school, archived: job.archived }), job.wave, job.follow, true);
   }
   return null;

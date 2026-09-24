@@ -40,6 +40,7 @@ describe("шаг 1: группы и состав", () => {
     assert.match(pull, /pullGroupRoster/);
     assert.match(pull, /rosterPolicy: loadRosterPolicy/);
     assert.match(job, /mode === "roster"/);
+    assert.match(job, /if \(mode === "roster-recheck"\) \{\s*if \(String\(job\.oneName \|\| ""\)\.trim\(\)\) return null/);
     assert.match(job, /liveAdminGroups\(school\)/);
     assert.match(job, /name: item.name/);
     assert.match(load, /mode === "roster" \|\| mode === "roster-recheck"/);
