@@ -8,7 +8,7 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { loadCachePolicy } from "./crm-cache-policy";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
-import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups } from "./dossiers";
+import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups, ensureCustomerCard } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra, lessonsStampShort, lessonsStampExtra, stampLessonSetGap, waitLockStudentAlfa, unlockStudentAlfa, studentCensusRange, nextLessonWindowDays } from "./crm-customer-sync";
 import { payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, paysOf } from "./crm-pay";
@@ -1798,13 +1798,21 @@ export async function journalPull(opts: {
       const order = [2, 4, 5].filter((n) => want.includes(n));
       const cid = Number(opts.customerId) || 0;
       if (!cid || !order.length) return journalJobView();
+      let oneName = String(opts.name || `№${cid}`);
+      try {
+        const card = await ensureCustomerCard(cid, Number(opts.branchId) || 1);
+        const fio = String(card?.child?.fio || "").trim();
+        if (fio && !/^клиент\s+\d+$/i.test(fio)) oneName = fio;
+      } catch {
+        /* карточка не открылась — шаги идут как раньше */
+      }
       const [first, ...rest] = order;
       startOnePersonStep({
         step: first,
         pipe: rest.map((n) => `one:${n}`),
         customerId: cid,
         branchId: Number(opts.branchId) || 1,
-        oneName: String(opts.name || `№${cid}`),
+        oneName,
         study: opts.study === "2" ? "2" : "1",
         dateFrom: opts.dateFrom || "",
         recheckDays: opts.recheckDays,

@@ -1271,16 +1271,18 @@ export async function ensureCustomerCard(crmId: number, branchId: number) {
   if (named && roleOk) return have || null;
   const t = await alfaToken();
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
-  const branches = [Number(branchId) || 0, 1, 2, 3, 4].filter((b, i, all) => b > 0 && all.indexOf(b) === i);
-  const bodies = [
-    { id, page: 0, is_study: 1 },
-    { id, page: 0, is_study: 0 },
-    { id, page: 0, removed: 1, is_study: 2 },
-    { id, page: 0, removed: 2, is_study: 1 },
-    { id, page: 0, removed: 2, is_study: 0 },
-  ];
+  const first = Number(branchId) || 1;
+  const branches = [first, 1, 2, 3, 4].filter((b, i, all) => b > 0 && all.indexOf(b) === i);
+  const bodiesFor = (b: number) =>
+    b === first
+      ? [
+          { page: 0, pageSize: 10, id },
+          { page: 0, pageSize: 10, ids: [id] },
+          { page: 0, id },
+        ]
+      : [{ page: 0, pageSize: 10, id }];
   for (const b of branches) {
-    for (const body of bodies) {
+    for (const body of bodiesFor(b)) {
       const json = await request(`/v2api/${b}/customer/index`, body, t).catch(() => null);
       const item = crmUnwrapIndex(json).items.find((x) => Number(x.id) === id);
       if (!item) continue;
