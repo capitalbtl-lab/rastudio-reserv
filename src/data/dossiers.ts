@@ -12,6 +12,7 @@ import type { DossiersReq } from "./dossiers-fn";
 import { logAdmin } from "./admin-settings";
 import { customerPullCandidate, diskIsArchive, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
+import { customerSyncOf } from "./crm-customer-sync";
 import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, archiveFioOk, archiveAgeYears, archiveWasClient, type ArchivePerson } from "./crm-archive-policy";
 
 export type PersonName = {
@@ -2249,10 +2250,45 @@ function viewOf(d: Dossier) {
     hasLiveTariff: ex.live_tariff === "1",
     was: String(ex.was || ""),
     recheckArchive: String(ex.recheckArchive || ""),
+    removed: String(ex.removed || ""),
+    auditRecheckAt: String(ex.auditRecheckAt || ""),
   };
 }
 
 export type ClientView = ReturnType<typeof viewOf>;
+
+function liveGroupKeySet() {
+  const keys = new Set<string>();
+  for (const g of overlayAdminGroups()) keys.add(`${g.branchId}:${g.groupId}`);
+  return keys;
+}
+
+function listedArchive(d: ClientView) {
+  if (d.status === "удалён" || d.removed === "1") return false;
+  return d.status === "архив" || d.recheckArchive === "1" || d.removed === "2";
+}
+
+function listedLead(d: ClientView) {
+  return d.status === "лид" && !listedArchive(d);
+}
+
+function clientWasRechecked(d: ClientView) {
+  if (d.auditRecheckAt) return true;
+  const id = Number(d.crmId) || 0;
+  if (!id) return false;
+  const sync = customerSyncOf(id);
+  return Boolean(sync.lessonsRecheckAt || sync.paysRecheckAt);
+}
+
+function listedCurrent(d: ClientView, keys: Set<string>) {
+  if (d.status !== "учится" || listedArchive(d) || !clientWasRechecked(d)) return false;
+  for (const g of d.groupLinks || []) {
+    const id = Number(g.id) || 0;
+    const bid = Number(g.branchId) || Number(d.branchId) || 0;
+    if (id && bid && keys.has(`${bid}:${id}`)) return true;
+  }
+  return false;
+}
 
 export function toClientListRow(d: ClientView) {
   return {
@@ -2348,27 +2384,26 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
   const branchCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
   const tariffCounts = { all: 0, with: 0, without: 0 };
   const hidden = (d: ClientView) => d.status === "удалён";
-  const chipStatus = !want || want === "все" ? "" : want;
   const policy = loadArchivePolicy();
-  const working = archiveWorkingSet(policy);
-  const inWorking = (d: ClientView) => {
-    const id = Number(d.crmId) || 0;
-    if (!id || d.status !== "архив") return false;
-    if (!working) return false;
-    return working.has(id);
+  const liveKeys = liveGroupKeySet();
+  void archiveAll;
+  const onTab = (d: ClientView) => {
+    if (want === "все") return true;
+    if (want === "архив") return listedArchive(d);
+    if (want === "лид") return listedLead(d);
+    if (want === "учится" || !want) return listedCurrent(d, liveKeys);
+    return d.status === want;
   };
   let archiveDisk = 0;
   for (const d of views) {
     if (hidden(d)) continue;
     counts.все += 1;
-    if (d.status === "учится") counts.учится += 1;
-    else if (d.status === "лид") counts.лид += 1;
-    else if (d.status === "архив") {
+    if (listedArchive(d)) {
       archiveDisk += 1;
-      if (inWorking(d) || d.recheckArchive === "1") counts.архив += 1;
-    }
-    if (chipStatus && d.status !== chipStatus) continue;
-    if (chipStatus === "архив" && d.status === "архив" && !archiveAll && !needle && !inWorking(d) && d.recheckArchive !== "1") continue;
+      counts.архив += 1;
+    } else if (listedLead(d)) counts.лид += 1;
+    else if (listedCurrent(d, liveKeys)) counts.учится += 1;
+    if (!onTab(d)) continue;
     tariffCounts.all += 1;
     if (d.hasLiveTariff) tariffCounts.with += 1;
     else tariffCounts.without += 1;
@@ -2378,15 +2413,9 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
   const items = views.filter((d) => {
     if (d.status === "удалён") return false;
     if (!needle) {
-      if (d.status === "архив" && want !== "архив") return false;
-      if (want === "архив") {
-        if (d.status !== "архив") return false;
-        if (!archiveAll && !inWorking(d) && d.recheckArchive !== "1") return false;
-      } else if (want && want !== "все") {
-        if (d.status !== want) return false;
-      } else if (!want) {
-        if (d.status !== "учится") return false;
-      }
+      if (want === "архив" && !listedArchive(d)) return false;
+      else if (want === "лид" && !listedLead(d)) return false;
+      else if ((want === "учится" || !want) && want !== "все" && !listedCurrent(d, liveKeys)) return false;
     }
     if (branchId) {
       const ids = d.branchIds && d.branchIds.length ? d.branchIds : [Number(d.branchId) || 0];

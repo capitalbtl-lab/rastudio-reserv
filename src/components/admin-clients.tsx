@@ -1372,7 +1372,7 @@ export function AdminClients({
             >
               Загрузить «Лидов»
             </button>
-            <span className="px-2 text-[0.72rem] text-muted">Набор архива — Настройка CRM → История из Alfa</span>
+            <span className="px-2 text-[0.72rem] text-muted">Архив — все архивные клиенты и лиды. Загрузка — Настройка CRM → История из Alfa</span>
         </div>
         {hint ? <p className="mt-2 rounded-xl bg-primary/10 px-3 py-1.5 text-sm font-medium text-fg">{hint}</p> : null}
 
@@ -1503,9 +1503,7 @@ export function AdminClients({
         </div>
         {status === "архив" && !counts.архив ? (
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">
-            {archiveInfo.ready
-              ? `Рабочий архив пуст. На диске ${archiveInfo.disk} скрытых. Набор — Настройка CRM → История из Alfa → «Посчитать отбор».`
-              : `На диске ${archiveInfo.disk || "архивные карточки"}. Рабочий набор не считали — Настройка CRM → История из Alfa → шаг 1 → «Посчитать отбор».`}
+            Архивных клиентов и лидов на сайте нет.
           </p>
         ) : null}
         {status === "архив" && archiveInfo.hidden ? (
@@ -1766,7 +1764,7 @@ export function AdminClients({
           ) : null}
           {view === "дети" && !busy && !shown.length ? (
             <p className="rounded-[1.2rem] bg-white px-4 py-10 text-center text-sm text-muted ring-1 ring-black/6">
-              {status === "архив" ? "В рабочем архиве никого нет. Сначала «Посчитать отбор» в Истории из Alfa." : status === "лид" ? "В этой выборке лидов нет." : "В этой выборке никого нет. Смените фильтр или нажмите «Загрузить „Клиентов“»."}
+              {status === "архив" ? "Архивных клиентов и лидов нет." : status === "лид" ? "В этой выборке лидов нет." : "В этой выборке никого нет. Смените фильтр или нажмите «Загрузить „Клиентов“»."}
             </p>
           ) : null}
         </div>
