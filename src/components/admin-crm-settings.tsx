@@ -1612,6 +1612,14 @@ function applyJobStatus<T extends {
     const rows = progress.groups.rows.map((r) => (r.groupId === row.groupId && (!row.branchId || r.branchId === row.branchId) ? { ...r, ...row } : r));
     progress = { ...progress, groups: { ...progress.groups, rows } };
   }
+  const auditRows = Array.isArray((res.lastAudit as { rows?: unknown } | undefined)?.rows)
+    ? ((res.lastAudit as { rows: { cid?: number; codes?: string[] }[] }).rows)
+    : [];
+  const gone = new Set(auditRows.filter((r) => Array.isArray(r.codes) && r.codes.includes("архив")).map((r) => Number(r.cid) || 0));
+  if (gone.size && progress.live?.people?.length) {
+    const people = progress.live.people.filter((p) => !gone.has(Number(p.cid) || 0));
+    progress = { ...progress, live: { ...progress.live, people, total: people.length } };
+  }
   return {
     ...base,
     ...res,
@@ -2217,7 +2225,7 @@ function FoldNames({ names }: { names?: string[] }) {
   );
 }
 
-function AuditStepPick({ busy, active, onRun }: { busy?: boolean; active?: boolean; onRun: (steps: number[]) => void }) {
+function AuditStepPick({ busy, active, runningStep, onRun }: { busy?: boolean; active?: boolean; runningStep?: number; onRun: (steps: number[]) => void }) {
   const [steps, setSteps] = useState<number[]>([2, 4, 5]);
   const labels: [number, string][] = [
     [2, "2 календарь"],
@@ -2229,12 +2237,13 @@ function AuditStepPick({ busy, active, onRun }: { busy?: boolean; active?: boole
       <span className="text-[0.72rem] font-medium text-muted">Какие шаги</span>
       {labels.map(([n, label]) => {
         const on = steps.includes(n);
+        const hot = Boolean(active && runningStep === n);
         return (
           <button
             key={n}
             type="button"
             aria-pressed={on}
-            className={cn("h-8 rounded-full px-3 text-[0.75rem] font-semibold", on ? "bg-black text-white" : "bg-white text-muted ring-1 ring-black/10")}
+            className={cn("h-8 rounded-full px-3 text-[0.75rem] font-semibold", hot ? "bg-red-600 text-white" : on ? "bg-black text-white" : "bg-white text-muted ring-1 ring-black/10")}
             onClick={() => setSteps((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort((a, b) => a - b)))}
           >
             {label}
@@ -2267,11 +2276,13 @@ function AuditFillList({
   rows,
   busy,
   loadingCid,
+  runStep,
   onRecheck,
 }: {
   rows: AuditUiRow[];
   busy?: boolean;
   loadingCid?: number;
+  runStep?: number;
   onRecheck: (row: AuditUiRow, steps: number[]) => void;
 }) {
   const [open, setOpen] = useState("");
@@ -2419,7 +2430,7 @@ function AuditFillList({
           {` · ${money}`}
         </p>
         {full || !recOnCard ? null : <p className="mt-1 text-[0.78rem] leading-snug">{seg.rec}</p>}
-        {full ? null : <AuditStepPick busy={busy && !active} active={active} onRun={(steps) => onRecheck(row, steps)} />}
+        {full ? null : <AuditStepPick busy={busy && !active} active={active} runningStep={active ? runStep : 0} onRun={(steps) => onRecheck(row, steps)} />}
         {shown ? (
           <div className="mt-3 border-t border-black/5 pt-3">
             {recOnCard ? null : <p className="text-[0.78rem] leading-snug font-medium">{seg.rec}</p>}
@@ -5154,6 +5165,7 @@ export function AdminCrmSettings() {
                     rows.push(asAuditRow(r, by.get(r.cid)));
                   }
                   const run = fillLoading?.kind === "audit";
+                  const stepNow = fillLoading?.kind === "students" ? 2 : fillLoading?.kind === "balance" ? 4 : fillLoading?.kind === "audit" ? 5 : 0;
                   const clientRows = rows.filter((r) => peopleStudy === "2" || auditRole(r) === "клиент");
                   const leadN = rows.filter((r) => auditRole(r) === "лид").length;
                   const scanned = clientRows.filter((r) => r.seen).length;
@@ -5220,7 +5232,8 @@ export function AdminCrmSettings() {
                       <AuditFillList
                         rows={rows}
                         busy={offline || run}
-                        loadingCid={run ? fillLoading?.customerId : undefined}
+                        loadingCid={stepNow ? fillLoading?.customerId : undefined}
+                        runStep={stepNow}
                         onRecheck={(row, steps) =>
                           void startHistJob({
                             jobMode: "person-steps",

@@ -432,6 +432,7 @@ function rowFromDossier(
     branchId: Number(d?.branchId || branchId || 1) || 1,
     status: String(d?.status || ""),
     removed: String(d?.extras?.removed || ""),
+    recheckArchive: String(d?.extras?.recheckArchive || "") === "1" ? "1" : "",
   };
 }
 
@@ -463,7 +464,7 @@ function linkHitsLiveGroup(
 
 function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; branchId: number }, school?: string) {
   const scoped = Boolean(group && group.groupId);
-  let pool: { cid: number; study: number; branchId: number; status: string; removed: string }[] = [];
+  let pool: { cid: number; study: number; branchId: number; status: string; removed: string; recheckArchive: string }[] = [];
   if (group && group.groupId) {
     pool = dossiersInGroup(group.branchId, group.groupId).map((d) => rowFromDossier(d, group.branchId)).filter((x) => x.cid);
   } else if (study === "1") {
@@ -505,6 +506,7 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
   const filtered = pool.filter((x) => {
     if (!x.cid) return false;
     if (x.status === "удалён" || x.removed === "1") return false;
+    if (study === "1" && x.removed === "2" && x.recheckArchive === "1") return false;
     const lead = x.study === 0 || x.status === "лид";
     if (lead) return study === "1";
     if (study === "1") {
@@ -577,6 +579,7 @@ export function peopleWithoutLiveGroup() {
   for (const x of listDossierCrm()) {
     if (!x.cid || live.has(x.cid)) continue;
     if (x.status === "удалён" || x.removed === "1") continue;
+    if (x.removed === "2" && x.recheckArchive === "1") continue;
     if (x.study === 0 || x.status === "лид") continue;
     if (x.study !== 1) continue;
     out.push({ cid: x.cid, branchId: x.branchId || 1, name: fioOf(x.cid) });

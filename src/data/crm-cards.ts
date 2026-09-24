@@ -175,6 +175,7 @@ export type ClientRow = {
   updatedAt?: string;
   hasLiveTariff?: boolean;
   archiveHidden?: boolean;
+  was?: string;
 };
 
 export type LessonCatalogItem = { id: number; name: string; branchId?: number };

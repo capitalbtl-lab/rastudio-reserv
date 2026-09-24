@@ -71,7 +71,7 @@ const MAX = 8000;
 const BULK: CrmWriteOpts = { persist: false, quiet: true };
 let cachedStore: StoreCache | null = null;
 let viewsMemo: { items: Dossier[]; views: unknown[] } | null = null;
-let crmListMem: { items: Dossier[]; rows: { cid: number; study: number; branchId: number; status: string; removed: string }[] } | null = null;
+let crmListMem: { items: Dossier[]; rows: { cid: number; study: number; branchId: number; status: string; removed: string; recheckArchive: string }[] } | null = null;
 
 function fileOf() {
   const local = join(process.cwd(), "storage", "dossiers.json");
@@ -766,7 +766,7 @@ export function allDossierCrmIds(): number[] {
 export function listDossierCrm() {
   const items = loadStore().items;
   if (crmListMem && crmListMem.items === items) return crmListMem.rows;
-  const out: { cid: number; study: number; branchId: number; status: string; removed: string }[] = [];
+  const out: { cid: number; study: number; branchId: number; status: string; removed: string; recheckArchive: string }[] = [];
   for (const d of items) {
     const cid = Number(d.crmId) || 0;
     if (!cid) continue;
@@ -777,6 +777,7 @@ export function listDossierCrm() {
       branchId: Number(d.branchId || 1) || 1,
       status: String(d.status || ""),
       removed: String(d.extras?.removed || ""),
+      recheckArchive: String(d.extras?.recheckArchive || "") === "1" ? "1" : "",
     });
   }
   crmListMem = { items, rows: out };
@@ -2246,6 +2247,8 @@ function viewOf(d: Dossier) {
     note: String(ex.note || "").replace(/<[^>]+>/g, "").trim().slice(0, 280),
     updatedAt: d.updatedAt,
     hasLiveTariff: ex.live_tariff === "1",
+    was: String(ex.was || ""),
+    recheckArchive: String(ex.recheckArchive || ""),
   };
 }
 
@@ -2279,7 +2282,8 @@ export function toClientListRow(d: ClientView) {
     leadStatusId: d.leadStatusId,
     note: d.note,
     hasLiveTariff: d.hasLiveTariff,
-    archiveHidden: d.status === "архив" && !isArchiveWorking(Number(d.crmId) || 0),
+    was: d.was,
+    archiveHidden: d.recheckArchive === "1" ? false : d.status === "архив" && !isArchiveWorking(Number(d.crmId) || 0),
   };
 }
 
@@ -2361,10 +2365,10 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
     else if (d.status === "лид") counts.лид += 1;
     else if (d.status === "архив") {
       archiveDisk += 1;
-      if (inWorking(d)) counts.архив += 1;
+      if (inWorking(d) || d.recheckArchive === "1") counts.архив += 1;
     }
     if (chipStatus && d.status !== chipStatus) continue;
-    if (chipStatus === "архив" && d.status === "архив" && !archiveAll && !needle && !inWorking(d)) continue;
+    if (chipStatus === "архив" && d.status === "архив" && !archiveAll && !needle && !inWorking(d) && d.recheckArchive !== "1") continue;
     tariffCounts.all += 1;
     if (d.hasLiveTariff) tariffCounts.with += 1;
     else tariffCounts.without += 1;
@@ -2377,7 +2381,7 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
       if (d.status === "архив" && want !== "архив") return false;
       if (want === "архив") {
         if (d.status !== "архив") return false;
-        if (!archiveAll && !inWorking(d)) return false;
+        if (!archiveAll && !inWorking(d) && d.recheckArchive !== "1") return false;
       } else if (want && want !== "все") {
         if (d.status !== want) return false;
       } else if (!want) {

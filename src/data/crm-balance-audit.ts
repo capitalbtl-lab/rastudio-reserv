@@ -474,6 +474,69 @@ async function alfaShow(branch: number, cid: number, study = Number.NaN) {
       }
     }
   }
+  if (!found && !authStop && !stopped) {
+    archiveScan: for (const bid of branches) {
+      if (step5SessionStopped()) {
+        stopped = true;
+        break;
+      }
+      let retried = false;
+      for (;;) {
+        try {
+          const json = await request(`/v2api/${bid}/customer/index`, { id: cid, page: 0, removed: 2 }, t);
+          const items = crmUnwrapIndex(json).items;
+          const hit = items.find((x) => sameCustomerId((x as { id?: unknown }).id, cid)) as Record<string, unknown> | undefined;
+          if (hit) {
+            const rem = Number(hit.removed);
+            const eDate = step5Ymd(hit.e_date);
+            const today = step5MoscowDay();
+            const closed = Boolean(eDate) && eDate !== "2030-12-31" && eDate <= today;
+            if (rem === 2 || (rem !== 1 && closed)) {
+              return {
+                ok: false as const,
+                alfa: 0,
+                headerOk: false,
+                miss: "id" as const,
+                archived: true as const,
+                archiveStudy: step5StudyNum(hit.is_study),
+                lessonCount: null as number | null,
+                branch: bid,
+                switched: bid !== (Number(branch) || 1),
+                token: t,
+                request,
+                study: Number.NaN,
+                removed: rem,
+                authStop: false,
+                rejectCid: false,
+                stopped: false,
+              };
+            }
+            break archiveScan;
+          }
+          break;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/\b401\b|\b403\b/.test(msg)) {
+            authStop = true;
+            break archiveScan;
+          }
+          if (/\b400\b|\b422\b/.test(msg)) {
+            break;
+          }
+          if (/\b429\b/.test(msg) && !retried) {
+            retried = true;
+            const go = await step5WaitOrStop(120000);
+            if (!go) {
+              stopped = true;
+              break archiveScan;
+            }
+            continue;
+          }
+          break;
+        }
+      }
+    }
+  }
   if (!found) {
     return {
       ok: false as const,
@@ -762,6 +825,37 @@ export async function auditOne(cid: number, branchId: number) {
         headerStamped: first.headerStamped,
       } satisfies AuditHit,
       authStop: true,
+    };
+  }
+  if ("archived" in shown && shown.archived) {
+    const archiveStudy = "archiveStudy" in shown ? shown.archiveStudy : Number.NaN;
+    const was = archiveStudy === 0 || (archiveStudy !== 1 && first.study === 0) ? "лид" : "клиент";
+    const { upsertDossier } = await import("./dossiers");
+    upsertDossier({
+      crmId: id,
+      source: "step5-archive",
+      status: "архив",
+      extras: { removed: "2", recheckArchive: "1", was },
+      persist: true,
+      byCrmOnly: true,
+      quiet: true,
+    });
+    return {
+      hit: {
+        cid: id,
+        branchId: branch,
+        name: first.name,
+        clients: first.clients,
+        alfa: Number.NaN,
+        cash: first.cash,
+        woSum: first.woCal,
+        woN: first.woN,
+        codes: ["нет сверки", "архив"] as AuditCode[],
+        repaired: false,
+        at,
+        extra: "в архиве Alfa, из текущих ушёл",
+        headerStamped: first.headerStamped,
+      } satisfies AuditHit,
     };
   }
 

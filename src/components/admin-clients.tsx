@@ -1713,7 +1713,7 @@ export function AdminClients({
                         r.status === "учится" ? "bg-primary/10 text-primary" : r.status === "лид" ? "bg-amber-100 text-amber-900" : "bg-surface-2 text-muted",
                       )}
                     >
-                      {statusLabel(r.status)}
+                      {r.status === "архив" && r.was === "лид" ? "Архив · лид" : r.status === "архив" && r.was === "клиент" ? "Архив · клиент" : statusLabel(r.status)}
                     </span>
                     {r.archiveHidden && crmId ? (
                       <span

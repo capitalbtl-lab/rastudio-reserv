@@ -41,6 +41,7 @@ export type ArchivePerson = {
   lessons?: number;
   lastLessonAt?: number;
   funnel?: string;
+  recheckArchive?: string;
 };
 
 export type ArchiveCountReport = {
@@ -311,6 +312,7 @@ export function archiveCard(p: Pick<ArchivePerson, "study" | "removed" | "status
 }
 
 export function archiveEligible(p: ArchivePerson, keys: Set<string>, filters: ArchivePolicyFilters = DEFAULT_ARCHIVE_FILTERS, liveCids?: Set<number>) {
+  if (p.recheckArchive === "1") return false;
   if (!archiveCard(p)) return false;
   if (archiveRemoved(p)) return false;
   if (liveCids?.has(p.cid)) return false;
@@ -353,7 +355,7 @@ export function recountArchivePolicy(
   const next = new Set<number>();
   for (const cid of keepManual) {
     const row = byCid.get(cid);
-    if (!row || !archiveCard(row) || archiveRemoved(row) || !archiveWasClient(row) || liveCids?.has(cid)) {
+    if (!row || !archiveCard(row) || archiveRemoved(row) || !archiveWasClient(row) || liveCids?.has(cid) || row.recheckArchive === "1") {
       keepManual.delete(cid);
       continue;
     }
@@ -524,6 +526,7 @@ export function archivePersonFrom(d: {
     paidTill: String(ex.paid_till || ""),
     course: String((d as { coursePast?: string; course?: string }).coursePast || (d as { course?: string }).course || ""),
     funnel: String(ex.crm_funnel || ""),
+    recheckArchive: String(ex.recheckArchive || ""),
   };
 }
 
