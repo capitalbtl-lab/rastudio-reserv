@@ -1798,6 +1798,11 @@ export async function journalPull(opts: {
       const order = [2, 4, 5].filter((n) => want.includes(n));
       const cid = Number(opts.customerId) || 0;
       if (!cid || !order.length) return journalJobView();
+      let steps = order;
+      if (steps.includes(5) && !steps.includes(4)) {
+        const { payCustomerFilled } = await import("./crm-pay");
+        if (!payCustomerFilled(cid)) steps = [...steps.filter((n) => n < 5), 4, 5];
+      }
       let oneName = String(opts.name || `№${cid}`);
       try {
         const card = await ensureCustomerCard(cid, Number(opts.branchId) || 1);
@@ -1806,7 +1811,7 @@ export async function journalPull(opts: {
       } catch {
         /* карточка не открылась — шаги идут как раньше */
       }
-      const [first, ...rest] = order;
+      const [first, ...rest] = steps;
       startOnePersonStep({
         step: first,
         pipe: rest.map((n) => `one:${n}`),

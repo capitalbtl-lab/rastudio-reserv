@@ -703,7 +703,7 @@ export function startOnePersonStep(p: {
     return;
   }
   if (p.step === 4) {
-    startJournalJob({ ...common, mode: "person", kind: "balance" });
+    startJournalJob({ ...common, mode: "person", kind: "balance", dateFrom: "2015-01-01" });
     return;
   }
   startJournalJob({ ...common, mode: "audit", kind: "audit", recheck: false });
