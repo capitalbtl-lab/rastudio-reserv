@@ -457,6 +457,17 @@ export function applyCreatedLesson(slotId: string, day: number, timeFrom: string
   return listAdminSlots();
 }
 
+export function dropAdminGroup(branchId: number, groupId: number) {
+  const gid = Number(groupId) || 0;
+  const bid = Number(branchId) || 0;
+  if (!gid) return false;
+  const cur = listAdminSlots();
+  const next = cur.filter((s) => !(Number(s.groupId) === gid && (!bid || Number(s.branchId) === bid)));
+  if (next.length === cur.length) return false;
+  saveAdminSlots(next);
+  return true;
+}
+
 export function bumpGroupTaken(branchId: number, groupId: number, delta: number) {
   if (!groupId || !delta) return listAdminSlots();
   const next = listAdminSlots().map((s) => {

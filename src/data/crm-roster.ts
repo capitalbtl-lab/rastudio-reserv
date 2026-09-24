@@ -107,14 +107,33 @@ function stampLink(cid: number, branchId: number, groupId: number, name: string,
   });
 }
 
+async function groupArchivedInAlfa(branchId: number, gid: number, t: string) {
+  const bodies = [
+    { page: 0, pageSize: 1, id: gid },
+    { page: 0, pageSize: 1, id: gid, status_id: 3 },
+  ];
+  for (const body of bodies) {
+    const json = await request(`/v2api/${branchId}/group/index`, body, t).catch(() => null);
+    const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === gid);
+    if (!hit) continue;
+    return Number(hit.status_id) === 3;
+  }
+  return false;
+}
+
 export async function pullGroupRoster(opts: { groupId: number; branchId: number; name?: string; force?: boolean }) {
   const gid = Number(opts.groupId) || 0;
   const bid = Number(opts.branchId) || 0;
   const name = String(opts.name || `группа ${gid}`);
   const force = Boolean(opts.force);
-  if (!gid || !bid) return { ok: false as const, error: "Нет номера группы.", cgi: 0, added: 0, disk: 0, extra: "Нет номера группы." };
+  if (!gid || !bid) return { ok: false as const, error: "Нет номера группы.", cgi: 0, added: 0, disk: 0, extra: "Нет номера группы.", archived: false };
   const t = await alfaToken().catch(() => "");
-  if (!t) return { ok: false as const, error: "Нет входа в AlfaCRM.", cgi: 0, added: 0, disk: 0, extra: "Нет входа в AlfaCRM." };
+  if (!t) return { ok: false as const, error: "Нет входа в AlfaCRM.", cgi: 0, added: 0, disk: 0, extra: "Нет входа в AlfaCRM.", archived: false };
+  if (await groupArchivedInAlfa(bid, gid, t)) {
+    const { dropAdminGroup } = await import("./alfacrm-schedule");
+    dropAdminGroup(bid, gid);
+    return { ok: true as const, error: "", cgi: 0, added: 0, disk: 0, extra: `${name} в архиве Alfa. Из перепроверки убрана.`, archived: true };
+  }
   const live = new Set<number>();
   await pagedIndex(
     `/v2api/${bid}/cgi/index?group_id=${gid}`,
@@ -148,5 +167,5 @@ export async function pullGroupRoster(opts: { groupId: number; branchId: number;
   }
   const disk = dossiersInGroup(bid, gid).filter((d) => (d.groupLinks || []).some((l) => Number(l.id) === gid && l.active !== false)).length;
   const extra = `${name} · в Alfa ${live.size} · на диске ${disk}${added ? ` · новых карточек ${added}` : ""}`;
-  return { ok: true as const, error: "", cgi: live.size, added, disk, extra };
+  return { ok: true as const, error: "", cgi: live.size, added, disk, extra, archived: false };
 }

@@ -1973,7 +1973,7 @@ export async function journalPull(opts: {
       name: opts.name || hit?.name || `группа ${gid}`,
       force: Boolean(opts.recheck),
     });
-    if (res.ok) {
+    if (res.ok && !res.archived) {
       const prev = fillOf(useBid, gid);
       patchFill(useBid, gid, { roster: new Date().toISOString(), ...(opts.recheck ? { rechecked: [...new Set([...(prev.rechecked || []), "roster"])] } : {}) });
     }
