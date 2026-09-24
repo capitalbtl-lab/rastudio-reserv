@@ -1270,14 +1270,19 @@ export async function ensureCustomerCard(crmId: number, branchId: number) {
   const roleOk = study === "0" || study === "1" || removed === "2";
   if (named && roleOk) return have || null;
   const t = await alfaToken();
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const branches = [Number(branchId) || 0, 1, 2, 3, 4].filter((b, i, all) => b > 0 && all.indexOf(b) === i);
+  const bodies = [
+    { id, page: 0, is_study: 1 },
+    { id, page: 0, is_study: 0 },
+    { id, page: 0, removed: 1, is_study: 2 },
+    { id, page: 0, removed: 2, is_study: 1 },
+    { id, page: 0, removed: 2, is_study: 0 },
+  ];
   for (const b of branches) {
-    for (const body of [
-      { page: 0, pageSize: 1, id },
-      { page: 0, pageSize: 1, id, removed: 1 },
-    ]) {
-      const data = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/customer/index`, body, t).catch(() => ({ items: [] as Record<string, unknown>[] }));
-      const item = (data.items || []).find((x) => Number(x.id) === id);
+    for (const body of bodies) {
+      const json = await request(`/v2api/${b}/customer/index`, body, t).catch(() => null);
+      const item = crmUnwrapIndex(json).items.find((x) => Number(x.id) === id);
       if (!item) continue;
       return applyCrmCustomer(item, Number(item.branch_id) || b, Number(item.removed) === 2);
     }
