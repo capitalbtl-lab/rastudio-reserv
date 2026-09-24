@@ -1273,20 +1273,35 @@ export async function ensureCustomerCard(crmId: number, branchId: number) {
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const first = Number(branchId) || 1;
   const branches = [first, 1, 2, 3, 4].filter((b, i, all) => b > 0 && all.indexOf(b) === i);
-  const bodiesFor = (b: number) =>
-    b === first
-      ? [
-          { page: 0, pageSize: 10, id },
-          { page: 0, pageSize: 10, ids: [id] },
-          { page: 0, id },
-        ]
-      : [{ page: 0, pageSize: 10, id }];
+  const bodies: { body: Record<string, unknown>; study?: number }[] = [
+    { body: { page: 0, pageSize: 1, id, is_study: 1 }, study: 1 },
+    { body: { page: 0, pageSize: 1, id, is_study: 0 }, study: 0 },
+    { body: { page: 0, pageSize: 1, id } },
+    { body: { page: 0, pageSize: 1, id, is_study: 2 }, study: 2 },
+    { body: { page: 0, pageSize: 1, id, removed: 1 } },
+  ];
+  const ask = async (b: number, body: Record<string, unknown>) => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const json = await request(`/v2api/${b}/customer/index`, body, t);
+        return crmUnwrapIndex(json).items.find((x) => Number(x.id) === id) || null;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/\b429\b/.test(msg) && attempt === 0) {
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
+        }
+        return null;
+      }
+    }
+    return null;
+  };
   for (const b of branches) {
-    for (const body of bodiesFor(b)) {
-      const json = await request(`/v2api/${b}/customer/index`, body, t).catch(() => null);
-      const item = crmUnwrapIndex(json).items.find((x) => Number(x.id) === id);
+    for (const spec of bodies) {
+      const item = await ask(b, spec.body);
       if (!item) continue;
-      return applyCrmCustomer(item, Number(item.branch_id) || b, Number(item.removed) === 2);
+      if (item.is_study == null && spec.study != null) item.is_study = spec.study;
+      return applyCrmCustomer(item, Number(item.branch_id) || b, Number(item.removed) === 2 || spec.study === 2);
     }
   }
   return have || null;
