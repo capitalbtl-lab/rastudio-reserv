@@ -1360,6 +1360,22 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     return finishWaveOrStop(job, doneMsg(job));
   }
   let item = job.items[job.idx];
+  const singlePerson = (mode === "person" || (mode === "audit" && job.items.length === 1)) && (Number(item.cid) || 0) > 0;
+  if (singlePerson) {
+    try {
+      const { ensureCustomerCard } = await import("./dossiers");
+      const card = await ensureCustomerCard(Number(item.cid), Number(item.branchId) || Number(job.branchId) || 1);
+      const fio = String(card?.child?.fio || "").trim();
+      if (fio && fio !== item.name) {
+        const items = job.items.slice();
+        items[job.idx] = { ...item, name: fio };
+        item = items[job.idx];
+        job = patch({ id, items, oneName: fio });
+      }
+    } catch {
+      /* карточка не открылась — шаг идёт как раньше */
+    }
+  }
   const blue = mode === "groups-recheck";
   const windowed = blue && job.recheck;
   if (mode === "groups" && item.groupId && !item.periodKey) {

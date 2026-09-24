@@ -1258,6 +1258,33 @@ export async function syncDossierFromCrm(crmId: number, branchId: number) {
   return applyCrmCustomer(item, branchId);
 }
 
+/** Одно чтение карточки Alfa, если на сайте нет фамилии или роли. Чужих не трогает. */
+export async function ensureCustomerCard(crmId: number, branchId: number) {
+  const id = Number(crmId) || 0;
+  if (!id) return null;
+  const have = findDossier({ crmId: id });
+  const name = String(have?.child?.fio || "").trim();
+  const study = String(have?.extras?.is_study ?? "").trim();
+  const removed = String(have?.extras?.removed ?? "").trim();
+  const named = Boolean(name) && !/^клиент\s+\d+$/i.test(name);
+  const roleOk = study === "0" || study === "1" || removed === "2";
+  if (named && roleOk) return have || null;
+  const t = await alfaToken();
+  const branches = [Number(branchId) || 0, 1, 2, 3, 4].filter((b, i, all) => b > 0 && all.indexOf(b) === i);
+  for (const b of branches) {
+    for (const body of [
+      { page: 0, pageSize: 1, id },
+      { page: 0, pageSize: 1, id, removed: 1 },
+    ]) {
+      const data = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/customer/index`, body, t).catch(() => ({ items: [] as Record<string, unknown>[] }));
+      const item = (data.items || []).find((x) => Number(x.id) === id);
+      if (!item) continue;
+      return applyCrmCustomer(item, Number(item.branch_id) || b, Number(item.removed) === 2);
+    }
+  }
+  return have || null;
+}
+
 export async function syncAllFromCrm(
   onProgress?: (p: { step: string; n: number; total: number }) => void,
   studies: number[] = [1],
