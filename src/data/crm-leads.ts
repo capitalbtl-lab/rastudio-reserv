@@ -66,7 +66,7 @@ export {
   leadCardFromView,
 } from "./crm-leads-stages";
 
-type Bag = { at: number; stages: LeadStage[]; items: LeadCard[]; note?: string; delta?: boolean; step6?: boolean };
+type Bag = { at: number; stages: LeadStage[]; items: LeadCard[]; note?: string; delta?: boolean; step6?: boolean; step7?: boolean };
 
 function withoutStudents(items: LeadCard[]) {
   return items.filter((x) => !dossierIsStudying(x.id));
@@ -135,6 +135,73 @@ export function replaceStep6Branch(branchId: number, cards: LeadCard[], stages: 
 /** Один итог кассы на все карточки этого id. */
 export function stampStep6Cash(id: number, patch: Partial<LeadCard>) {
   const hit = bag().get("0");
+  if (!hit) return;
+  hit.items = hit.items.map((x) => (x.id === id ? { ...x, ...patch } : x));
+  hit.at = Date.now();
+  persistLeads();
+}
+
+const ARCH_STAGE: LeadStage = { id: 0, name: "Архив", color: "#6a6a6a", weight: 0, pipelineId: 0 };
+
+export function peekStep7Board() {
+  return bag().get("7") || null;
+}
+
+/** Архив шага 7. Доску лидов не трогает. */
+export function replaceStep7List(cards: LeadCard[]) {
+  const prev = bag().get("7");
+  const cash = new Map((prev?.items || []).map((x) => [x.id, x]));
+  const items = cards.map((c) => {
+    const old = cash.get(c.id);
+    return old ? { ...c, ...cashFields(old) } : c;
+  });
+  const next: Bag = { at: Date.now(), stages: [ARCH_STAGE], items, note: `шаг 7 · архив без живых групп: ${items.length}`, step7: true };
+  bag().set("7", next);
+  persistLeads();
+  return next;
+}
+
+function cashFields(old: LeadCard): Partial<LeadCard> {
+  return {
+    cashState: old.cashState,
+    cashSort: old.cashSort,
+    cashBalance: old.cashBalance,
+    cashFormula: old.cashFormula,
+    cashAt: old.cashAt,
+    cashPayN: old.cashPayN,
+    cashPaySum: old.cashPaySum,
+    cashCorrN: old.cashCorrN,
+    cashCorrSum: old.cashCorrSum,
+    cashRefundN: old.cashRefundN,
+    cashRefundSum: old.cashRefundSum,
+    cashGoodsN: old.cashGoodsN,
+    cashGoodsSum: old.cashGoodsSum,
+    cashGoodsFit: old.cashGoodsFit,
+    cashLesN: old.cashLesN,
+    cashLesSum: old.cashLesSum,
+    cashDiskPayN: old.cashDiskPayN,
+    cashDiskPaySum: old.cashDiskPaySum,
+    cashDiskCorrN: old.cashDiskCorrN,
+    cashDiskCorrSum: old.cashDiskCorrSum,
+    cashDiskRefundN: old.cashDiskRefundN,
+    cashDiskRefundSum: old.cashDiskRefundSum,
+    cashDiskGoodsN: old.cashDiskGoodsN,
+    cashDiskGoodsSum: old.cashDiskGoodsSum,
+    cashDiskLesN: old.cashDiskLesN,
+    cashDiskLesSum: old.cashDiskLesSum,
+    cashPayHole: old.cashPayHole,
+    cashPayExtra: old.cashPayExtra,
+    cashLesHole: old.cashLesHole,
+    cashLesExtra: old.cashLesExtra,
+    cashNoId: old.cashNoId,
+    cashNoCommission: old.cashNoCommission,
+    cashDiskKnown: old.cashDiskKnown,
+    cashBranches: old.cashBranches,
+  };
+}
+
+export function stampStep7Cash(id: number, patch: Partial<LeadCard>) {
+  const hit = bag().get("7");
   if (!hit) return;
   hit.items = hit.items.map((x) => (x.id === id ? { ...x, ...patch } : x));
   hit.at = Date.now();

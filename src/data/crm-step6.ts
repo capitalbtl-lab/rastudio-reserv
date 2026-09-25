@@ -5,7 +5,7 @@ import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-le
 import { kindFromAlfaPay, alfaPayIndexDate, extraPayTypeIds, payCustomerIdOf } from "./crm-pay-core";
 import { writeoffSumOf, uniqueBranches } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon } from "./crm-step5-canon";
-import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, readCrmLeadColumns } from "./crm-leads";
+import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, peekStep7Board, stampStep7Cash, readCrmLeadColumns } from "./crm-leads";
 import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
 import { loadCustomerCalendar } from "./group-cards";
 import { paysOf } from "./crm-pay";
@@ -20,9 +20,9 @@ const BRANCHES = [1, 2, 3, 4];
 const COL_LOG: StepLogSettings = { kind: "step6", recheck: false, src: "hands" };
 const CASH_LOG: StepLogSettings = { kind: "step6", recheck: true, src: "hands" };
 
-function writeStep6(settings: StepLogSettings, rows: Omit<StepLogRow, "id" | "at" | "runId" | "settings">[], close: boolean) {
+function writeStep6(settings: StepLogSettings, rows: Omit<StepLogRow, "id" | "at" | "runId" | "settings">[], close: boolean, step: 6 | 7 = 6) {
   try {
-    const run = beginStepRun({ step: 6, settings });
+    const run = beginStepRun({ step, settings });
     const at = new Date().toISOString();
     const next: StepLogRow[] = rows.map((row, i) => ({
       ...row,
@@ -219,14 +219,47 @@ function alfaCustomerCommission(row: Record<string, unknown>, customerId: number
   return Number.isFinite(n) ? n : null;
 }
 
+type CashPass = {
+  step: 6 | 7;
+  onlyId: number;
+  items: () => LeadCard[];
+  stamp: (id: number, patch: Partial<LeadCard>) => void;
+  customer: (id: number) => Record<string, unknown>;
+  emptyNote: string;
+  missingNote: string;
+};
+
 export async function recheckStep6Cash(onlyId = 0) {
-  const board = peekLeadBoard();
-  const items = board?.items || [];
-  const wanted = Number(onlyId) || 0;
+  return recheckCashPass({
+    step: 6,
+    onlyId,
+    items: () => peekLeadBoard()?.items || [],
+    stamp: stampStep6Cash,
+    customer: (id) => ({ id, is_study: 0, removed: 0, page: 0, pageSize: 1 }),
+    emptyNote: "Кассу шага 6 снимать некого. Сначала колонки.",
+    missingNote: "Этого лида нет на шаге 6.",
+  });
+}
+
+export async function recheckStep7Cash(onlyId = 0) {
+  return recheckCashPass({
+    step: 7,
+    onlyId,
+    items: () => peekStep7Board()?.items || [],
+    stamp: stampStep7Cash,
+    customer: (id) => ({ id, is_study: 1, removed: 2, page: 0, pageSize: 1 }),
+    emptyNote: "Кассу шага 7 снимать некого. Сначала прочитайте архив.",
+    missingNote: "Этого клиента нет на шаге 7.",
+  });
+}
+
+export async function recheckCashPass(opts: CashPass) {
+  const items = opts.items();
+  const wanted = Number(opts.onlyId) || 0;
   const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null || x.cashNoCommission == null || x.cashBranches == null)));
   const id = wanted || waiting[0]?.id || 0;
-  if (!id) return { ok: true as const, more: false, note: "Кассу шага 6 снимать некого. Сначала колонки." };
-  if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, error: "Этого лида нет на шаге 6." };
+  if (!id) return { ok: true as const, more: false, note: opts.emptyNote };
+  if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, error: opts.missingNote };
   const branches = [...new Set(items.filter((x) => x.id === id).map((x) => x.branchId).filter((n) => n > 0))];
   const scan = uniqueBranches(branches[0] || 1);
   dropAlfaIndex();
@@ -236,11 +269,7 @@ export async function recheckStep6Cash(onlyId = 0) {
   let failed = 0;
   for (const branch of scan) {
     try {
-      const json = await request<unknown>(
-        `/v2api/${branch}/customer/index`,
-        { id, is_study: 0, removed: 0, page: 0, pageSize: 1 },
-        tok,
-      );
+      const json = await request<unknown>(`/v2api/${branch}/customer/index`, opts.customer(id), tok);
       const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === id);
       if (!hit) continue;
       saw = true;
@@ -256,7 +285,7 @@ export async function recheckStep6Cash(onlyId = 0) {
   if (!saw && failed > 0) {
     const who = items.find((x) => x.id === id)?.name || `№${id}`;
     writeStep6(CASH_LOG, [{
-      step: 6,
+      step: opts.step,
       cid: id,
       branchId: branches[0],
       name: who,
@@ -265,15 +294,15 @@ export async function recheckStep6Cash(onlyId = 0) {
       ok: false,
       note: "Alfa не ответила",
       error: "Alfa не ответила",
-    }], false);
+    }], false, opts.step);
     throw new Error(`№${id} · Alfa не ответила`);
   }
   if (!saw || !Number.isFinite(header)) {
-    stampStep6Cash(id, { cashState: "no-balance", cashSort: "", cashAt: new Date().toISOString() });
-    const left = wanted ? false : (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");
+    opts.stamp(id, { cashState: "no-balance", cashSort: "", cashAt: new Date().toISOString() });
+    const left = wanted ? false : opts.items().some((x) => x.cashState === "wait");
     const who = items.find((x) => x.id === id)?.name || `№${id}`;
     writeStep6(CASH_LOG, [{
-      step: 6,
+      step: opts.step,
       cid: id,
       branchId: branches[0],
       name: who,
@@ -281,7 +310,7 @@ export async function recheckStep6Cash(onlyId = 0) {
       result: "skip",
       ok: true,
       note: "нет balance",
-    }], !left);
+    }], !left, opts.step);
     return { ok: true as const, more: left, note: `№${id} · нет balance` };
   }
   let cash = 0;
@@ -443,7 +472,7 @@ export async function recheckStep6Cash(onlyId = 0) {
   const payRows = payN + corrN + refundN;
   const empty = payRows === 0 && lessons === 0;
   const sort = lessons > 0 || (empty && !step5Close(header, 0)) ? "back" : payRows > 0 ? "paid" : "new";
-  stampStep6Cash(id, {
+  opts.stamp(id, {
     cashState: matched ? "ok" : "gap",
     cashSort: sort,
     cashBalance: header,
@@ -480,10 +509,10 @@ export async function recheckStep6Cash(onlyId = 0) {
     cashBranches,
   });
   const name = items.find((x) => x.id === id)?.name || `№${id}`;
-  const left = wanted ? false : (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");
+  const left = wanted ? false : opts.items().some((x) => x.cashState === "wait");
   const sortRu = sort === "new" ? "новый" : sort === "paid" ? "новый с деньгами" : "вернувшийся";
   writeStep6(CASH_LOG, [{
-    step: 6,
+    step: opts.step,
     cid: id,
     branchId: branches[0],
     name,
@@ -493,7 +522,7 @@ export async function recheckStep6Cash(onlyId = 0) {
     matched,
     note: `${sortRu} · шапка ${header} · формула ${fitted.n}${idMiss ? ` · id не сошлись ${idMiss}` : ""}`,
     after: { header, formula: fitted.n },
-  }], !left);
+  }], !left, opts.step);
   return {
     ok: true as const,
     more: left,

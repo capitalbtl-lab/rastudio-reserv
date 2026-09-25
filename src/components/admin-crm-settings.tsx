@@ -373,7 +373,7 @@ const CRM_SET_TABS = [
   { id: "branches", label: "Филиалы" },
 ] as const;
 type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
-type HistTab = "roster" | "groups" | "students" | "money" | "audit" | "step6";
+type HistTab = "roster" | "groups" | "students" | "money" | "audit" | "step6" | "step7";
 const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "roster", label: "Шаг 1 · Группы и состав" },
   { id: "students", label: "Шаг 2 · Календарь ученика" },
@@ -381,6 +381,7 @@ const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "money", label: "Шаг 4 · Деньги на карточке" },
   { id: "audit", label: "Шаг 5 · Сверка остатка" },
   { id: "step6", label: "Шаг 6 · Лиды" },
+  { id: "step7", label: "Шаг 7 · Архив" },
 ];
 const PEOPLE_LOAD_GAP_MS = 5000;
 const CATALOG_GAP_MS = 5000;
@@ -2359,14 +2360,14 @@ function step6Why(x: Step6Item) {
   return bits.join(" ");
 }
 
-function Step6Panel() {
+function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [cashing, setCashing] = useState(false);
   const [oneId, setOneId] = useState(0);
   const stopCash = useRef(false);
   const [items, setItems] = useState<Step6Item[]>([]);
-  const [stages, setStages] = useState<LeadStage[]>(LEAD_STAGES);
+  const [stages, setStages] = useState<LeadStage[]>(archive ? [{ id: 0, name: "Архив", color: "#6a6a6a", weight: 0, pipelineId: 0 }] : LEAD_STAGES);
   const [query, setQuery] = useState("");
   const [branch, setBranch] = useState(0);
   const [col, setCol] = useState<"all" | number>("all");
@@ -2378,7 +2379,7 @@ function Step6Panel() {
   const [pageRight, setPageRight] = useState(0);
 
   async function loadList() {
-    const res = (await adminSchedule({ data: { token: token(), action: "leadsBoard", branchId: 0 } as never })) as {
+    const res = (await adminSchedule({ data: { token: token(), action: archive ? "step7Board" : "leadsBoard", branchId: 0 } as never })) as {
       ok?: boolean;
       error?: string;
       items?: Step6Item[];
@@ -2404,7 +2405,7 @@ function Step6Panel() {
   function readColumns() {
     setBusy(true);
     setNote("Читаю колонки…");
-    void adminSchedule({ data: { token: token(), action: "step6Columns" } as never })
+    void adminSchedule({ data: { token: token(), action: archive ? "step7List" : "step6Columns" } as never })
       .then(async (res) => {
         const r = res as { ok?: boolean; error?: string; note?: string };
         setNote(r.ok ? r.note || "Колонки записаны." : r.error || "Не прочиталось.");
@@ -2421,7 +2422,7 @@ function Step6Panel() {
     setNote("Снимаю кассу…");
     const run = async () => {
       for (;;) {
-        const res = (await adminSchedule({ data: { token: token(), action: "step6Cash" } as never })) as {
+        const res = (await adminSchedule({ data: { token: token(), action: archive ? "step7Cash" : "step6Cash" } as never })) as {
           ok?: boolean;
           error?: string;
           note?: string;
@@ -2453,7 +2454,7 @@ function Step6Panel() {
     setBusy(true);
     setOneId(id);
     setNote("Снимаю кассу…");
-    void adminSchedule({ data: { token: token(), action: "step6Cash", customerId: id } as never })
+    void adminSchedule({ data: { token: token(), action: archive ? "step7Cash" : "step6Cash", customerId: id } as never })
       .then(async (res) => {
         const r = res as { ok?: boolean; error?: string; note?: string };
         setNote(r.ok ? r.note || "Касса снята." : r.error || "Касса не снялась.");
@@ -2524,7 +2525,7 @@ function Step6Panel() {
       <li key={key} className={cn("rounded-2xl bg-white px-4 py-3 ring-1", ok ? "ring-emerald-200" : aside || x.cashState === "gap" || x.cashState === "no-balance" ? "ring-amber-200" : "ring-black/8")}>
         <div className="flex items-center gap-3">
           <button type="button" className="min-w-0 flex-1 truncate text-left font-medium leading-tight" onClick={() => setOpen(shown ? "" : key)}>
-            {x.name || `лид ${x.id}`}
+            {x.name || (archive ? `клиент ${x.id}` : `лид ${x.id}`)}
           </button>
           <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[0.72rem] font-semibold", ok ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950")}>
             {word}
@@ -2534,7 +2535,7 @@ function Step6Panel() {
           </button>
         </div>
         <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
-          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {stageName(x.statusId)} · {step6SortWord(x.cashSort)}
+          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? "архив, не в живой группе" : stageName(x.statusId)} · {step6SortWord(x.cashSort)}
           {x.cashState && x.cashState !== "wait" ? ` · шапка ${rubAudit(x.cashBalance)} · формула ${rubAudit(x.cashFormula)}` : ""}
         </p>
         {ok ? null : (
@@ -2546,7 +2547,7 @@ function Step6Panel() {
         )}
         {shown ? (
           <div className="mt-3 border-t border-black/5 pt-3 text-[0.72rem] leading-snug">
-            <p>Филиал — {step6Branch(x.branchId)}. Колонка — {stageName(x.statusId)}. Разбор — {step6SortWord(x.cashSort)}.</p>
+            <p>Филиал — {step6Branch(x.branchId)}. {archive ? "Архивный клиент, в живых группах его нет." : `Колонка — ${stageName(x.statusId)}.`} Разбор — {step6SortWord(x.cashSort)}.</p>
             <table className="mt-2 w-full text-left text-[0.72rem] leading-snug">
               <thead>
                 <tr className="text-muted">
@@ -2642,23 +2643,25 @@ function Step6Panel() {
   return (
     <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
       <div className="flex items-center gap-2 font-display text-[1.15rem]">
-        Лиды
+        {archive ? "Архив" : "Лиды"}
         <button type="button" className="ml-auto h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setLogOpen(true)}>Лог шага</button>
       </div>
-      <StepRunLogModal open={logOpen} step={6} onClose={() => setLogOpen(false)} tick={note} />
+      <StepRunLogModal open={logOpen} step={archive ? 7 : 6} onClose={() => setLogOpen(false)} tick={note} />
       <p className="mt-1 text-sm text-muted">
-        Активные лиды по филиалам. Колонка — этап воронки. Касса — отдельная кнопка, в роль и в шаг 5 не пишется.
+        {archive
+          ? "Архивные клиенты, которых нет в живых группах. Касса считается как на шаге 6: шапка Alfa и формула. В роль и в шаг 5 не пишется."
+          : "Активные лиды по филиалам. Колонка — этап воронки. Касса — отдельная кнопка, в роль и в шаг 5 не пишется."}
       </p>
       <p className="mt-3 text-sm">
-        карточек {inBranch.length}{colParts.length ? ` · ${colParts.join(" · ")}` : ""} · не в колонке {asideN} · касса совпала {inBranch.filter((x) => x.cashState === "ok").length} · не сошлось {inBranch.filter((x) => x.cashState === "gap").length} · ещё не снимали {inBranch.filter((x) => !x.cashState || x.cashState === "wait").length}
+        карточек {inBranch.length}{archive ? "" : `${colParts.length ? ` · ${colParts.join(" · ")}` : ""} · не в колонке ${asideN}`} · касса совпала {inBranch.filter((x) => x.cashState === "ok").length} · не сошлось {inBranch.filter((x) => x.cashState === "gap").length} · ещё не снимали {inBranch.filter((x) => !x.cashState || x.cashState === "wait").length}
         {note ? ` · ${note}` : ""}
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
-        <button type="button" className={cn(BTN_RED, busy && "ra-progress-run")} disabled={busy} onClick={readColumns}>Прочитать колонки</button>
+        <button type="button" className={cn(BTN_RED, busy && "ra-progress-run")} disabled={busy} onClick={readColumns}>{archive ? "Прочитать архив" : "Прочитать колонки"}</button>
         <button type="button" className={BTN_GHOST} disabled={busy || !items.length} onClick={readCash}>Перепроверить кассу</button>
-        <button type="button" className={BTN_GHOST} disabled={!cashing} onClick={() => { stopCash.current = true; setNote("Стоп после этого лида."); }}>Стоп</button>
+        <button type="button" className={BTN_GHOST} disabled={!cashing} onClick={() => { stopCash.current = true; setNote(archive ? "Стоп после этого клиента." : "Стоп после этого лида."); }}>Стоп</button>
       </div>
-      <input className="mt-3 h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10" placeholder="Найти лида…" value={query} onChange={(e) => { setQuery(e.target.value); setPageLeft(0); setPageRight(0); }} />
+      <input className="mt-3 h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10" placeholder={archive ? "Найти клиента…" : "Найти лида…"} value={query} onChange={(e) => { setQuery(e.target.value); setPageLeft(0); setPageRight(0); }} />
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {[{ id: 0, label: "Все филиалы" }, ...[1, 2, 3, 4].map((id) => ({ id, label: step6Branch(id) }))].map((b) => (
           <button key={b.id} type="button" className={cn(chips, branch === b.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setBranch(b.id); setPageLeft(0); setPageRight(0); }}>
@@ -2666,6 +2669,7 @@ function Step6Panel() {
           </button>
         ))}
       </div>
+      {archive ? null : (
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <button type="button" className={cn(chips, col === "all" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol("all")}>Все</button>
         <button type="button" className={cn(chips, col === -1 ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol(-1)}>не в колонке · {inBranch.filter((x) => x.statusId < 0).length}</button>
@@ -2675,6 +2679,7 @@ function Step6Panel() {
           </button>
         ))}
       </div>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {([
           ["all", "Вся касса"],
@@ -2685,7 +2690,7 @@ function Step6Panel() {
           ["gap", "не сошлось"],
           ["no-balance", "нет balance"],
           ["aside", "не в колонке"],
-        ] as const).map(([id, label]) => (
+        ] as const).filter(([id]) => !archive || id !== "aside").map(([id, label]) => (
           <button key={id} type="button" className={cn(chips, sort === id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setSort(id); setPageLeft(0); setPageRight(0); }}>
             {label}
           </button>
@@ -2697,7 +2702,7 @@ function Step6Panel() {
           ))}
         </span>
       </div>
-      {!items.length ? <p className="mt-3 text-sm text-muted">Колонки ещё не читали. Список появится после «Прочитать колонки».</p> : null}
+      {!items.length ? <p className="mt-3 text-sm text-muted">{archive ? "Архив ещё не читали. Список появится после «Прочитать архив»." : "Колонки ещё не читали. Список появится после «Прочитать колонки»."}</p> : null}
       <div className="mt-3 grid items-stretch gap-3 lg:grid-cols-2">
         <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
           <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -3375,7 +3380,7 @@ export function AdminCrmSettings() {
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
       const tab = t === "historyAuto" ? "history" : t;
       if (CRM_SET_TABS.some((x) => x.id === tab)) setCrmTab(tab as CrmSetTab);
-      if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit" || h === "step6") setHistTab(h);
+      if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit" || h === "step6" || h === "step7") setHistTab(h);
     } catch {
       /* */
     }
@@ -4798,7 +4803,7 @@ export function AdminCrmSettings() {
                     >
                       {t.label}
                     </button>
-                    {t.id === "step6" ? null : <LoadGuideBtn tab={t.id as HistLoadTab} onOpen={setLoadGuide} />}
+                    {t.id === "step6" || t.id === "step7" ? null : <LoadGuideBtn tab={t.id as HistLoadTab} onOpen={setLoadGuide} />}
                   </span>
                 ))}
               </div>
@@ -5713,6 +5718,7 @@ export function AdminCrmSettings() {
               ) : null}
 
               {histTab === "step6" ? <Step6Panel /> : null}
+              {histTab === "step7" ? <Step6Panel archive /> : null}
             </div>
           );
         })()}

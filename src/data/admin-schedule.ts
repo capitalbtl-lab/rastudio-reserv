@@ -1200,6 +1200,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "leadsBoard"
           | "step6Columns"
           | "step6Cash"
+          | "step7List"
+          | "step7Board"
+          | "step7Cash"
           | "leadMove"
           | "leadArchive"
           | "leadStageSave"
@@ -2614,6 +2617,30 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return { ok: false as const, error: e instanceof Error ? e.message : "Касса шага 6 не снялась." };
       }
     }
+    if (data.action === "step7List") {
+      const { syncStep7List } = await import("./crm-step7");
+      try {
+        const res = await syncStep7List();
+        return { ok: true as const, note: res.note };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Шаг 7 не прочитал архив." };
+      }
+    }
+    if (data.action === "step7Board") {
+      const { peekStep7Board } = await import("./crm-leads");
+      const board = peekStep7Board();
+      return { ok: true as const, stages: board?.stages || [], items: board?.items || [], total: board?.items.length || 0, note: board?.note || "" };
+    }
+    if (data.action === "step7Cash") {
+      const { recheckStep7Cash } = await import("./crm-step6");
+      try {
+        const res = await recheckStep7Cash(Number((data as { customerId?: number }).customerId) || 0);
+        if (!res.ok) return { ok: false as const, error: res.error || "Касса шага 7 не снялась.", more: false };
+        return { ok: true as const, note: res.note, more: res.more };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Касса шага 7 не снялась." };
+      }
+    }
     if (data.action === "leadMove") {
       const { moveLead } = await import("./crm-leads");
       const branch = Number(data.branchId) || 1;
@@ -3134,7 +3161,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const op = String(data.kind || "list");
       const runId = String(data.runId || data.name || "").trim();
       const rowId = String(data.rowId || "").trim();
-      const stepN = Number(data.step) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+      const stepN = Number(data.step) as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
       if (op === "get") {
         const run = runId ? loadRun(runId) : null;
         if (!run) return { ok: false as const, error: "Прогон не найден." };
