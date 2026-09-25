@@ -2397,7 +2397,7 @@ function Step6Panel() {
     if (sort === "gap" || sort === "no-balance") return x.cashState === sort;
     return x.cashSort === sort;
   });
-  const closed = (x: Step6Item) => x.statusId >= 0 && x.cashState === "ok";
+  const closed = (x: Step6Item) => x.cashState === "ok";
   const left = filtered.filter((x) => !closed(x)).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id);
   const right = filtered.filter(closed).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id);
   const pagesL = Math.max(1, Math.ceil(left.length / pageSize) || 1);
@@ -2514,7 +2514,7 @@ function Step6Panel() {
             <h4 className="font-display text-[1.05rem] text-rose-900">Не закрыто · {left.length}</h4>
             {pager(safeL, pagesL, setPageLeft)}
           </div>
-          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Нет колонки, касса не снята или не сошлась.</p>
+          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Касса ещё не снята, не сошлась или нет balance.</p>
           <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto p-0.5">{sliceL.map(card)}</ul>
         </section>
         <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
@@ -2522,7 +2522,7 @@ function Step6Panel() {
             <h4 className="font-display text-[1.05rem] text-emerald-900">Совпало · {right.length}</h4>
             {pager(safeR, pagesR, setPageRight)}
           </div>
-          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Колонка есть, шапка и формула сошлись.</p>
+          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Шапка и формула сошлись. Колонка и филиал остаются на карточке.</p>
           <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto p-0.5">{sliceR.map(card)}</ul>
         </section>
       </div>
