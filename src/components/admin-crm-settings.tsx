@@ -1445,8 +1445,8 @@ function auditReasonHit(r: AuditSegIn, id: string) {
 }
 
 function rubAudit(n?: number) {
+  if (n == null || !Number.isFinite(Number(n))) return "не собрали";
   const x = Number(n);
-  if (!Number.isFinite(x)) return "не собрали";
   const v = Math.round(x * 100) / 100;
   const body = Math.abs(v - Math.round(v)) < 0.005
     ? String(Math.round(Math.abs(v)))
@@ -2162,7 +2162,7 @@ function asAuditRow(
   r: { cid: number; branchId: number; name: string; groups?: string[]; alfaRole?: "лид" | "клиент" | "архив"; status?: string; study?: number; funnel?: string; leadStatus?: number; cashPaysN?: number;
   cashRefundN?: number; cashCorrN?: number; cashGoodsN?: number; cashPaysSum?: number;
   cashRefundSum?: number; cashCorrSum?: number; cashGoodsSum?: number },
-  h?: { clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; alfaWoSum?: number; alfaWoN?: number; alfaWoOk?: boolean; woSum?: number; woN?: number; headerStamped?: number; unitScale?: number },
+  h?: { name?: string; clients?: number; alfa?: number; cash?: number; codes?: string[]; extra?: string; at?: string; alfaPaysN?: number; alfaCorrN?: number; alfaGoodsN?: number; alfaPaysSum?: number; alfaCorrSum?: number; alfaGoodsSum?: number; alfaSplitOk?: boolean; alfaWoSum?: number; alfaWoN?: number; alfaWoOk?: boolean; woSum?: number; woN?: number; headerStamped?: number; unitScale?: number },
 ): AuditUiRow {
   const rawCodes = h?.codes;
   const revived = step5ReviveEmptySkip({ codes: rawCodes, extra: h?.extra, clients: h?.clients, cash: h?.cash });
@@ -2170,10 +2170,12 @@ function asAuditRow(
   const k = Number(h?.unitScale) === 100 ? 100 : 1;
   const rub = (n?: number) => (n == null || !Number.isFinite(Number(n)) ? n : Number(n) / k);
   const money0 = (n?: number) => (revived && !Number.isFinite(Number(n)) ? 0 : n);
+  const hitName = String(h?.name || "").trim();
+  const namedHit = Boolean(hitName) && !/^клиент\s+\d+$/i.test(hitName);
   return {
     cid: r.cid,
     branchId: r.branchId,
-    name: r.name,
+    name: namedHit ? hitName : r.name,
     groups: r.groups || [],
     clients: money0(h?.clients),
     alfaMoney: money0(h?.alfa),

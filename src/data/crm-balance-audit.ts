@@ -406,7 +406,7 @@ function archiveEdateClosed(raw: unknown, today: string) {
   return ymd <= today;
 }
 
-async function alfaShow(branch: number, cid: number, study = Number.NaN) {
+async function alfaShow(branch: number, cid: number, _study = Number.NaN) {
   const { token, request } = await import("./alfacrm");
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const t = await token();
@@ -436,11 +436,9 @@ async function alfaShow(branch: number, cid: number, study = Number.NaN) {
   let rejectCid = false;
   let stopped = false;
   const bodies: Record<string, unknown>[] = [
-    { id: cid, page: 0 },
-    { id: cid, page: 0, removed: 1 },
-    { id: cid, page: 0, is_study: 2 },
-    { id: cid, page: 0, is_study: Number(study) === 0 ? 0 : 1 },
-    { id: cid, page: 0, is_study: Number(study) === 0 ? 1 : 0 },
+    { id: cid, is_study: 1, removed: 1, page: 0 },
+    { id: cid, is_study: 0, page: 0 },
+    { id: cid, is_study: 2, removed: 1, page: 0 },
   ];
   outer: for (const bid of branches) {
     if (step5SessionStopped()) {

@@ -1272,13 +1272,11 @@ export async function ensureCustomerCard(crmId: number, branchId: number) {
   const t = await alfaToken();
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const first = Number(branchId) || 1;
-  const branches = [first, 1, 2, 3, 4].filter((b, i, all) => b > 0 && all.indexOf(b) === i);
-  const bodies: { body: Record<string, unknown>; study?: number }[] = [
-    { body: { page: 0, pageSize: 1, id, is_study: 1 }, study: 1 },
-    { body: { page: 0, pageSize: 1, id, is_study: 0 }, study: 0 },
-    { body: { page: 0, pageSize: 1, id } },
-    { body: { page: 0, pageSize: 1, id, is_study: 2 }, study: 2 },
-    { body: { page: 0, pageSize: 1, id, removed: 1 } },
+  const branches = [1, first, 2, 3, 4].filter((b, i, all) => b > 0 && all.indexOf(b) === i);
+  const bodies: { body: Record<string, unknown>; study?: 0 | 1 }[] = [
+    { body: { id, is_study: 1, removed: 1, page: 0 }, study: 1 },
+    { body: { id, is_study: 0, page: 0 }, study: 0 },
+    { body: { id, is_study: 2, removed: 1, page: 0 } },
   ];
   const ask = async (b: number, body: Record<string, unknown>) => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1301,7 +1299,8 @@ export async function ensureCustomerCard(crmId: number, branchId: number) {
       const item = await ask(b, spec.body);
       if (!item) continue;
       if (item.is_study == null && spec.study != null) item.is_study = spec.study;
-      return applyCrmCustomer(item, Number(item.branch_id) || b, Number(item.removed) === 2 || spec.study === 2);
+      const branchOf = Number(Array.isArray(item.branch_ids) ? item.branch_ids[0] : item.branch_id) || b;
+      return applyCrmCustomer(item, branchOf, Number(item.removed) === 2);
     }
   }
   return have || null;
