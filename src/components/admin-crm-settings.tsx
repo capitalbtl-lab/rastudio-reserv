@@ -2339,6 +2339,7 @@ function Step6Panel() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [cashing, setCashing] = useState(false);
+  const [oneId, setOneId] = useState(0);
   const stopCash = useRef(false);
   const [items, setItems] = useState<Step6Item[]>([]);
   const [stages, setStages] = useState<LeadStage[]>(LEAD_STAGES);
@@ -2424,6 +2425,23 @@ function Step6Panel() {
       });
   }
 
+  function readOne(id: number) {
+    setBusy(true);
+    setOneId(id);
+    setNote("Снимаю кассу…");
+    void adminSchedule({ data: { token: token(), action: "step6Cash", customerId: id } as never })
+      .then(async (res) => {
+        const r = res as { ok?: boolean; error?: string; note?: string };
+        setNote(r.ok ? r.note || "Касса снята." : r.error || "Касса не снялась.");
+        if (r.ok) await loadList();
+      })
+      .catch((e) => setNote(e instanceof Error ? e.message : "Касса не снялась."))
+      .finally(() => {
+        setBusy(false);
+        setOneId(0);
+      });
+  }
+
   const q = query.trim().toLowerCase();
   const named = items.filter((x) => !q || x.name.toLowerCase().includes(q) || String(x.id).includes(q));
   const byBranch = (id: number) => named.filter((x) => x.branchId === id).length;
@@ -2484,6 +2502,13 @@ function Step6Panel() {
           №{x.id} · {step6Branch(x.branchId)} · {stageName(x.statusId)} · {step6SortWord(x.cashSort)}
           {x.cashState && x.cashState !== "wait" ? ` · шапка ${rubAudit(x.cashBalance)} · формула ${rubAudit(x.cashFormula)}` : ""}
         </p>
+        {ok ? null : (
+          <div className="mt-2">
+            <button type="button" disabled={busy} className={cn(BTN_LOAD_SM, "w-fit px-4", oneId === x.id && "ra-progress-run", busy && oneId !== x.id && "opacity-50")} onClick={() => readOne(x.id)}>
+              Перепроверить этого
+            </button>
+          </div>
+        )}
         {shown ? (
           <div className="mt-3 border-t border-black/5 pt-3 text-[0.72rem] leading-snug">
             <p>Филиал — {step6Branch(x.branchId)}. Колонка — {stageName(x.statusId)}. Разбор — {step6SortWord(x.cashSort)}.</p>

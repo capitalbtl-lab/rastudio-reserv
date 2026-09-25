@@ -174,12 +174,14 @@ function payParts(item: Record<string, unknown>) {
   return { kind, product: false, n, goods: 0 };
 }
 
-export async function recheckStep6Cash() {
+export async function recheckStep6Cash(onlyId = 0) {
   const board = peekLeadBoard();
   const items = board?.items || [];
+  const wanted = Number(onlyId) || 0;
   const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && x.cashPayN == null));
-  const id = waiting[0]?.id || 0;
+  const id = wanted || waiting[0]?.id || 0;
   if (!id) return { ok: true as const, more: false, note: "Кассу шага 6 снимать некого. Сначала колонки." };
+  if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, error: "Этого лида нет на шаге 6." };
   const branches = [...new Set(items.filter((x) => x.id === id).map((x) => x.branchId).filter((n) => n > 0))];
   dropAlfaIndex();
   const tok = await alfaToken();
@@ -222,7 +224,7 @@ export async function recheckStep6Cash() {
   }
   if (!saw || !Number.isFinite(header)) {
     stampStep6Cash(id, { cashState: "no-balance", cashSort: "", cashAt: new Date().toISOString() });
-    const left = (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");
+    const left = wanted ? false : (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");
     const who = items.find((x) => x.id === id)?.name || `№${id}`;
     writeStep6(CASH_LOG, [{
       step: 6,
@@ -300,7 +302,7 @@ export async function recheckStep6Cash() {
     cashLesSum: writeoff,
   });
   const name = items.find((x) => x.id === id)?.name || `№${id}`;
-  const left = (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");
+  const left = wanted ? false : (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");
   const sortRu = sort === "new" ? "новый" : sort === "paid" ? "новый с деньгами" : "вернувшийся";
   writeStep6(CASH_LOG, [{
     step: 6,

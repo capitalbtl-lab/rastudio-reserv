@@ -2607,7 +2607,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "step6Cash") {
       const { recheckStep6Cash } = await import("./crm-step6");
       try {
-        const res = await recheckStep6Cash();
+        const res = await recheckStep6Cash(Number((data as { customerId?: number }).customerId) || 0);
+        if (!res.ok) return { ok: false as const, error: res.error || "Касса шага 6 не снялась.", more: false };
         return { ok: true as const, note: res.note, more: res.more };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Касса шага 6 не снялась." };
