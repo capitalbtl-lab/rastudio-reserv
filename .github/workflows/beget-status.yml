@@ -20,24 +20,32 @@ jobs:
             set +e
             cd /var/www/rastudio
             node --input-type=module <<'EOF'
-            import { readFileSync } from "node:fs";
-            const raw = JSON.parse(readFileSync("storage/dossiers.json", "utf8"));
-            let leadWord = 0, leadOk = 0, archWord = 0, archRemoved = 0, archRecheck = 0, study0statusArch = 0;
+            import { copyFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+            const path = "storage/dossiers.json";
+            const raw = JSON.parse(readFileSync(path, "utf8"));
+            let toLead = 0, toStudy = 0, kept = 0, other = 0;
             for (const d of raw.items || []) {
+              if (String(d.status || "") !== "архив") continue;
               const ex = d.extras || {};
               const study = ex.is_study === "" || ex.is_study == null ? NaN : Number(ex.is_study);
-              const st = String(d.status || "");
               const removed = String(ex.removed ?? "");
               const rec = String(ex.recheckArchive || "");
-              if (st === "архив") archWord++;
-              if (st === "архив" && removed === "2") archRemoved++;
-              if (st === "архив" && rec === "1") archRecheck++;
-              if (study === 0 && st === "архив") study0statusArch++;
-              if (study === 0 && st === "лид") leadOk++;
-              if (study === 0 && st === "архив" && removed !== "2" && rec !== "1") leadWord++;
+              if (removed === "2" || rec === "1") { kept++; continue; }
+              if (study === 0) { d.status = "лид"; toLead++; continue; }
+              if (study === 1) { d.status = "учится"; toStudy++; continue; }
+              other++;
             }
-            console.log(JSON.stringify({ archWord, archRemoved, archRecheck, study0statusArch, leadWord, leadOk }));
+            const changed = toLead + toStudy;
+            if (changed) {
+              copyFileSync(path, "storage/dossiers.json.bak-status-word");
+              const tmp = path + ".tmp-status-word";
+              writeFileSync(tmp, JSON.stringify(raw));
+              renameSync(tmp, path);
+            }
+            console.log(JSON.stringify({ toLead, toStudy, kept, other, changed }));
             EOF
+            pm2 restart rastudio rastudio-history --update-env >/tmp/ra-restart-status.log 2>&1 || true
+            echo restarted
             echo "=== probe ==="
             cd /var/www/rastudio
             cat > /tmp/ra-probe.mjs <<'NODE'
