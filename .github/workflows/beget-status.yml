@@ -18,61 +18,36 @@ jobs:
           command_timeout: 1m
           script: |
             set +e
+            echo "=== time ==="
+            date -u
+            echo "=== git ==="
             cd /var/www/rastudio
-            node --input-type=module <<'EOF'
-            import { readFileSync } from "node:fs";
-            const raw = JSON.parse(readFileSync("storage/dossiers.json", "utf8"));
-            function diskIsArchive(it) {
-              if (Number(it.removed) === 1) return false;
-              if (Number(it.removed) === 2) return true;
-              const study = it.is_study === "" || it.is_study == null ? NaN : Number(it.is_study);
-              return study === 2;
-            }
-            function personRole(it) {
-              if (Number(it.removed) === 1) return "удалён";
-              if (diskIsArchive(it)) return "архив";
-              const study = it.is_study === "" || it.is_study == null ? NaN : Number(it.is_study);
-              if (study === 1) return "учится";
-              if (study === 0) return "лид";
-              if (String(it.crm_funnel || "") === "1") return "лид";
-              const st = String(it.status || "");
-              if (st === "лид" || st === "учится" || st === "архив" || st === "удалён") return st;
-              return "удалён";
-            }
-            const why = {};
-            let leads = 0, arch = 0, cur = 0, rows = 0;
-            let rawArchButLead = 0, study0 = 0, funnel = 0, rawLead = 0;
-            for (const d of raw.items || []) {
-              const ex = d.extras || {};
-              const role = personRole({ is_study: ex.is_study, removed: ex.removed, crm_funnel: ex.crm_funnel, status: d.status });
-              if (role === "удалён") continue;
-              rows++;
-              const removed = String(ex.removed || "");
-              const rec = String(ex.recheckArchive || "");
-              const isArch = role === "архив" || rec === "1" || removed === "2";
-              if (isArch) { arch++; continue; }
-              if (role === "лид") {
-                leads++;
-                const study = ex.is_study === "" || ex.is_study == null ? NaN : Number(ex.is_study);
-                const key = study === 0 ? "is_study0" : String(ex.crm_funnel || "") === "1" ? "funnel" : "status";
-                why[key] = (why[key] || 0) + 1;
-                if (String(d.status) === "архив") rawArchButLead++;
-                if (study === 0) study0++;
-                if (String(ex.crm_funnel || "") === "1") funnel++;
-                if (String(d.status) === "лид") rawLead++;
-              } else if (role === "учится") cur++;
-            }
-            console.log(JSON.stringify({ rows, leads, arch, cur, why, rawArchButLead, study0, funnel, rawLead }));
-            try {
-              const board = JSON.parse(readFileSync("storage/crm-leads-board.json", "utf8"));
-              const cards = board.cards || board.items || board.leads || [];
-              const n = Array.isArray(cards) ? cards.length : 0;
-              const keys = Object.keys(board).slice(0, 12);
-              console.log(JSON.stringify({ boardKeys: keys, boardN: n, boardCount: board.count || board.total || null }));
-            } catch (e) {
-              console.log(JSON.stringify({ boardErr: String(e.message || e).slice(0, 120) }));
-            }
-            EOF
+            git rev-parse --short HEAD
+            git log -1 --oneline
+            echo "=== live stamp ==="
+            cat .output/.deploy-rev 2>/dev/null | cut -c1-7
+            cat .deploy-rev 2>/dev/null | cut -c1-7
+            echo "=== lock ==="
+            ls -l /tmp/rastudio-deploy.lock 2>/dev/null || echo no-lock
+            echo "=== stage ==="
+            ls -d /var/www/rastudio/.build-stage 2>/dev/null || echo no-stage
+            echo "=== mem ==="
+            free -h | head -2
+            nproc
+            echo "=== pm2 ==="
+            pm2 jlist | python3 -c "import json,sys; d=json.load(sys.stdin);
+            [print(p.get('name'), p.get('pm2_env',{}).get('status'), p.get('pid')) for p in d]"
+            echo "=== procs ==="
+            ps aux | awk '/node|npm|vite/ && !/awk/ {print $2,$3,$4,$11,$12,$13}' | head -20
+            echo "=== log tail ==="
+            tail -n 40 /tmp/rastudio-deploy.bg.log 2>/dev/null || echo no-log
+            echo "=== pm2 err ==="
+            pm2 logs rastudio --nostream --lines 40 --err 2>/dev/null | tail -40
+            echo "=== node log ==="
+            tail -n 40 /tmp/rastudio-node.log 2>/dev/null || echo no-node-log
+            echo "=== local ==="
+            curl -sS -o /tmp/local.html -w "local:%{http_code}\n" --max-time 8 http://127.0.0.1:3000/ || echo localfail
+            head -c 300 /tmp/local.html 2>/dev/null; echo
             echo "=== probe ==="
             cd /var/www/rastudio
             cat > /tmp/ra-probe.mjs <<'NODE'
