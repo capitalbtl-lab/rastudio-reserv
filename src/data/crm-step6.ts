@@ -86,7 +86,33 @@ export async function syncStep6Columns() {
         const card = cardOf(row, branch, stages);
         if (card) byId.set(card.id, card);
       }
+      const hits = new Map<number, number[]>();
+      let asked = 0;
+      for (const stage of stages) {
+        if (!stage.id) continue;
+        try {
+          const found = await readPages(`/v2api/${branch}/customer/index`, { is_study: 0, lead_status_id: stage.id }, tok);
+          asked += 1;
+          for (const row of found) {
+            const id = Number(row.id);
+            if (!Number.isFinite(id) || id <= 0 || !isApiLeadStudy(row.is_study)) continue;
+            const list = hits.get(id) || [];
+            if (!list.includes(stage.id)) list.push(stage.id);
+            hits.set(id, list);
+          }
+        } catch {
+          /* этот этап не узнали — чужие колонки не трогаем */
+        }
+      }
       const cards = [...byId.values()];
+      if (asked > 0) {
+        for (const card of cards) {
+          const cols = hits.get(card.id) || [];
+          if (cols.length === 1) card.statusId = cols[0];
+          else if (cols.length > 1) card.statusId = -1;
+          else if (card.statusId < 0) card.statusId = 0;
+        }
+      }
       replaceStep6Branch(branch, cards, stages);
       const placed = cards.filter((c) => c.statusId >= 0).length;
       notes.push(`${branch}: ${placed}`);

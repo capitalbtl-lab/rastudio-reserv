@@ -2395,7 +2395,6 @@ function Step6Panel() {
   const q = query.trim().toLowerCase();
   const named = items.filter((x) => !q || x.name.toLowerCase().includes(q) || String(x.id).includes(q));
   const byBranch = (id: number) => named.filter((x) => x.branchId === id).length;
-  const colIds = [...new Set(named.map((x) => (x.statusId < 0 ? -1 : x.statusId)))];
   const filtered = named.filter((x) => {
     if (branch && x.branchId !== branch) return false;
     if (col === "all") {
@@ -2474,12 +2473,12 @@ function Step6Panel() {
   }
   const seenCol = new Set<number>();
   const colParts: string[] = [];
-  for (const s of stages) {
-    const n = colCount.get(s.id) || 0;
-    if (!n) continue;
+  const stageCols = stages.filter((s) => {
+    if (seenCol.has(s.id)) return false;
     seenCol.add(s.id);
-    colParts.push(`${s.name} ${n}`);
-  }
+    return true;
+  });
+  for (const s of stageCols) colParts.push(`${s.name} ${colCount.get(s.id) || 0}`);
   for (const [id, n] of colCount) {
     if (seenCol.has(id) || !n) continue;
     colParts.push(`${stageName(id)} ${n}`);
@@ -2510,7 +2509,7 @@ function Step6Panel() {
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <button type="button" className={cn(chips, col === "all" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol("all")}>Все</button>
         <button type="button" className={cn(chips, col === -1 ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol(-1)}>не в колонке · {named.filter((x) => x.statusId < 0).length}</button>
-        {stages.filter((s) => colIds.includes(s.id) || named.some((x) => x.statusId === s.id)).map((s) => (
+        {stageCols.map((s) => (
           <button key={s.id} type="button" className={cn(chips, col === s.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setCol(s.id); setPageLeft(0); setPageRight(0); }}>
             {s.name} · {named.filter((x) => x.statusId === s.id).length}
           </button>
