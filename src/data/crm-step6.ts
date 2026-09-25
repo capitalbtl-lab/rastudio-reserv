@@ -168,16 +168,16 @@ function payParts(item: Record<string, unknown>) {
   const expenditure = step5Money(item.expenditure);
   const inn = income.ok ? income.n : 0;
   const out = expenditure.ok ? expenditure.n : 0;
-  if (kind === "product") return { product: true, n: 0, goods: Math.abs(out || inn) };
+  if (kind === "product") return { kind, product: true, n: 0, goods: Math.abs(out || inn) };
   let n = inn - out;
   if (kind === "refund" && n > 0) n = -n;
-  return { product: false, n, goods: 0 };
+  return { kind, product: false, n, goods: 0 };
 }
 
 export async function recheckStep6Cash() {
   const board = peekLeadBoard();
   const items = board?.items || [];
-  const waiting = items.filter((x) => x.cashState === "wait");
+  const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && x.cashPayN == null));
   const id = waiting[0]?.id || 0;
   if (!id) return { ok: true as const, more: false, note: "Кассу шага 6 снимать некого. Сначала колонки." };
   const branches = [...new Set(items.filter((x) => x.id === id).map((x) => x.branchId).filter((n) => n > 0))];
@@ -239,6 +239,12 @@ export async function recheckStep6Cash() {
   let cash = 0;
   const goods: number[] = [];
   let payRows = 0;
+  let payN = 0;
+  let paySum = 0;
+  let corrN = 0;
+  let corrSum = 0;
+  let refundN = 0;
+  let refundSum = 0;
   let lessons = 0;
   let writeoff = 0;
   for (const branch of branches) {
@@ -252,6 +258,16 @@ export async function recheckStep6Cash() {
       }
       payRows += 1;
       cash += part.n;
+      if (part.kind === "correct") {
+        corrN += 1;
+        corrSum += part.n;
+      } else if (part.kind === "refund") {
+        refundN += 1;
+        refundSum += part.n;
+      } else {
+        payN += 1;
+        paySum += part.n;
+      }
     }
     const lrows = await readPages(`/v2api/${branch}/lesson/index`, { customer_id: id }, tok);
     for (const row of lrows) {
@@ -271,6 +287,17 @@ export async function recheckStep6Cash() {
     cashBalance: header,
     cashFormula: fitted.n,
     cashAt: new Date().toISOString(),
+    cashPayN: payN,
+    cashPaySum: paySum,
+    cashCorrN: corrN,
+    cashCorrSum: corrSum,
+    cashRefundN: refundN,
+    cashRefundSum: refundSum,
+    cashGoodsN: goods.length,
+    cashGoodsSum: goods.reduce((s, a) => s + a, 0),
+    cashGoodsFit: fitted.goods,
+    cashLesN: lessons,
+    cashLesSum: writeoff,
   });
   const name = items.find((x) => x.id === id)?.name || `№${id}`;
   const left = (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");

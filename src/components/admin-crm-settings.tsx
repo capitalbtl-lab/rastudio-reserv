@@ -2284,6 +2284,17 @@ type Step6Item = {
   cashSort?: "" | "new" | "paid" | "back";
   cashBalance?: number;
   cashFormula?: number;
+  cashPayN?: number;
+  cashPaySum?: number;
+  cashCorrN?: number;
+  cashCorrSum?: number;
+  cashRefundN?: number;
+  cashRefundSum?: number;
+  cashGoodsN?: number;
+  cashGoodsSum?: number;
+  cashGoodsFit?: number;
+  cashLesN?: number;
+  cashLesSum?: number;
 };
 
 function step6Branch(id: number) {
@@ -2302,6 +2313,26 @@ function step6CashWord(state?: string) {
   if (state === "gap") return "не сошлось";
   if (state === "no-balance") return "нет balance";
   return "касса не снята";
+}
+
+function step6Count(n: number | undefined, sum: number | undefined, minus = false) {
+  if (n == null) return "ещё не снимали";
+  const v = minus ? -Math.abs(Number(sum) || 0) : Number(sum) || 0;
+  return `${n} (${rubAudit(v)})`;
+}
+
+function step6Why(x: Step6Item) {
+  if (!x.cashState || x.cashState === "wait") return "Кассу ещё не снимали.";
+  if (x.cashState === "no-balance") return "В ответе Alfa нет balance. Платежи и занятия не считали, шапку сравнить не с чем.";
+  if (x.cashPayN == null && x.cashLesN == null) return "Разбивки ещё нет, только шапка и формула. Нажмите «Перепроверить кассу» ещё раз.";
+  const bits: string[] = [];
+  if (x.cashState === "ok") bits.push("Шапка и формула сошлись.");
+  else bits.push(`Не сошлось: формула ${rubAudit(x.cashFormula)}, шапка ${rubAudit(x.cashBalance)}.`);
+  const tape = (x.cashPayN || 0) + (x.cashCorrN || 0) + (x.cashRefundN || 0) + (x.cashLesN || 0);
+  if (!tape) bits.push("Лента платежей и проведённых занятий пустая.");
+  if ((x.cashGoodsN || 0) > 0 && !(x.cashGoodsFit && x.cashGoodsFit > 0)) bits.push("Товар в ленте есть, в формулу не вошёл: без него шапка ближе.");
+  else if ((x.cashGoodsFit || 0) > 0) bits.push(`В формулу вошёл товар ${rubAudit(-(x.cashGoodsFit || 0))}.`);
+  return bits.join(" ");
 }
 
 function Step6Panel() {
@@ -2455,10 +2486,51 @@ function Step6Panel() {
         </p>
         {shown ? (
           <div className="mt-3 border-t border-black/5 pt-3 text-[0.72rem] leading-snug">
-            <p>Филиал — {step6Branch(x.branchId)}. Колонка — {stageName(x.statusId)}.</p>
-            <p>Касса — {step6CashWord(x.cashState)}. Разбор — {step6SortWord(x.cashSort)}.</p>
-            <p>Шапка {rubAudit(x.cashBalance)}. Формула {rubAudit(x.cashFormula)}.</p>
-            <p className="mt-1 text-muted">В роль досье и в сверку шага 5 это не пишется. Один id в двух филиалах — две карточки, касса одна.</p>
+            <p>Филиал — {step6Branch(x.branchId)}. Колонка — {stageName(x.statusId)}. Разбор — {step6SortWord(x.cashSort)}.</p>
+            <table className="mt-2 w-full text-left text-[0.72rem] leading-snug">
+              <thead>
+                <tr className="text-muted">
+                  <th className="py-0.5 font-medium">Откуда</th>
+                  <th className="py-0.5 font-medium">Alfa</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>платежи</td>
+                  <td>{step6Count(x.cashPayN, x.cashPaySum)}</td>
+                </tr>
+                <tr>
+                  <td>списания занятий</td>
+                  <td>{step6Count(x.cashLesN, x.cashLesSum, true)}</td>
+                </tr>
+                <tr>
+                  <td>корректировки</td>
+                  <td>{step6Count(x.cashCorrN, x.cashCorrSum)}</td>
+                </tr>
+                <tr>
+                  <td>возвраты</td>
+                  <td>{step6Count(x.cashRefundN, x.cashRefundSum)}</td>
+                </tr>
+                <tr>
+                  <td>товары</td>
+                  <td>
+                    {x.cashGoodsN == null
+                      ? "ещё не снимали"
+                      : `${step6Count(x.cashGoodsN, x.cashGoodsSum, true)}${(x.cashGoodsFit || 0) > 0 ? `, в формулу ${rubAudit(-(x.cashGoodsFit || 0))}` : x.cashGoodsN ? ", в формулу не вошли" : ""}`}
+                  </td>
+                </tr>
+                <tr>
+                  <td>формула</td>
+                  <td>{rubAudit(x.cashFormula)}</td>
+                </tr>
+                <tr>
+                  <td>шапка</td>
+                  <td>{x.cashState === "no-balance" ? "нет balance" : rubAudit(x.cashBalance)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-1">{step6Why(x)}</p>
+            <p className="mt-1 text-muted">Лента — живой pay/index и lesson/index, на диск шага 4 не пишется. Товар входит в формулу, только если так шапка сходится. Шапка — Customer.balance. В роль досье и в сверку шага 5 это не пишется.</p>
           </div>
         ) : null}
       </li>

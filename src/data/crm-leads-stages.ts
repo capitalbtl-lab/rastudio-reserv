@@ -370,6 +370,17 @@ export type LeadCard = {
   cashBalance?: number;
   cashFormula?: number;
   cashAt?: string;
+  cashPayN?: number;
+  cashPaySum?: number;
+  cashCorrN?: number;
+  cashCorrSum?: number;
+  cashRefundN?: number;
+  cashRefundSum?: number;
+  cashGoodsN?: number;
+  cashGoodsSum?: number;
+  cashGoodsFit?: number;
+  cashLesN?: number;
+  cashLesSum?: number;
 };
 
 /** Карточка лида с диска сайта. Без API. crmId < 0 — заявка ещё не в Alfa. */
