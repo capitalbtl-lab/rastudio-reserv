@@ -20,43 +20,18 @@ jobs:
             set +e
             cd /var/www/rastudio
             node --input-type=module <<'EOF'
-            import { register } from "node:module";
-            import { pathToFileURL } from "node:url";
             import { readFileSync } from "node:fs";
-            register(pathToFileURL("/var/www/rastudio/scripts/ts-ext-hook.mjs"));
-            const { token, request } = await import(pathToFileURL("/var/www/rastudio/src/data/alfacrm.ts").href);
-            const raw = JSON.parse(readFileSync("storage/dossiers.json", "utf8"));
-            const t = await token();
-            const ids = [8714, 9286];
-            for (const id of ids) {
-              const d = (raw.items || []).find((x) => Number(x.crmId) === id);
-              console.log(JSON.stringify({ disk: id, fio: d?.child?.fio || "", study: d?.extras?.is_study ?? null, removed: d?.extras?.removed ?? null, status: d?.status || "", branchId: d?.branchId || 0 }));
+            const pull = JSON.parse(readFileSync("storage/crm-journal-pull.json", "utf8"));
+            const rows = pull.lastAudit?.rows || [];
+            const ids = new Set([8714, 9286, 9718]);
+            console.log(JSON.stringify({ note: pull.note, at: pull.at, n: rows.length }));
+            for (const r of rows) {
+              if (!ids.has(Number(r.cid))) continue;
+              console.log(JSON.stringify({ cid: r.cid, name: r.name, codes: r.codes, extra: r.extra, alfa: r.alfa, clients: r.clients, cash: r.cash, at: r.at }));
             }
-            const bodies = (id) => [
-              ["id-page", { id, page: 0 }],
-              ["id-size1", { id, page: 0, pageSize: 1 }],
-              ["id-size10", { page: 0, pageSize: 10, id }],
-              ["client-rem1", { id, is_study: 1, removed: 1, page: 0 }],
-              ["client", { id, is_study: 1, page: 0 }],
-              ["lead", { id, is_study: 0, page: 0 }],
-              ["both", { id, is_study: 2, removed: 1, page: 0 }],
-            ];
-            for (const id of ids) {
-              for (const [name, body] of bodies(id)) {
-                try {
-                  const json = await request(`/v2api/1/customer/index`, body, t);
-                  const items = Array.isArray(json?.items) ? json.items : [];
-                  const hit = items.find((x) => Number(x.id) === id) || null;
-                  const top = items[0];
-                  console.log(JSON.stringify({
-                    id, name, total: json?.total, count: json?.count, n: items.length, topId: top ? top.id : null,
-                    hit: hit ? { name: hit.name, is_study: hit.is_study, removed: hit.removed, balance: hit.balance, branch_ids: hit.branch_ids } : null,
-                  }));
-                } catch (e) {
-                  console.log(JSON.stringify({ id, name, err: String(e && e.message || e).slice(0, 220) }));
-                }
-              }
-            }
+            const pay = JSON.parse(readFileSync("storage/crm-pay.json", "utf8"));
+            const fill = pay.payFill || {};
+            for (const id of ids) console.log(JSON.stringify({ pay: id, fill: fill[String(id)] || null }));
             EOF
             echo "=== probe ==="
             cd /var/www/rastudio
