@@ -2595,7 +2595,7 @@ function Step6Panel() {
               </tbody>
             </table>
             <p className="mt-1">{step6Why(x)}</p>
-            <p className="mt-1 text-muted">Касса читается по филиалам 1–4: у Alfa метод привязан к филиалу, сверка — по всем счетам. Платёж — pay.id, даты фильтра как в кассе. Занятие — lesson.id, status 3, дата 2015-01-01. Списание — details.commission этого customer_id, иначе cost. Бонус и price в остаток не входят. Шапка — Customer.balance.</p>
+            <p className="mt-1 text-muted">Филиалы 1–4. Платежи: общий pay/index и отдельно типы возврата и корректировки — общий индекс их не отдаёт. Занятия: status 3, дата 2015-01-01. Списание — details.commission этого customer_id, иначе cost. Бонус и price в остаток не входят. Шапка — Customer.balance.</p>
           </div>
         ) : null}
       </li>

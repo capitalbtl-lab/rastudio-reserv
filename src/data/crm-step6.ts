@@ -2,7 +2,7 @@
 
 import { request, token as alfaToken, dropAlfaIndex } from "./alfacrm";
 import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
-import { kindFromAlfaPay, alfaPayIndexDate } from "./crm-pay-core";
+import { kindFromAlfaPay, alfaPayIndexDate, extraPayTypeIds, payCustomerIdOf } from "./crm-pay-core";
 import { writeoffSumOf, uniqueBranches } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon } from "./crm-step5-canon";
 import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, readCrmLeadColumns } from "./crm-leads";
@@ -294,11 +294,22 @@ export async function recheckStep6Cash(onlyId = 0) {
   const lessonTo = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
   for (const branch of scan) {
     try {
-    const pays = await readPages(`/v2api/${branch}/pay/index`, { customer_id: id, date_from: payFrom, date_to: payTo }, tok);
+    const payBodies = [
+      { customer_id: id, date_from: payFrom, date_to: payTo },
+      ...extraPayTypeIds().map((pay_type_id) => ({ customer_id: id, pay_type_id, date_from: payFrom, date_to: payTo })),
+    ];
+    const pays: Record<string, unknown>[] = [];
+    for (const body of payBodies) {
+      try {
+        pays.push(...await readPages(`/v2api/${branch}/pay/index`, body, tok));
+      } catch {
+        /* один тип не гасит остальные */
+      }
+    }
     for (const row of pays) {
       if (row.deleted === true || row.deleted === 1 || row.deleted === "1") continue;
       const pid = posId(row.id);
-      const owner = Number(row.customer_id || row.customerId) || 0;
+      const owner = payCustomerIdOf(row, 0);
       if (!pid || (owner && owner !== id)) {
         payNoId += 1;
         continue;
