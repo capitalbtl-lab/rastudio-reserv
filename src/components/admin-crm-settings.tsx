@@ -2466,6 +2466,24 @@ function Step6Panel() {
   }
 
   const chips = "h-8 rounded-full px-3 text-[0.78rem] font-semibold";
+  const asideN = items.filter((x) => x.statusId < 0).length;
+  const colCount = new Map<number, number>();
+  for (const x of items) {
+    if (x.statusId < 0) continue;
+    colCount.set(x.statusId, (colCount.get(x.statusId) || 0) + 1);
+  }
+  const seenCol = new Set<number>();
+  const colParts: string[] = [];
+  for (const s of stages) {
+    const n = colCount.get(s.id) || 0;
+    if (!n) continue;
+    seenCol.add(s.id);
+    colParts.push(`${s.name} ${n}`);
+  }
+  for (const [id, n] of colCount) {
+    if (seenCol.has(id) || !n) continue;
+    colParts.push(`${stageName(id)} ${n}`);
+  }
   return (
     <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
       <div className="font-display text-[1.15rem]">Лиды</div>
@@ -2473,7 +2491,7 @@ function Step6Panel() {
         Активные лиды по филиалам. Колонка — этап воронки. Касса — отдельная кнопка, в роль и в шаг 5 не пишется.
       </p>
       <p className="mt-3 text-sm">
-        карточек {items.length} · в колонке {items.filter((x) => x.statusId >= 0).length} · не в колонке {items.filter((x) => x.statusId < 0).length} · касса совпала {items.filter((x) => x.cashState === "ok").length} · не сошлось {items.filter((x) => x.cashState === "gap").length} · ещё не снимали {items.filter((x) => !x.cashState || x.cashState === "wait").length}
+        карточек {items.length}{colParts.length ? ` · ${colParts.join(" · ")}` : ""} · не в колонке {asideN} · касса совпала {items.filter((x) => x.cashState === "ok").length} · не сошлось {items.filter((x) => x.cashState === "gap").length} · ещё не снимали {items.filter((x) => !x.cashState || x.cashState === "wait").length}
         {note ? ` · ${note}` : ""}
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
@@ -2490,7 +2508,7 @@ function Step6Panel() {
         ))}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <button type="button" className={cn(chips, col === "all" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol("all")}>Все колонки · {named.length}</button>
+        <button type="button" className={cn(chips, col === "all" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol("all")}>Все</button>
         <button type="button" className={cn(chips, col === -1 ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol(-1)}>не в колонке · {named.filter((x) => x.statusId < 0).length}</button>
         {stages.filter((s) => colIds.includes(s.id) || named.some((x) => x.statusId === s.id)).map((s) => (
           <button key={s.id} type="button" className={cn(chips, col === s.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setCol(s.id); setPageLeft(0); setPageRight(0); }}>
