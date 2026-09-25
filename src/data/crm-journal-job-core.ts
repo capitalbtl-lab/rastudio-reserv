@@ -44,7 +44,9 @@ export type JournalJobMode =
   | "roster-recheck"
   | "step6-recount"
   | "step6-columns"
-  | "step6-cash";
+  | "step6-cash"
+  | "step7-list"
+  | "step7-cash";
 
 export type JournalJobItem = {
   cid?: number;

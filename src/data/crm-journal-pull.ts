@@ -1789,7 +1789,7 @@ export async function journalPull(opts: {
       const archGroups = study === "1" && /archGroups=1/.test(raw);
       const stepsRaw = raw.match(/(?:^|&)steps=([^&]*)/)?.[1] || "";
       const also = (raw.match(/(?:^|&)also=([^&]*)/)?.[1] || "").split(",").filter((id) => id === "step6-recount" || id === "step6-columns" || id === "step6-cash");
-      const steps = stepsRaw ? stepsRaw.split(",").map((n) => Number(n)).filter((n) => n >= 1 && n <= 5) : [];
+      const steps = stepsRaw ? stepsRaw.split(",").map((n) => Number(n)).filter((n) => n >= 1 && n <= 7) : [];
       const hasSteps = /(?:^|&)steps=/.test(raw);
       const custom = hasSteps || also.length > 0;
       const built = custom ? pipeFromSelection(steps.length ? steps : hasSteps ? [] : [1, 2, 3, 4, 5], also, { study, archGroups }) : null;

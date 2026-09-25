@@ -95,6 +95,8 @@ function modeRu(mode: string, kind = "") {
   if (mode === "step6-recount") return "шаг 6 · пересчет лидов";
   if (mode === "step6-columns") return "шаг 6 · колонки";
   if (mode === "step6-cash") return "шаг 6 · касса";
+  if (mode === "step7-list") return "шаг 7 · архив";
+  if (mode === "step7-cash") return "шаг 7 · касса";
   if (mode === "archivesPupils") return "архив групп действующих";
   if (mode === "archives") return "архивные группы";
   return mode || "очередь";
@@ -524,6 +526,9 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   if (mode === "step6-recount" || mode === "step6-columns" || mode === "step6-cash") {
     items = [{ name: mode === "step6-cash" ? "касса лидов" : mode === "step6-recount" ? "пересчет лидов" : "колонки лидов" }];
   }
+  if (mode === "step7-list" || mode === "step7-cash") {
+    items = [{ name: mode === "step7-cash" ? "касса архива" : "архив без живых групп" }];
+  }
   if (!items.length && !loopPullKind(mode)) {
     const saved = saveJournalJob({
       ...emptyJournalJob(),
@@ -819,7 +824,7 @@ function continueAutoPipe(job: JournalJob) {
     startJournalJob({ ...base, mode: "audit", kind: "audit", recheck: false, archived: job.archived, skipLeads: false });
     return;
   }
-  if (next === "step6-recount" || next === "step6-columns" || next === "step6-cash") {
+  if (next === "step6-recount" || next === "step6-columns" || next === "step6-cash" || next === "step7-list" || next === "step7-cash") {
     startJournalJob({
       ...base,
       mode: next,
@@ -1324,23 +1329,32 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, msg });
     return { done: true, gap: 0, msg };
   }
-  if (mode === "step6-recount" || mode === "step6-columns" || mode === "step6-cash") {
-    if (mode === "step6-cash") {
-      const { recheckStep6Cash } = await import("./crm-step6");
+  if (mode === "step6-recount" || mode === "step6-columns" || mode === "step6-cash" || mode === "step7-list" || mode === "step7-cash") {
+    if (mode === "step6-cash" || mode === "step7-cash") {
       const only = Number(job.customerId) || 0;
-      const got = await awaitWhileJob(id, recheckStep6Cash(only));
+      const got = await awaitWhileJob(id, mode === "step7-cash" ? (await import("./crm-step6")).recheckStep7Cash(only) : (await import("./crm-step6")).recheckStep6Cash(only));
       if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
       const res = got.value;
       if (loadJournalJob().id !== id) return { done: true, gap: 0 };
       const n = job.n + 1;
       const note = "note" in res ? res.note : res.error || "";
       if (!res.ok || !("more" in res) || !res.more || only) {
-        const msg = note || "Касса лидов снята.";
+        const msg = note || (mode === "step7-cash" ? "Касса архива снята." : "Касса лидов снята.");
         patch({ id, running: false, n, total: Math.max(Number(job.total) || 0, n), cur: "", fill: null, msg });
         return { done: true, gap: 0, msg };
       }
       patch({ id, n, total: Math.max(Number(job.total) || 0, n + 1), cur: note, msg: note });
       return { done: false, gap: 800 };
+    }
+    if (mode === "step7-list") {
+      const { syncStep7List } = await import("./crm-step7");
+      const got = await awaitWhileJob(id, syncStep7List());
+      if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+      const res = got.value;
+      if (loadJournalJob().id !== id) return { done: true, gap: 0 };
+      const msg = res.note || "Архив шага 7 прочитан.";
+      patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, msg });
+      return { done: true, gap: 0, msg };
     }
     const { syncStep6Columns } = await import("./crm-step6");
     const got = await awaitWhileJob(id, syncStep6Columns());

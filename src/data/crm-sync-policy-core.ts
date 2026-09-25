@@ -19,19 +19,25 @@ export const HISTORY_PLAN_MODES = [
 
 export type HistoryPlanMode = (typeof HISTORY_PLAN_MODES)[number]["id"];
 
-/** После состава: календарь → группы → касса → сверка. */
-/** Шаг 5 в трубе: пустая лента = нули, товар минус, лидов не отсекаем. */
+/** Шаг 6 в трубе: колонки, затем касса. Пересчёт лидов — те же колонки, второй раз не идёт. */
 export const STEP6_PIPE = ["step6-recount", "step6-columns", "step6-cash"] as const;
+/** Шаг 7: список архива без живых групп, затем та же касса. */
+export const STEP7_PIPE = ["step7-list", "step7-cash"] as const;
 
-/** Выбор шагов. Полный 1–5 без хвоста шага 6 остаётся прежней трубой. */
+/** Выбор шагов. Полный 1–5 без 6, 7 и хвоста шага 6 остаётся прежней трубой. */
 export function pipeFromSelection(
   steps: number[],
   also: string[],
   opts: { study: "1" | "2"; archGroups: boolean },
 ): { mode: string; pipe: string[] } {
   const want = [1, 2, 3, 4, 5].filter((n) => steps.includes(n));
-  const tail = STEP6_PIPE.filter((id) => also.includes(id) && !(id === "step6-recount" && also.includes("step6-columns")));
-  const full = want.length === 5 && !tail.length;
+  const six = steps.includes(6);
+  const seven = steps.includes(7);
+  const alsoTail = STEP6_PIPE.filter((id) => also.includes(id) && !(id === "step6-recount" && (also.includes("step6-columns") || six)));
+  const sixTail = six ? (["step6-columns", "step6-cash"] as const) : [];
+  const tail = [...sixTail, ...alsoTail.filter((id) => !(sixTail as readonly string[]).includes(id))];
+  const sevenTail = seven ? [...STEP7_PIPE] : [];
+  const full = want.length === 5 && !tail.length && !sevenTail.length;
   if (full) {
     const pipe = opts.study === "2" || opts.archGroups === false ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL];
     return { mode: "roster-recheck", pipe };
@@ -47,7 +53,7 @@ export function pipeFromSelection(
     if (n === 4) modes.push("balance");
     if (n === 5) modes.push("audit");
   }
-  const all = [...modes, ...tail];
+  const all = [...modes, ...tail, ...sevenTail];
   if (!all.length) return { mode: "", pipe: [] };
   return { mode: all[0], pipe: all.slice(1) };
 }
@@ -63,6 +69,7 @@ export function journalStartOf(token: string): { mode: string; kind: string; rec
   if (token === "archivesPupils" || token === "archives") return { mode: token, kind: token, recheck: false };
   if (token === "catalog") return { mode: "catalog", kind: "archiveCatalog", recheck: false };
   if (token === "step6-recount" || token === "step6-columns" || token === "step6-cash") return { mode: token, kind: "students", recheck: false };
+  if (token === "step7-list" || token === "step7-cash") return { mode: token, kind: "students", recheck: false };
   return { mode: token || "roster-recheck", kind: "students", recheck: false };
 }
 /** После состава: календарь → группы → касса → сверка. */
@@ -263,7 +270,7 @@ export function scheduleOf(raw: unknown, fallbackId = ""): HistorySchedule {
     label: String(r.label || "").trim().slice(0, 80),
     leads: r.leads !== false,
     archGroups: r.archGroups !== false,
-    steps: Array.isArray(r.steps) ? [...new Set(r.steps.map((n) => Number(n)).filter((n) => n >= 1 && n <= 5))].sort((a, b) => a - b) : undefined,
+    steps: Array.isArray(r.steps) ? [...new Set(r.steps.map((n) => Number(n)).filter((n) => n >= 1 && n <= 7))].sort((a, b) => a - b) : undefined,
     also: Array.isArray(r.also) ? STEP6_PIPE.filter((id) => (r.also as unknown[]).includes(id)) : undefined,
     dueAt: String(r.dueAt || ""),
     lastFiredAt: String(r.lastFiredAt || ""),

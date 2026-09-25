@@ -153,6 +153,8 @@ const STEP_CHIPS: [number, string][] = [
   [3, "3 группы"],
   [4, "4 касса"],
   [5, "5 сверка"],
+  [6, "6 лиды"],
+  [7, "7 архив"],
 ];
 
 function StepPick({
@@ -173,9 +175,12 @@ function StepPick({
         {STEP_CHIPS.map(([n, label]) => (
           <Chip key={n} on={steps.includes(n)} onClick={() => onSteps(n)}>{label}</Chip>
         ))}
+      </div>
+      <p className="mt-2 text-[0.72rem] font-medium text-muted">Шаг 6 по частям</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
         {STEP6_PIPE.map((id) => (
           <Chip key={id} on={also.includes(id)} onClick={() => onAlso(id)}>
-            {id === "step6-recount" ? "6 пересчет лидов" : id === "step6-columns" ? "6 колонки" : "6 касса"}
+            {id === "step6-recount" ? "пересчет лидов" : id === "step6-columns" ? "колонки" : "касса лидов"}
           </Chip>
         ))}
       </div>
@@ -409,7 +414,7 @@ function DraftForm({
             />
           </label>
           <p className="mt-3 text-sm">
-            {planModeMeta(mode).label}. {whenLabel(when())}, {at} МСК. {study === "2" ? "Архив." : "Сейчас ходят."}
+            {planModeMeta(mode).label}. Шаги: {stepsOn.length ? stepsOn.join(", ") : "нет"}. {whenLabel(when())}, {at} МСК. {study === "2" ? "Архив." : "Сейчас ходят."}
             {mode === "auto" || mode === "people" || mode === "people-slow" || mode === "balance"
               ? ` Окно: ${PLAN_FROM_OPTS.find((o) => o.id === fromId)?.label || ""}.`
               : isRecheck(mode)
@@ -649,7 +654,7 @@ function NowWizard({
         <p className="mt-3 text-sm">
           {one
             ? `${pickedName ? `${pickedName} · ` : ""}№${cid || "—"} · ${act === "calendar" ? "календарь" : "шаг 5"}${act === "calendar" ? ` · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}` : ""}`
-            : `${whoKind === "arch" ? "Архив" : "Сейчас ходят"} · шаги 1–5 · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}`}
+            : `${whoKind === "arch" ? "Архив" : "Сейчас ходят"} · шаги ${stepsOn.length ? stepsOn.join(", ") : "—"}${also.length ? ` · ${also.length} част.` : ""} · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}`}
         </p>
       ) : null}
       <div className="mt-4 flex gap-2">

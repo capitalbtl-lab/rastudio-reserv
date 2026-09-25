@@ -520,4 +520,30 @@ describe("пульт Истории", () => {
     assert.deepEqual(r.steps, [5]);
   });
 
+  it("шаги 6 и 7 сохраняются и идут после выбранных 1–5", () => {
+    const saved = scheduleOf({ id: "s", mode: "auto", steps: [1, 3, 6, 7, 9], when: { kind: "daily" }, at: "04:00" });
+    assert.deepEqual(saved.steps, [1, 3, 6, 7]);
+    const job = planRuleToJob(saved);
+    assert.equal(job.mode, "roster-recheck");
+    assert.ok(job.pipe.includes("groups"));
+    assert.ok(job.pipe.includes("step6-columns"));
+    assert.ok(job.pipe.includes("step6-cash"));
+    assert.equal(job.pipe.at(-2), "step7-list");
+    assert.equal(job.pipe.at(-1), "step7-cash");
+  });
+
+  it("только шаг 6 — колонки, затем касса лидов", () => {
+    const built = pipeFromSelection([6], [], { study: "1", archGroups: true });
+    assert.equal(built.mode, "step6-columns");
+    assert.deepEqual(built.pipe, ["step6-cash"]);
+  });
+
+  it("только шаг 7 — список архива, затем касса", () => {
+    const built = pipeFromSelection([7], [], { study: "1", archGroups: false });
+    assert.equal(built.mode, "step7-list");
+    assert.deepEqual(built.pipe, ["step7-cash"]);
+    assert.deepEqual(journalStartOf("step7-list"), { mode: "step7-list", kind: "students", recheck: false });
+    assert.deepEqual(journalStartOf("step7-cash"), { mode: "step7-cash", kind: "students", recheck: false });
+  });
+
 });
