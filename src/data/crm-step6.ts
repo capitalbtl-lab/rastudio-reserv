@@ -3,13 +3,12 @@
 import { request, token as alfaToken, dropAlfaIndex } from "./alfacrm";
 import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
 import { kindFromAlfaPay, alfaPayIndexDate } from "./crm-pay-core";
-import { writeoffSumOf } from "./crm-ledger-core";
+import { writeoffSumOf, uniqueBranches } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon } from "./crm-step5-canon";
 import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, readCrmLeadColumns } from "./crm-leads";
 import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
 import { loadCustomerCalendar } from "./group-cards";
 import { paysOf } from "./crm-pay";
-import { writeoffSumOf } from "./crm-ledger-core";
 import { isApiLeadStudy, step6ColumnId } from "./crm-step6-core";
 import type { LeadCard, LeadStage } from "./crm-leads-stages";
 import type { StepLogRow, StepLogSettings } from "./crm-step-run-log-core";
@@ -190,10 +189,13 @@ function idGap(disk: Set<number>, alfa: Set<number>) {
   return { hole, extra };
 }
 
-/** Списание клиента по доке: details[].commission того же customer_id. Чужую деталь и price не берём. */
+/** Списание этого клиента: details.commission, иначе cost. Чужой detail и price не берём. */
 function alfaCustomerCommission(row: Record<string, unknown>, customerId: number): number | null {
   const details = Array.isArray(row.details) ? (row.details as Record<string, unknown>[]) : [];
-  const hit = details.find((d) => Number(d.customer_id || d.customerId) === customerId);
+  const own = details.filter((d) => Number(d.customer_id || d.customerId) === customerId);
+  const lessonOwner = Number(row.customer_id || row.customerId) === customerId;
+  const listed = Array.isArray(row.customer_ids) && row.customer_ids.some((x) => Number(x) === customerId);
+  const hit = own[0] || ((lessonOwner || listed) && details.length === 1 ? details[0] : undefined);
   if (!hit) return null;
   const raw = Object.prototype.hasOwnProperty.call(hit, "commission")
     ? hit.commission
@@ -216,12 +218,13 @@ export async function recheckStep6Cash(onlyId = 0) {
   if (!id) return { ok: true as const, more: false, note: "Кассу шага 6 снимать некого. Сначала колонки." };
   if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, error: "Этого лида нет на шаге 6." };
   const branches = [...new Set(items.filter((x) => x.id === id).map((x) => x.branchId).filter((n) => n > 0))];
+  const scan = uniqueBranches(branches[0] || 1);
   dropAlfaIndex();
   const tok = await alfaToken();
   let header = Number.NaN;
   let saw = false;
   let failed = 0;
-  for (const branch of branches) {
+  for (const branch of scan) {
     try {
       const json = await request<unknown>(
         `/v2api/${branch}/customer/index`,
@@ -289,7 +292,8 @@ export async function recheckStep6Cash(onlyId = 0) {
   const payFrom = alfaPayIndexDate("2015-01-01");
   const payTo = alfaPayIndexDate(new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10));
   const lessonTo = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
-  for (const branch of branches) {
+  for (const branch of scan) {
+    try {
     const pays = await readPages(`/v2api/${branch}/pay/index`, { customer_id: id, date_from: payFrom, date_to: payTo }, tok);
     for (const row of pays) {
       if (row.deleted === true || row.deleted === 1 || row.deleted === "1") continue;
@@ -336,6 +340,9 @@ export async function recheckStep6Cash(onlyId = 0) {
       }
       lessons += 1;
       writeoff += commission;
+    }
+    } catch {
+      /* чужой филиал без доступа не обрывает остальные */
     }
   }
   const cal = loadCustomerCalendar(id);
