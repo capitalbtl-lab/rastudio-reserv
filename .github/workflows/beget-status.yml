@@ -21,17 +21,16 @@ jobs:
             cd /var/www/rastudio
             node --input-type=module <<'EOF'
             import { readFileSync } from "node:fs";
-            const pull = JSON.parse(readFileSync("storage/crm-journal-pull.json", "utf8"));
-            const rows = pull.lastAudit?.rows || [];
-            const ids = new Set([8714, 9286, 9718]);
-            console.log(JSON.stringify({ note: pull.note, at: pull.at, n: rows.length }));
-            for (const r of rows) {
-              if (!ids.has(Number(r.cid))) continue;
-              console.log(JSON.stringify({ cid: r.cid, name: r.name, codes: r.codes, extra: r.extra, alfa: r.alfa, clients: r.clients, cash: r.cash, at: r.at }));
+            const raw = JSON.parse(readFileSync("storage/dossiers.json", "utf8"));
+            const ids = [8714, 9286];
+            for (const id of ids) {
+              const hits = (raw.items || []).filter((x) => Number(x.crmId) === id);
+              console.log(JSON.stringify({
+                id,
+                n: hits.length,
+                rows: hits.map((d) => ({ id: d.id, fio: d.child?.fio || "", study: d.extras?.is_study ?? null, removed: d.extras?.removed ?? null, status: d.status || "", at: d.updatedAt || "" })),
+              }));
             }
-            const pay = JSON.parse(readFileSync("storage/crm-pay.json", "utf8"));
-            const fill = pay.payFill || {};
-            for (const id of ids) console.log(JSON.stringify({ pay: id, fill: fill[String(id)] || null }));
             EOF
             echo "=== probe ==="
             cd /var/www/rastudio
