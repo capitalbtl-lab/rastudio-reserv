@@ -2483,8 +2483,19 @@ function Step6Panel() {
     return x.cashSort === sort;
   });
   const closed = (x: Step6Item) => x.cashState === "ok";
-  const left = filtered.filter((x) => !closed(x)).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id);
-  const right = filtered.filter(closed).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id);
+  const onePerson = (list: Step6Item[]) => {
+    if (branch) return list;
+    const seen = new Set<number>();
+    const out: Step6Item[] = [];
+    for (const x of list) {
+      if (seen.has(x.id)) continue;
+      seen.add(x.id);
+      out.push(x);
+    }
+    return out;
+  };
+  const left = onePerson(filtered.filter((x) => !closed(x)).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id));
+  const right = onePerson(filtered.filter(closed).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id));
   const pagesL = Math.max(1, Math.ceil(left.length / pageSize) || 1);
   const pagesR = Math.max(1, Math.ceil(right.length / pageSize) || 1);
   const safeL = Math.min(pageLeft, pagesL - 1);
@@ -2523,7 +2534,7 @@ function Step6Panel() {
           </button>
         </div>
         <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
-          №{x.id} · {step6Branch(x.branchId)} · {stageName(x.statusId)} · {step6SortWord(x.cashSort)}
+          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {stageName(x.statusId)} · {step6SortWord(x.cashSort)}
           {x.cashState && x.cashState !== "wait" ? ` · шапка ${rubAudit(x.cashBalance)} · формула ${rubAudit(x.cashFormula)}` : ""}
         </p>
         {ok ? null : (
