@@ -36,9 +36,15 @@ jobs:
           script_stop: true
           command_timeout: 10m
           script: |
-            rm -f /tmp/rastudio-deploy.lock
             cd /var/www/rastudio
             git fetch origin main && git reset --hard origin/main
+            if [ -f /tmp/rastudio-deploy.lock ]; then
+              age=$(( $(date +%s) - $(stat -c %Y /tmp/rastudio-deploy.lock 2>/dev/null || echo 0) ))
+              if [ "$age" -lt 2400 ]; then
+                echo "сборка уже идёт (${age}s), вторую не стартую"
+                exit 0
+              fi
+            fi
             env RA_DEPLOY_REEXEC=1 RA_DEPLOY_BG=1 bash scripts/beget-deploy.sh --force
 
   production:
