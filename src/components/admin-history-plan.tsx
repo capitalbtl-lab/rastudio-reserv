@@ -13,6 +13,7 @@ import {
   planModeMeta,
   planLogSessions,
   whenLabel,
+  STEP6_PIPE,
   type CrmSyncPolicy,
   type HistoryPlanMode,
   type HistorySchedule,
@@ -146,6 +147,52 @@ function fmtSlot(rule: HistorySchedule) {
   return `${pad2(w.d)}.${pad2(w.mo)} ${pad2(w.h)}:${pad2(w.min)} МСК`;
 }
 
+const STEP_CHIPS: [number, string][] = [
+  [1, "1 состав"],
+  [2, "2 календарь"],
+  [3, "3 группы"],
+  [4, "4 касса"],
+  [5, "5 сверка"],
+];
+
+function StepPick({
+  steps,
+  also,
+  onSteps,
+  onAlso,
+}: {
+  steps: number[];
+  also: string[];
+  onSteps: (n: number) => void;
+  onAlso: (id: string) => void;
+}) {
+  return (
+    <div className="mt-3">
+      <p className="text-[0.72rem] font-medium text-muted">Какие шаги</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {STEP_CHIPS.map(([n, label]) => (
+          <Chip key={n} on={steps.includes(n)} onClick={() => onSteps(n)}>{label}</Chip>
+        ))}
+        {STEP6_PIPE.map((id) => (
+          <Chip key={id} on={also.includes(id)} onClick={() => onAlso(id)}>
+            {id === "step6-recount" ? "6 пересчет лидов" : id === "step6-columns" ? "6 колонки" : "6 касса"}
+          </Chip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function defaultSteps(mode: string): number[] {
+  if (mode === "auto") return [1, 2, 3, 4, 5];
+  if (mode.startsWith("roster")) return [1];
+  if (mode.startsWith("people")) return [2];
+  if (mode.startsWith("groups")) return [3];
+  if (mode === "balance") return [4];
+  if (mode === "audit") return [5];
+  return [];
+}
+
 function isRecheck(mode: string) {
   return Boolean(planModeMeta(mode).recheck);
 }
@@ -168,6 +215,8 @@ function draftBits(seed?: HistorySchedule | null) {
     study: (seed?.study || "1") as "1" | "2",
     leads: seed ? seed.leads !== false : true,
     archGroups: seed ? seed.archGroups !== false : true,
+    steps: seed?.steps?.length ? seed.steps : defaultSteps(seed?.mode || "auto"),
+    also: seed?.also || [],
   };
 }
 
@@ -198,6 +247,8 @@ function DraftForm({
   const [study, setStudy] = useState<"1" | "2">(init.study);
   const [leads, setLeads] = useState(init.leads);
   const [archGroups, setArchGroups] = useState(init.archGroups);
+  const [stepsOn, setStepsOn] = useState<number[]>(init.steps);
+  const [also, setAlso] = useState<string[]>(init.also);
 
   function when(): HistoryWhen {
     if (kind === "weekly") return { kind: "weekly", days };
@@ -210,7 +261,8 @@ function DraftForm({
   const canSave =
     Boolean(at) &&
     (kind !== "weekly" || days.length > 0) &&
-    (kind !== "ymd" || Boolean(date));
+    (kind !== "ymd" || Boolean(date)) &&
+    (stepsOn.length > 0 || also.length > 0 || mode.startsWith("step6"));
 
   const [step, setStep] = useState(0);
   const titles = ["Что запускать", "Когда", "Кого", "Сохранить"];
@@ -228,7 +280,11 @@ function DraftForm({
           <select
             className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
             value={mode}
-            onChange={(e) => setMode(e.target.value as HistoryPlanMode)}
+            onChange={(e) => {
+              const next = e.target.value as HistoryPlanMode;
+              setMode(next);
+              setStepsOn(defaultSteps(next));
+            }}
           >
             {HISTORY_PLAN_MODES.map((m) => (
               <option key={m.id} value={m.id}>
@@ -237,6 +293,12 @@ function DraftForm({
             ))}
           </select>
         </label>
+        <StepPick
+          steps={stepsOn}
+          also={also}
+          onSteps={(n) => setStepsOn((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort((a, b) => a - b)))}
+          onAlso={(id) => setAlso((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))}
+        />
       ) : null}
       {step === 1 ? (
         <>
@@ -387,6 +449,8 @@ function DraftForm({
                 label,
                 leads: study === "1" && leads,
                 archGroups: study === "1" && archGroups,
+                steps: stepsOn,
+                also,
               });
             }}
           >
@@ -410,17 +474,19 @@ function NowWizard({
   run?: boolean;
   people?: PlanPerson[];
   seed?: PlanPerson | null;
-  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
-  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
+  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean; steps?: number[]; also?: string[] }) => void;
+  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar" | "step6-cash" | "step6-columns" | "step6-recount"; dateFromId: PlanFromId }) => void;
 }) {
   const [step, setStep] = useState(seed?.cid ? 1 : 0);
   const [whoKind, setWhoKind] = useState<"one" | "live" | "arch">("one");
-  const [act, setAct] = useState<"audit" | "calendar" | "all">("audit");
+  const [act, setAct] = useState<"audit" | "calendar" | "all" | "step6-cash" | "step6-columns" | "step6-recount">("audit");
   const [who, setWho] = useState(seed?.name || "");
   const [picked, setPicked] = useState<PlanPerson | null>(seed?.cid ? seed : null);
   const [from, setFrom] = useState<PlanFromId>("1");
   const [leads, setLeads] = useState(true);
   const [archGroups, setArchGroups] = useState(true);
+  const [stepsOn, setStepsOn] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [also, setAlso] = useState<string[]>([]);
   const hits = matchPeople(people || [], who);
   const q = who.trim();
   const numeric = /^\d+$/.test(q);
@@ -437,9 +503,9 @@ function NowWizard({
   function go() {
     if (one) {
       if (!onRunOne || !cid) return;
-      const kind = act === "calendar" ? "calendar" : "audit";
+      const kind = act === "calendar" ? "calendar" : act === "step6-cash" || act === "step6-columns" || act === "step6-recount" ? act : "audit";
       const whoLine = pickedName ? `${pickedName} · №${cid}` : `№${cid}`;
-      const ask = kind === "audit" ? `Шаг 5 только ${whoLine}? Календарь и кассу не трогаем.` : `Календарь ${whoLine}? Кассу не трогаем.`;
+      const ask = kind === "calendar" ? `Календарь ${whoLine}? Кассу не трогаем.` : kind === "audit" ? `Шаг 5 только ${whoLine}? Календарь и кассу не трогаем.` : `Шаг 6 · ${kind === "step6-cash" ? "касса" : kind === "step6-columns" ? "колонки" : "пересчет лидов"} ${whoLine}?`;
       if (!window.confirm(ask)) return;
       onRunOne({ cid, kind, dateFromId: from });
       return;
@@ -451,6 +517,8 @@ function NowWizard({
       dateFromId: from,
       leads: whoKind === "live" && leads,
       archGroups: whoKind === "live" && archGroups,
+      steps: stepsOn,
+      also,
     });
   }
 
@@ -463,8 +531,8 @@ function NowWizard({
           {(
             [
               ["one", "Один человек", "Фамилия, имя или номер."],
-              ["live", "Сейчас ходят", "Шаги 1–5 по живым."],
-              ["arch", "Архив клиентов", "Шаги 1–5 по архиву."],
+              ["live", "Сейчас ходят", "Какие шаги отметить — те и пойдут."],
+              ["arch", "Архив клиентов", "Те же шаги по архиву."],
             ] as const
           ).map(([id, title, hint]) => (
             <button
@@ -497,9 +565,29 @@ function NowWizard({
               <span className="block text-sm font-semibold">Календарь</span>
               <span className={cn("mt-0.5 block text-[0.75rem]", act === "calendar" ? "text-white/75" : "text-muted")}>Синяя перепроверка только его.</span>
             </button>
+            <button type="button" onClick={() => setAct("step6-recount")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "step6-recount" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
+              <span className="block text-sm font-semibold">Пересчет лидов</span>
+              <span className={cn("mt-0.5 block text-[0.75rem]", act === "step6-recount" ? "text-white/75" : "text-muted")}>Заново разложить лидов по колонкам.</span>
+            </button>
+            <button type="button" onClick={() => setAct("step6-columns")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "step6-columns" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
+              <span className="block text-sm font-semibold">Прочитать колонки</span>
+              <span className={cn("mt-0.5 block text-[0.75rem]", act === "step6-columns" ? "text-white/75" : "text-muted")}>Колонки воронки по всем филиалам.</span>
+            </button>
+            <button type="button" onClick={() => setAct("step6-cash")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "step6-cash" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
+              <span className="block text-sm font-semibold">Перепроверить кассу</span>
+              <span className={cn("mt-0.5 block text-[0.75rem]", act === "step6-cash" ? "text-white/75" : "text-muted")}>Только этого лида, шаги 1–5 не трогает.</span>
+            </button>
           </div>
         ) : (
-          <p className="mt-3 text-sm">Шаги 1–5: состав, календарь, группы, касса, сверка. Очередь одна.</p>
+          <>
+            <p className="mt-3 text-sm">Отметьте шаги. Очередь одна.</p>
+            <StepPick
+              steps={stepsOn}
+              also={also}
+              onSteps={(n) => setStepsOn((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort((a, b) => a - b)))}
+              onAlso={(id) => setAlso((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))}
+            />
+          </>
         )
       ) : null}
       {step === 2 ? (
@@ -573,7 +661,7 @@ function NowWizard({
         ) : (
           <button
             type="button"
-            disabled={busy || run || (one ? !cid || !onRunOne : !onRunAuto)}
+            disabled={busy || run || (one ? !cid || !onRunOne : !onRunAuto || (!stepsOn.length && !also.length))}
             className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
             onClick={go}
           >
@@ -606,8 +694,8 @@ export function HistoryPlanPanel({
   people?: PlanPerson[];
   focus?: PlanPerson | null;
   onSave: (next: CrmSyncPolicy) => void;
-  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
-  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
+  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean; steps?: number[]; also?: string[] }) => void;
+  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar" | "step6-cash" | "step6-columns" | "step6-recount"; dateFromId: PlanFromId }) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState("");
@@ -674,7 +762,7 @@ export function HistoryPlanPanel({
         <div className="grid gap-2">
           {(
             [
-              ["now", "Сейчас", "Один человек или шаги 1–5."],
+              ["now", "Сейчас", "Один человек или выбранные шаги."],
               ["plan", "Расписание", policy.plan.length ? `${policy.plan.filter((r) => r.on).length} вкл · само, без конца` : "Слотов нет"],
               ["log", "Журнал", "Последние синхронизации и сбои."],
             ] as const
@@ -847,8 +935,8 @@ export function HistoryPlanModal({
   job?: JobSnap | null;
   busy?: boolean;
   onSave: (next: CrmSyncPolicy) => void;
-  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean }) => void;
-  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar"; dateFromId: PlanFromId }) => void;
+  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean; steps?: number[]; also?: string[] }) => void;
+  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar" | "step6-cash" | "step6-columns" | "step6-recount"; dateFromId: PlanFromId }) => void;
   people?: PlanPerson[];
   focus?: PlanPerson | null;
   planLog?: PlanLogRow[];

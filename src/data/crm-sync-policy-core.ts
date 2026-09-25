@@ -11,6 +11,9 @@ export const HISTORY_PLAN_MODES = [
   { id: "groups-recheck", label: "Шаг 3 · перепроверить группы", recheck: true, step: "groups" },
   { id: "balance", label: "Шаг 4 · загрузить кассу", recheck: false, step: "money" },
   { id: "audit", label: "Шаг 5 · сверка остатка", recheck: false, step: "audit" },
+  { id: "step6-recount", label: "Шаг 6 · пересчет лидов", recheck: false, step: "step6" },
+  { id: "step6-columns", label: "Шаг 6 · прочитать колонки", recheck: false, step: "step6" },
+  { id: "step6-cash", label: "Шаг 6 · перепроверить кассу", recheck: false, step: "step6" },
   { id: "catalog", label: "Архив · каталог клиентов", recheck: false, step: "roster" },
 ] as const;
 
@@ -18,6 +21,37 @@ export type HistoryPlanMode = (typeof HISTORY_PLAN_MODES)[number]["id"];
 
 /** После состава: календарь → группы → касса → сверка. */
 /** Шаг 5 в трубе: пустая лента = нули, товар минус, лидов не отсекаем. */
+export const STEP6_PIPE = ["step6-recount", "step6-columns", "step6-cash"] as const;
+
+/** Выбор шагов. Полный 1–5 без хвоста шага 6 остаётся прежней трубой. */
+export function pipeFromSelection(
+  steps: number[],
+  also: string[],
+  opts: { study: "1" | "2"; archGroups: boolean },
+): { mode: string; pipe: string[] } {
+  const want = [1, 2, 3, 4, 5].filter((n) => steps.includes(n));
+  const tail = STEP6_PIPE.filter((id) => also.includes(id));
+  const full = want.length === 5 && !tail.length;
+  if (full) {
+    const pipe = opts.study === "2" || opts.archGroups === false ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL];
+    return { mode: "roster-recheck", pipe };
+  }
+  const modes: string[] = [];
+  for (const n of want) {
+    if (n === 1) modes.push("roster-recheck");
+    if (n === 2) modes.push("people");
+    if (n === 3) {
+      modes.push("groups");
+      if (opts.study === "1" && opts.archGroups) modes.push("archivesPupils", "groups-archived");
+    }
+    if (n === 4) modes.push("balance");
+    if (n === 5) modes.push("audit");
+  }
+  const all = [...modes, ...tail];
+  if (!all.length) return { mode: "", pipe: [] };
+  return { mode: all[0], pipe: all.slice(1) };
+}
+/** После состава: календарь → группы → касса → сверка. */
 export const AUTO_PIPE: HistoryPlanMode[] = ["people", "groups", "balance", "audit"];
 /** Живые: плюс архив групп действующих, потом касса. */
 export const AUTO_PIPE_FULL: string[] = ["people", "groups", "archivesPupils", "groups-archived", "balance", "audit"];
@@ -70,6 +104,8 @@ export type HistorySchedule = {
   label: string;
   leads: boolean;
   archGroups: boolean;
+  steps?: number[];
+  also?: string[];
   dueAt: string;
   lastFiredAt: string;
   lastJobId: string;
@@ -213,6 +249,8 @@ export function scheduleOf(raw: unknown, fallbackId = ""): HistorySchedule {
     label: String(r.label || "").trim().slice(0, 80),
     leads: r.leads !== false,
     archGroups: r.archGroups !== false,
+    steps: Array.isArray(r.steps) ? [...new Set(r.steps.map((n) => Number(n)).filter((n) => n >= 1 && n <= 5))].sort((a, b) => a - b) : undefined,
+    also: Array.isArray(r.also) ? STEP6_PIPE.filter((id) => (r.also as unknown[]).includes(id)) : undefined,
     dueAt: String(r.dueAt || ""),
     lastFiredAt: String(r.lastFiredAt || ""),
     lastJobId: String(r.lastJobId || ""),
@@ -294,16 +332,48 @@ export function planFromIdToRecheckDays(id: string): number {
 export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
   const fromId = planFromIdOf(rule.study, rule.dateFromId);
   if (rule.mode === "auto") {
+    const custom = Array.isArray(rule.steps);
+    const also = (rule.also || []).filter((id) => (STEP6_PIPE as readonly string[]).includes(id));
+    if (!custom && !also.length) {
+      return {
+        mode: "roster-recheck" as const,
+        kind: "roster",
+        study: rule.study,
+        recheck: true,
+        recheckDays: planFromIdToRecheckDays(fromId),
+        dateFrom: planDateFrom(fromId, now),
+        archived: rule.study === "2",
+        pipe: rule.study === "2" || rule.archGroups === false ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL],
+        skipLeads: Boolean(rule.study === "1" && rule.leads === false),
+      };
+    }
+    const built = pipeFromSelection(custom ? rule.steps || [] : [1, 2, 3, 4, 5], also, {
+      study: rule.study,
+      archGroups: rule.archGroups !== false,
+    });
     return {
-      mode: "roster-recheck" as const,
-      kind: "roster",
+      mode: built.mode as HistoryPlanMode,
+      kind: built.mode.startsWith("step6") ? "students" : built.mode.includes("roster") ? "roster" : "students",
       study: rule.study,
       recheck: true,
       recheckDays: planFromIdToRecheckDays(fromId),
       dateFrom: planDateFrom(fromId, now),
       archived: rule.study === "2",
-      pipe: rule.study === "2" || rule.archGroups === false ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL],
+      pipe: built.pipe as HistoryPlanMode[],
       skipLeads: Boolean(rule.study === "1" && rule.leads === false),
+    };
+  }
+  if (rule.mode === "step6-recount" || rule.mode === "step6-columns" || rule.mode === "step6-cash") {
+    const also = (rule.also || []).filter((id) => id !== rule.mode && (STEP6_PIPE as readonly string[]).includes(id));
+    return {
+      mode: rule.mode,
+      kind: "students",
+      study: rule.study,
+      recheck: false,
+      recheckDays: 32,
+      dateFrom: "",
+      archived: false,
+      pipe: also as unknown as HistoryPlanMode[],
     };
   }
   const meta = planModeMeta(rule.mode);
@@ -317,8 +387,25 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
     recheckDays: meta.recheck ? rule.recheckDays : 32,
     dateFrom: needFrom ? planDateFrom(fromId, now) : "",
     archived: rule.study === "2",
-    pipe: [] as HistoryPlanMode[],
+    pipe: extraPipe(rule),
   };
+}
+
+function ownStep(mode: string) {
+  if (mode.startsWith("roster")) return 1;
+  if (mode.startsWith("people")) return 2;
+  if (mode.startsWith("groups")) return 3;
+  if (mode === "balance") return 4;
+  if (mode === "audit") return 5;
+  return 0;
+}
+
+function extraPipe(rule: HistorySchedule): HistoryPlanMode[] {
+  const rest = (rule.steps || []).filter((n) => n !== ownStep(rule.mode));
+  const also = rule.also || [];
+  if (!rest.length && !also.length) return [];
+  const built = pipeFromSelection(rest, also, { study: rule.study, archGroups: rule.archGroups !== false });
+  return [built.mode, ...built.pipe].filter((id) => id && id !== rule.mode) as HistoryPlanMode[];
 }
 
 export function slotOpen(now: Date, at: string) {

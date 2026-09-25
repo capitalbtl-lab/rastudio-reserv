@@ -4824,7 +4824,7 @@ export function AdminCrmSettings() {
                     dateFrom: planDateFrom(planFromIdOf(opts.study, opts.dateFromId)),
                     recheckDays: planFromIdToRecheckDays(planFromIdOf(opts.study, opts.dateFromId)),
                     archived: opts.study === "2",
-                    name: `leads=${opts.leads ? 1 : 0}&archGroups=${opts.archGroups ? 1 : 0}`,
+                    name: `leads=${opts.leads ? 1 : 0}&archGroups=${opts.archGroups ? 1 : 0}&steps=${(opts.steps || []).join(",")}&also=${(opts.also || []).join(",")}`,
                   })
                 }
                 onRunOne={(opts) => {
@@ -4836,6 +4836,16 @@ export function AdminCrmSettings() {
                   const from = planFromIdOf("1", opts.dateFromId);
                   const name = hit?.name || `№${opts.cid}`;
                   const branchId = Number(hit?.branchId) || undefined;
+                  if (opts.kind === "step6-cash" || opts.kind === "step6-columns" || opts.kind === "step6-recount") {
+                    void startHistJob({
+                      jobMode: opts.kind,
+                      study: "1",
+                      customerId: opts.cid,
+                      branchId,
+                      name,
+                    });
+                    return;
+                  }
                   if (opts.kind === "audit") {
                     void startHistJob({
                       jobMode: "audit",
