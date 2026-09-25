@@ -2465,9 +2465,10 @@ function Step6Panel() {
   }
 
   const chips = "h-8 rounded-full px-3 text-[0.78rem] font-semibold";
-  const asideN = items.filter((x) => x.statusId < 0).length;
+  const inBranch = named.filter((x) => !branch || x.branchId === branch);
+  const asideN = inBranch.filter((x) => x.statusId < 0).length;
   const colCount = new Map<number, number>();
-  for (const x of items) {
+  for (const x of inBranch) {
     if (x.statusId < 0) continue;
     colCount.set(x.statusId, (colCount.get(x.statusId) || 0) + 1);
   }
@@ -2490,7 +2491,7 @@ function Step6Panel() {
         Активные лиды по филиалам. Колонка — этап воронки. Касса — отдельная кнопка, в роль и в шаг 5 не пишется.
       </p>
       <p className="mt-3 text-sm">
-        карточек {items.length}{colParts.length ? ` · ${colParts.join(" · ")}` : ""} · не в колонке {asideN} · касса совпала {items.filter((x) => x.cashState === "ok").length} · не сошлось {items.filter((x) => x.cashState === "gap").length} · ещё не снимали {items.filter((x) => !x.cashState || x.cashState === "wait").length}
+        карточек {inBranch.length}{colParts.length ? ` · ${colParts.join(" · ")}` : ""} · не в колонке {asideN} · касса совпала {inBranch.filter((x) => x.cashState === "ok").length} · не сошлось {inBranch.filter((x) => x.cashState === "gap").length} · ещё не снимали {inBranch.filter((x) => !x.cashState || x.cashState === "wait").length}
         {note ? ` · ${note}` : ""}
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
@@ -2508,10 +2509,10 @@ function Step6Panel() {
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <button type="button" className={cn(chips, col === "all" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol("all")}>Все</button>
-        <button type="button" className={cn(chips, col === -1 ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol(-1)}>не в колонке · {named.filter((x) => x.statusId < 0).length}</button>
+        <button type="button" className={cn(chips, col === -1 ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol(-1)}>не в колонке · {inBranch.filter((x) => x.statusId < 0).length}</button>
         {stageCols.map((s) => (
           <button key={s.id} type="button" className={cn(chips, col === s.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setCol(s.id); setPageLeft(0); setPageRight(0); }}>
-            {s.name} · {named.filter((x) => x.statusId === s.id).length}
+            {s.name} · {inBranch.filter((x) => x.statusId === s.id).length}
           </button>
         ))}
       </div>
