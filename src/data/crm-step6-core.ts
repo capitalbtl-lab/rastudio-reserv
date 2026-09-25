@@ -10,12 +10,6 @@ export function isApiClientStudy(raw: unknown) {
 export function step6ColumnId(leadStatusIds: unknown, stages: { id: number; name: string }[], leadStatusId?: unknown): number | null {
   if (!(leadStatusIds == null || leadStatusIds === "")) {
     const list = idList(leadStatusIds);
-    const rawCount = Array.isArray(leadStatusIds)
-      ? leadStatusIds.length
-      : leadStatusIds && typeof leadStatusIds === "object"
-        ? Object.keys(leadStatusIds as Record<string, unknown>).length
-        : 1;
-    if (rawCount > 0 && list.length === 0) return null;
     if (list.length > 1) return null;
     if (list.length === 1) return list[0];
   }

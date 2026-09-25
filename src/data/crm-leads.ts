@@ -296,6 +296,11 @@ async function fetchStageOrderFromSettings(branchId: number): Promise<number[]> 
   return [];
 }
 
+export async function readCrmLeadColumns(branch: number, statusIds: number[], tok: string) {
+  const login = await crmWebLogin().catch(() => ({ cookie: "" }));
+  return fetchCrmLeadColumns(branch, statusIds, login.cookie || "", tok);
+}
+
 async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: string, token = "", maxPages = 40) {
   const host = crmHost();
   const found: { id: number; name: string; statusId: number }[] = [];

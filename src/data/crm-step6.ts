@@ -5,7 +5,7 @@ import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-le
 import { kindFromAlfaPay } from "./crm-pay-core";
 import { lessonWriteoffAmount } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon } from "./crm-step5-canon";
-import { replaceStep6Branch, stampStep6Cash, peekLeadBoard } from "./crm-leads";
+import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, readCrmLeadColumns } from "./crm-leads";
 import { isApiLeadStudy, step6ColumnId } from "./crm-step6-core";
 import type { LeadCard, LeadStage } from "./crm-leads-stages";
 
@@ -86,30 +86,19 @@ export async function syncStep6Columns() {
         const card = cardOf(row, branch, stages);
         if (card) byId.set(card.id, card);
       }
-      const hits = new Map<number, number[]>();
-      let asked = 0;
-      for (const stage of stages) {
-        if (!stage.id) continue;
-        try {
-          const found = await readPages(`/v2api/${branch}/customer/index`, { is_study: 0, lead_status_id: stage.id }, tok);
-          asked += 1;
-          for (const row of found) {
-            const id = Number(row.id);
-            if (!Number.isFinite(id) || id <= 0 || !isApiLeadStudy(row.is_study)) continue;
-            const list = hits.get(id) || [];
-            if (!list.includes(stage.id)) list.push(stage.id);
-            hits.set(id, list);
-          }
-        } catch {
-          /* этот этап не узнали — чужие колонки не трогаем */
-        }
-      }
       const cards = [...byId.values()];
-      if (asked > 0) {
+      const board = await readCrmLeadColumns(branch, stages.map((s) => s.id), tok).catch(() => []);
+      const byLead = new Map<number, number>();
+      const many = new Set<number>();
+      for (const row of board) {
+        const prev = byLead.get(row.id);
+        if (prev == null) byLead.set(row.id, row.statusId);
+        else if (prev !== row.statusId) many.add(row.id);
+      }
+      if (board.length) {
         for (const card of cards) {
-          const cols = hits.get(card.id) || [];
-          if (cols.length === 1) card.statusId = cols[0];
-          else if (cols.length > 1) card.statusId = -1;
+          if (many.has(card.id)) card.statusId = -1;
+          else if (byLead.has(card.id)) card.statusId = byLead.get(card.id) ?? 0;
           else if (card.statusId < 0) card.statusId = 0;
         }
       }
