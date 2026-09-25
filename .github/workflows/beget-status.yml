@@ -18,34 +18,36 @@ jobs:
           command_timeout: 1m
           script: |
             set +e
+            echo "=== time ==="
+            date -u
+            echo "=== git ==="
             cd /var/www/rastudio
-            node --input-type=module <<'EOF'
-            import { copyFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-            const path = "storage/dossiers.json";
-            const raw = JSON.parse(readFileSync(path, "utf8"));
-            let toLead = 0, toStudy = 0, kept = 0, other = 0;
-            for (const d of raw.items || []) {
-              if (String(d.status || "") !== "архив") continue;
-              const ex = d.extras || {};
-              const study = ex.is_study === "" || ex.is_study == null ? NaN : Number(ex.is_study);
-              const removed = String(ex.removed ?? "");
-              const rec = String(ex.recheckArchive || "");
-              if (removed === "2" || rec === "1") { kept++; continue; }
-              if (study === 0) { d.status = "лид"; toLead++; continue; }
-              if (study === 1) { d.status = "учится"; toStudy++; continue; }
-              other++;
-            }
-            const changed = toLead + toStudy;
-            if (changed) {
-              copyFileSync(path, "storage/dossiers.json.bak-status-word");
-              const tmp = path + ".tmp-status-word";
-              writeFileSync(tmp, JSON.stringify(raw));
-              renameSync(tmp, path);
-            }
-            console.log(JSON.stringify({ toLead, toStudy, kept, other, changed }));
-            EOF
-            pm2 restart rastudio rastudio-history --update-env >/tmp/ra-restart-status.log 2>&1 || true
-            echo restarted
+            git rev-parse --short HEAD
+            git log -1 --oneline
+            echo "=== live stamp ==="
+            cat .output/.deploy-rev 2>/dev/null | cut -c1-7
+            cat .deploy-rev 2>/dev/null | cut -c1-7
+            echo "=== lock ==="
+            ls -l /tmp/rastudio-deploy.lock 2>/dev/null || echo no-lock
+            echo "=== stage ==="
+            ls -d /var/www/rastudio/.build-stage 2>/dev/null || echo no-stage
+            echo "=== mem ==="
+            free -h | head -2
+            nproc
+            echo "=== pm2 ==="
+            pm2 jlist | python3 -c "import json,sys; d=json.load(sys.stdin);
+            [print(p.get('name'), p.get('pm2_env',{}).get('status'), p.get('pid')) for p in d]"
+            echo "=== procs ==="
+            ps aux | awk '/node|npm|vite/ && !/awk/ {print $2,$3,$4,$11,$12,$13}' | head -20
+            echo "=== log tail ==="
+            tail -n 40 /tmp/rastudio-deploy.bg.log 2>/dev/null || echo no-log
+            echo "=== pm2 err ==="
+            pm2 logs rastudio --nostream --lines 40 --err 2>/dev/null | tail -40
+            echo "=== node log ==="
+            tail -n 40 /tmp/rastudio-node.log 2>/dev/null || echo no-node-log
+            echo "=== local ==="
+            curl -sS -o /tmp/local.html -w "local:%{http_code}\n" --max-time 8 http://127.0.0.1:3000/ || echo localfail
+            head -c 300 /tmp/local.html 2>/dev/null; echo
             echo "=== probe ==="
             cd /var/www/rastudio
             cat > /tmp/ra-probe.mjs <<'NODE'
