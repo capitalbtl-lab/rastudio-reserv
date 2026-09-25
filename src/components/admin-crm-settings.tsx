@@ -2595,7 +2595,7 @@ function Step6Panel() {
               </tbody>
             </table>
             <p className="mt-1">{step6Why(x)}</p>
-            <p className="mt-1 text-muted">Календарь и платежи — диск, каждый id один раз. Alfa: платёж — pay.id и pay.customer_id, списание — lesson.id со status 3 и details.commission этого customer_id. Чужую деталь и price не берём. Дырка — id есть на диске и нет в Alfa. Лишнее — наоборот.</p>
+            <p className="mt-1 text-muted">Календарь — диск. Alfa: pay/index с customer_id и датами с 2015, один pay.id. Занятия: lesson/index status 3, дата с 2015-01-01, списание — details.commission этого customer_id, иначе cost. Без status в ответе занятие уже проведённое. Чужую деталь и price не берём.</p>
           </div>
         ) : null}
       </li>

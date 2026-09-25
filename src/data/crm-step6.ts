@@ -2,7 +2,7 @@
 
 import { request, token as alfaToken, dropAlfaIndex } from "./alfacrm";
 import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
-import { kindFromAlfaPay } from "./crm-pay-core";
+import { kindFromAlfaPay, alfaPayIndexDate } from "./crm-pay-core";
 import { writeoffSumOf } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon } from "./crm-step5-canon";
 import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, readCrmLeadColumns } from "./crm-leads";
@@ -199,7 +199,9 @@ function alfaCustomerCommission(row: Record<string, unknown>, customerId: number
     ? hit.commission
     : Object.prototype.hasOwnProperty.call(hit, "commision")
       ? hit.commision
-      : undefined;
+      : Object.prototype.hasOwnProperty.call(hit, "cost")
+        ? hit.cost
+        : undefined;
   if (raw == null || raw === "") return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
@@ -284,8 +286,11 @@ export async function recheckStep6Cash(onlyId = 0) {
   let lessons = 0;
   let writeoff = 0;
   let noCommission = 0;
+  const payFrom = alfaPayIndexDate("2015-01-01");
+  const payTo = alfaPayIndexDate(new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10));
+  const lessonTo = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
   for (const branch of branches) {
-    const pays = await readPages(`/v2api/${branch}/pay/index`, { customer_id: id }, tok);
+    const pays = await readPages(`/v2api/${branch}/pay/index`, { customer_id: id, date_from: payFrom, date_to: payTo }, tok);
     for (const row of pays) {
       if (row.deleted === true || row.deleted === 1 || row.deleted === "1") continue;
       const pid = posId(row.id);
@@ -313,9 +318,10 @@ export async function recheckStep6Cash(onlyId = 0) {
         paySum += part.n;
       }
     }
-    const lrows = await readPages(`/v2api/${branch}/lesson/index`, { customer_id: id }, tok);
+    const lrows = await readPages(`/v2api/${branch}/lesson/index`, { customer_id: id, status: 3, date_from: "2015-01-01", date_to: lessonTo }, tok);
     for (const row of lrows) {
-      if (Number(row.status) !== 3) continue;
+      const st = Number(row.status);
+      if (Number.isFinite(st) && st !== 3) continue;
       const lid = posId(row.id);
       if (!lid) {
         lesNoId += 1;
