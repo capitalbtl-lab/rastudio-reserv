@@ -2310,6 +2310,7 @@ type Step6Item = {
   cashLesHole?: number;
   cashLesExtra?: number;
   cashNoId?: number;
+  cashNoCommission?: number;
   cashDiskKnown?: boolean;
 };
 
@@ -2352,6 +2353,7 @@ function step6Why(x: Step6Item) {
   if (!x.cashDiskKnown) bits.push("Календаря и платежей на диске нет, id сверить не с чем.");
   else bits.push(`Id: платежи дырки ${x.cashPayHole || 0}, лишние ${x.cashPayExtra || 0}; занятия дырки ${x.cashLesHole || 0}, лишние ${x.cashLesExtra || 0}.`);
   if ((x.cashNoId || 0) > 0) bits.push(`Без id: ${x.cashNoId}.`);
+  if ((x.cashNoCommission || 0) > 0) bits.push(`Занятий без commission этого клиента: ${x.cashNoCommission}.`);
   return bits.join(" ");
 }
 
@@ -2576,8 +2578,8 @@ function Step6Panel() {
                     {x.cashPayHole == null
                       ? "ещё не снимали"
                       : x.cashDiskKnown
-                        ? `платежи: дырки ${x.cashPayHole || 0}, лишние ${x.cashPayExtra || 0} · занятия: дырки ${x.cashLesHole || 0}, лишние ${x.cashLesExtra || 0}${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}`
-                        : `календаря на диске нет${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}`}
+                        ? `платежи: дырки ${x.cashPayHole || 0}, лишние ${x.cashPayExtra || 0} · занятия: дырки ${x.cashLesHole || 0}, лишние ${x.cashLesExtra || 0}${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}${(x.cashNoCommission || 0) > 0 ? ` · без commission ${x.cashNoCommission}` : ""}`
+                        : `календаря на диске нет${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}${(x.cashNoCommission || 0) > 0 ? ` · без commission ${x.cashNoCommission}` : ""}`}
                   </td>
                 </tr>
                 <tr>
@@ -2593,7 +2595,7 @@ function Step6Panel() {
               </tbody>
             </table>
             <p className="mt-1">{step6Why(x)}</p>
-            <p className="mt-1 text-muted">Календарь и платежи — диск, каждый id один раз. Alfa — живой pay/index и lesson/index, тоже по id. Дырка — id есть на диске и нет в Alfa. Лишнее — наоборот. Строка без id в сумму не входит. Товар входит в формулу, только если так шапка сходится. Шапка — Customer.balance.</p>
+            <p className="mt-1 text-muted">Календарь и платежи — диск, каждый id один раз. Alfa: платёж — pay.id и pay.customer_id, списание — lesson.id со status 3 и details.commission этого customer_id. Чужую деталь и price не берём. Дырка — id есть на диске и нет в Alfa. Лишнее — наоборот.</p>
           </div>
         ) : null}
       </li>

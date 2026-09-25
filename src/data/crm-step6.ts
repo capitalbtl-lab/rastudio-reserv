@@ -3,7 +3,7 @@
 import { request, token as alfaToken, dropAlfaIndex } from "./alfacrm";
 import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
 import { kindFromAlfaPay } from "./crm-pay-core";
-import { lessonWriteoffAmount } from "./crm-ledger-core";
+import { writeoffSumOf } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon } from "./crm-step5-canon";
 import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, readCrmLeadColumns } from "./crm-leads";
 import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
@@ -190,11 +190,26 @@ function idGap(disk: Set<number>, alfa: Set<number>) {
   return { hole, extra };
 }
 
+/** Списание клиента по доке: details[].commission того же customer_id. Чужую деталь и price не берём. */
+function alfaCustomerCommission(row: Record<string, unknown>, customerId: number): number | null {
+  const details = Array.isArray(row.details) ? (row.details as Record<string, unknown>[]) : [];
+  const hit = details.find((d) => Number(d.customer_id || d.customerId) === customerId);
+  if (!hit) return null;
+  const raw = Object.prototype.hasOwnProperty.call(hit, "commission")
+    ? hit.commission
+    : Object.prototype.hasOwnProperty.call(hit, "commision")
+      ? hit.commision
+      : undefined;
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function recheckStep6Cash(onlyId = 0) {
   const board = peekLeadBoard();
   const items = board?.items || [];
   const wanted = Number(onlyId) || 0;
-  const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null)));
+  const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null || x.cashNoCommission == null)));
   const id = wanted || waiting[0]?.id || 0;
   if (!id) return { ok: true as const, more: false, note: "Кассу шага 6 снимать некого. Сначала колонки." };
   if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, error: "Этого лида нет на шаге 6." };
@@ -268,12 +283,14 @@ export async function recheckStep6Cash(onlyId = 0) {
   let refundSum = 0;
   let lessons = 0;
   let writeoff = 0;
+  let noCommission = 0;
   for (const branch of branches) {
     const pays = await readPages(`/v2api/${branch}/pay/index`, { customer_id: id }, tok);
     for (const row of pays) {
       if (row.deleted === true || row.deleted === 1 || row.deleted === "1") continue;
       const pid = posId(row.id);
-      if (!pid) {
+      const owner = Number(row.customer_id || row.customerId) || 0;
+      if (!pid || (owner && owner !== id)) {
         payNoId += 1;
         continue;
       }
@@ -298,8 +315,7 @@ export async function recheckStep6Cash(onlyId = 0) {
     }
     const lrows = await readPages(`/v2api/${branch}/lesson/index`, { customer_id: id }, tok);
     for (const row of lrows) {
-      const status = row.status;
-      if (status != null && status !== "" && Number(status) !== 3) continue;
+      if (Number(row.status) !== 3) continue;
       const lid = posId(row.id);
       if (!lid) {
         lesNoId += 1;
@@ -307,8 +323,13 @@ export async function recheckStep6Cash(onlyId = 0) {
       }
       if (lesIds.has(lid)) continue;
       lesIds.add(lid);
+      const commission = alfaCustomerCommission(row, id);
+      if (commission == null) {
+        noCommission += 1;
+        continue;
+      }
       lessons += 1;
-      writeoff += lessonWriteoffAmount(row, id);
+      writeoff += commission;
     }
   }
   const cal = loadCustomerCalendar(id);
@@ -359,7 +380,7 @@ export async function recheckStep6Cash(onlyId = 0) {
   const payIdsGap = idGap(diskPayIds, payIds);
   const lesIdsGap = idGap(diskLesIds, lesIds);
   const diskKnown = diskPayIds.size > 0 || diskLesIds.size > 0;
-  const idMiss = payNoId + lesNoId + (diskKnown ? payIdsGap.hole + payIdsGap.extra + lesIdsGap.hole + lesIdsGap.extra : 0);
+  const idMiss = payNoId + lesNoId + noCommission + (diskKnown ? payIdsGap.hole + payIdsGap.extra + lesIdsGap.hole + lesIdsGap.extra : 0);
   const fitted = step5FitRemainder(cash, writeoff, goods, header);
   const matched = step5Close(fitted.n, header) && idMiss === 0;
   const payRows = payN + corrN + refundN;
@@ -397,6 +418,7 @@ export async function recheckStep6Cash(onlyId = 0) {
     cashLesHole: diskKnown ? lesIdsGap.hole : 0,
     cashLesExtra: diskKnown ? lesIdsGap.extra : 0,
     cashNoId: payNoId + lesNoId,
+    cashNoCommission: noCommission,
     cashDiskKnown: diskKnown,
   });
   const name = items.find((x) => x.id === id)?.name || `№${id}`;

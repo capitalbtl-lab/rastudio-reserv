@@ -396,6 +396,7 @@ export type LeadCard = {
   cashLesHole?: number;
   cashLesExtra?: number;
   cashNoId?: number;
+  cashNoCommission?: number;
   cashDiskKnown?: boolean;
 };
 
