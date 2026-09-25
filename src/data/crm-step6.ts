@@ -7,6 +7,9 @@ import { lessonWriteoffAmount } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon } from "./crm-step5-canon";
 import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, readCrmLeadColumns } from "./crm-leads";
 import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
+import { loadCustomerCalendar } from "./group-cards";
+import { paysOf } from "./crm-pay";
+import { writeoffSumOf } from "./crm-ledger-core";
 import { isApiLeadStudy, step6ColumnId } from "./crm-step6-core";
 import type { LeadCard, LeadStage } from "./crm-leads-stages";
 import type { StepLogRow, StepLogSettings } from "./crm-step-run-log-core";
@@ -174,11 +177,24 @@ function payParts(item: Record<string, unknown>) {
   return { kind, product: false, n, goods: 0 };
 }
 
+function posId(raw: unknown) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function idGap(disk: Set<number>, alfa: Set<number>) {
+  let hole = 0;
+  let extra = 0;
+  for (const id of disk) if (!alfa.has(id)) hole += 1;
+  for (const id of alfa) if (!disk.has(id)) extra += 1;
+  return { hole, extra };
+}
+
 export async function recheckStep6Cash(onlyId = 0) {
   const board = peekLeadBoard();
   const items = board?.items || [];
   const wanted = Number(onlyId) || 0;
-  const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && x.cashPayN == null));
+  const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null)));
   const id = wanted || waiting[0]?.id || 0;
   if (!id) return { ok: true as const, more: false, note: "Кассу шага 6 снимать некого. Сначала колонки." };
   if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, error: "Этого лида нет на шаге 6." };
@@ -240,7 +256,10 @@ export async function recheckStep6Cash(onlyId = 0) {
   }
   let cash = 0;
   const goods: number[] = [];
-  let payRows = 0;
+  const payIds = new Set<number>();
+  const lesIds = new Set<number>();
+  let payNoId = 0;
+  let lesNoId = 0;
   let payN = 0;
   let paySum = 0;
   let corrN = 0;
@@ -253,12 +272,18 @@ export async function recheckStep6Cash(onlyId = 0) {
     const pays = await readPages(`/v2api/${branch}/pay/index`, { customer_id: id }, tok);
     for (const row of pays) {
       if (row.deleted === true || row.deleted === 1 || row.deleted === "1") continue;
+      const pid = posId(row.id);
+      if (!pid) {
+        payNoId += 1;
+        continue;
+      }
+      if (payIds.has(pid)) continue;
+      payIds.add(pid);
       const part = payParts(row);
       if (part.product) {
         if (part.goods > 0) goods.push(part.goods);
         continue;
       }
-      payRows += 1;
       cash += part.n;
       if (part.kind === "correct") {
         corrN += 1;
@@ -275,12 +300,69 @@ export async function recheckStep6Cash(onlyId = 0) {
     for (const row of lrows) {
       const status = row.status;
       if (status != null && status !== "" && Number(status) !== 3) continue;
+      const lid = posId(row.id);
+      if (!lid) {
+        lesNoId += 1;
+        continue;
+      }
+      if (lesIds.has(lid)) continue;
+      lesIds.add(lid);
       lessons += 1;
       writeoff += lessonWriteoffAmount(row, id);
     }
   }
+  const cal = loadCustomerCalendar(id);
+  const diskLesIds = new Set<number>();
+  for (const lesson of cal) {
+    if (Number(lesson.status) !== 3) continue;
+    const lid = posId(lesson.lessonId);
+    if (lid) diskLesIds.add(lid);
+  }
+  const diskWo = writeoffSumOf(cal, id);
+  const diskPayIds = new Set<number>();
+  let diskPayN = 0;
+  let diskPaySum = 0;
+  let diskCorrN = 0;
+  let diskCorrSum = 0;
+  let diskRefundN = 0;
+  let diskRefundSum = 0;
+  let diskGoodsN = 0;
+  let diskGoodsSum = 0;
+  for (const row of paysOf(id)) {
+    if (row.deleted) continue;
+    const pid = posId(row.id);
+    if (!pid || diskPayIds.has(pid)) continue;
+    diskPayIds.add(pid);
+    const inn = Number(row.income) || 0;
+    const out = Number(row.expenditure) || 0;
+    if (row.kind === "product") {
+      const g = Math.abs(out || inn);
+      if (g > 0) {
+        diskGoodsN += 1;
+        diskGoodsSum += g;
+      }
+      continue;
+    }
+    let n = inn - out;
+    if (row.kind === "refund" && n > 0) n = -n;
+    if (row.kind === "correct") {
+      diskCorrN += 1;
+      diskCorrSum += n;
+    } else if (row.kind === "refund") {
+      diskRefundN += 1;
+      diskRefundSum += n;
+    } else {
+      diskPayN += 1;
+      diskPaySum += n;
+    }
+  }
+  const payIdsGap = idGap(diskPayIds, payIds);
+  const lesIdsGap = idGap(diskLesIds, lesIds);
+  const diskKnown = diskPayIds.size > 0 || diskLesIds.size > 0;
+  const idMiss = payNoId + lesNoId + (diskKnown ? payIdsGap.hole + payIdsGap.extra + lesIdsGap.hole + lesIdsGap.extra : 0);
   const fitted = step5FitRemainder(cash, writeoff, goods, header);
-  const matched = step5Close(fitted.n, header);
+  const matched = step5Close(fitted.n, header) && idMiss === 0;
+  const payRows = payN + corrN + refundN;
   const empty = payRows === 0 && lessons === 0;
   const sort = lessons > 0 || (empty && !step5Close(header, 0)) ? "back" : payRows > 0 ? "paid" : "new";
   stampStep6Cash(id, {
@@ -300,6 +382,22 @@ export async function recheckStep6Cash(onlyId = 0) {
     cashGoodsFit: fitted.goods,
     cashLesN: lessons,
     cashLesSum: writeoff,
+    cashDiskPayN: diskPayN,
+    cashDiskPaySum: diskPaySum,
+    cashDiskCorrN: diskCorrN,
+    cashDiskCorrSum: diskCorrSum,
+    cashDiskRefundN: diskRefundN,
+    cashDiskRefundSum: diskRefundSum,
+    cashDiskGoodsN: diskGoodsN,
+    cashDiskGoodsSum: diskGoodsSum,
+    cashDiskLesN: diskLesIds.size,
+    cashDiskLesSum: diskWo,
+    cashPayHole: diskKnown ? payIdsGap.hole : 0,
+    cashPayExtra: diskKnown ? payIdsGap.extra : 0,
+    cashLesHole: diskKnown ? lesIdsGap.hole : 0,
+    cashLesExtra: diskKnown ? lesIdsGap.extra : 0,
+    cashNoId: payNoId + lesNoId,
+    cashDiskKnown: diskKnown,
   });
   const name = items.find((x) => x.id === id)?.name || `№${id}`;
   const left = wanted ? false : (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");
@@ -313,7 +411,7 @@ export async function recheckStep6Cash(onlyId = 0) {
     result: matched ? "right" : "left",
     ok: true,
     matched,
-    note: `${sortRu} · шапка ${header} · формула ${fitted.n}`,
+    note: `${sortRu} · шапка ${header} · формула ${fitted.n}${idMiss ? ` · id не сошлись ${idMiss}` : ""}`,
     after: { header, formula: fitted.n },
   }], !left);
   return {

@@ -381,6 +381,22 @@ export type LeadCard = {
   cashGoodsFit?: number;
   cashLesN?: number;
   cashLesSum?: number;
+  cashDiskPayN?: number;
+  cashDiskPaySum?: number;
+  cashDiskCorrN?: number;
+  cashDiskCorrSum?: number;
+  cashDiskRefundN?: number;
+  cashDiskRefundSum?: number;
+  cashDiskGoodsN?: number;
+  cashDiskGoodsSum?: number;
+  cashDiskLesN?: number;
+  cashDiskLesSum?: number;
+  cashPayHole?: number;
+  cashPayExtra?: number;
+  cashLesHole?: number;
+  cashLesExtra?: number;
+  cashNoId?: number;
+  cashDiskKnown?: boolean;
 };
 
 /** Карточка лида с диска сайта. Без API. crmId < 0 — заявка ещё не в Alfa. */

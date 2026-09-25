@@ -2295,6 +2295,22 @@ type Step6Item = {
   cashGoodsFit?: number;
   cashLesN?: number;
   cashLesSum?: number;
+  cashDiskPayN?: number;
+  cashDiskPaySum?: number;
+  cashDiskCorrN?: number;
+  cashDiskCorrSum?: number;
+  cashDiskRefundN?: number;
+  cashDiskRefundSum?: number;
+  cashDiskGoodsN?: number;
+  cashDiskGoodsSum?: number;
+  cashDiskLesN?: number;
+  cashDiskLesSum?: number;
+  cashPayHole?: number;
+  cashPayExtra?: number;
+  cashLesHole?: number;
+  cashLesExtra?: number;
+  cashNoId?: number;
+  cashDiskKnown?: boolean;
 };
 
 function step6Branch(id: number) {
@@ -2332,6 +2348,10 @@ function step6Why(x: Step6Item) {
   if (!tape) bits.push("Лента платежей и проведённых занятий пустая.");
   if ((x.cashGoodsN || 0) > 0 && !(x.cashGoodsFit && x.cashGoodsFit > 0)) bits.push("Товар в ленте есть, в формулу не вошёл: без него шапка ближе.");
   else if ((x.cashGoodsFit || 0) > 0) bits.push(`В формулу вошёл товар ${rubAudit(-(x.cashGoodsFit || 0))}.`);
+  if (x.cashDiskKnown == null && x.cashPayHole == null) return bits.join(" ");
+  if (!x.cashDiskKnown) bits.push("Календаря и платежей на диске нет, id сверить не с чем.");
+  else bits.push(`Id: платежи дырки ${x.cashPayHole || 0}, лишние ${x.cashPayExtra || 0}; занятия дырки ${x.cashLesHole || 0}, лишние ${x.cashLesExtra || 0}.`);
+  if ((x.cashNoId || 0) > 0) bits.push(`Без id: ${x.cashNoId}.`);
   return bits.join(" ");
 }
 
@@ -2516,28 +2536,34 @@ function Step6Panel() {
               <thead>
                 <tr className="text-muted">
                   <th className="py-0.5 font-medium">Откуда</th>
+                  <th className="py-0.5 font-medium">Календарь</th>
                   <th className="py-0.5 font-medium">Alfa</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>платежи</td>
+                  <td>{step6Count(x.cashDiskPayN, x.cashDiskPaySum)}</td>
                   <td>{step6Count(x.cashPayN, x.cashPaySum)}</td>
                 </tr>
                 <tr>
                   <td>списания занятий</td>
+                  <td>{step6Count(x.cashDiskLesN, x.cashDiskLesSum, true)}</td>
                   <td>{step6Count(x.cashLesN, x.cashLesSum, true)}</td>
                 </tr>
                 <tr>
                   <td>корректировки</td>
+                  <td>{step6Count(x.cashDiskCorrN, x.cashDiskCorrSum)}</td>
                   <td>{step6Count(x.cashCorrN, x.cashCorrSum)}</td>
                 </tr>
                 <tr>
                   <td>возвраты</td>
+                  <td>{step6Count(x.cashDiskRefundN, x.cashDiskRefundSum)}</td>
                   <td>{step6Count(x.cashRefundN, x.cashRefundSum)}</td>
                 </tr>
                 <tr>
                   <td>товары</td>
+                  <td>{step6Count(x.cashDiskGoodsN, x.cashDiskGoodsSum, true)}</td>
                   <td>
                     {x.cashGoodsN == null
                       ? "ещё не снимали"
@@ -2545,17 +2571,29 @@ function Step6Panel() {
                   </td>
                 </tr>
                 <tr>
+                  <td>id</td>
+                  <td colSpan={2}>
+                    {x.cashPayHole == null
+                      ? "ещё не снимали"
+                      : x.cashDiskKnown
+                        ? `платежи: дырки ${x.cashPayHole || 0}, лишние ${x.cashPayExtra || 0} · занятия: дырки ${x.cashLesHole || 0}, лишние ${x.cashLesExtra || 0}${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}`
+                        : `календаря на диске нет${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}`}
+                  </td>
+                </tr>
+                <tr>
                   <td>формула</td>
+                  <td />
                   <td>{rubAudit(x.cashFormula)}</td>
                 </tr>
                 <tr>
                   <td>шапка</td>
+                  <td />
                   <td>{x.cashState === "no-balance" ? "нет balance" : rubAudit(x.cashBalance)}</td>
                 </tr>
               </tbody>
             </table>
             <p className="mt-1">{step6Why(x)}</p>
-            <p className="mt-1 text-muted">Лента — живой pay/index и lesson/index, на диск шага 4 не пишется. Товар входит в формулу, только если так шапка сходится. Шапка — Customer.balance. В роль досье и в сверку шага 5 это не пишется.</p>
+            <p className="mt-1 text-muted">Календарь и платежи — диск, каждый id один раз. Alfa — живой pay/index и lesson/index, тоже по id. Дырка — id есть на диске и нет в Alfa. Лишнее — наоборот. Строка без id в сумму не входит. Товар входит в формулу, только если так шапка сходится. Шапка — Customer.balance.</p>
           </div>
         ) : null}
       </li>
