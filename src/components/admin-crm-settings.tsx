@@ -2275,6 +2275,261 @@ function alfaRoleLabel(role?: string) {
   return "";
 }
 
+type Step6Item = {
+  id: number;
+  branchId: number;
+  name: string;
+  statusId: number;
+  cashState?: "wait" | "ok" | "gap" | "no-balance";
+  cashSort?: "" | "new" | "paid" | "back";
+  cashBalance?: number;
+  cashFormula?: number;
+};
+
+function step6Branch(id: number) {
+  return CRM_BRANCH[id]?.short || `филиал ${id}`;
+}
+
+function step6SortWord(sort?: string) {
+  if (sort === "new") return "новый";
+  if (sort === "paid") return "новый с деньгами";
+  if (sort === "back") return "вернувшийся";
+  return "кассу не разбирали";
+}
+
+function step6CashWord(state?: string) {
+  if (state === "ok") return "совпало";
+  if (state === "gap") return "не сошлось";
+  if (state === "no-balance") return "нет balance";
+  return "касса не снята";
+}
+
+function Step6Panel() {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [items, setItems] = useState<Step6Item[]>([]);
+  const [stages, setStages] = useState<LeadStage[]>(LEAD_STAGES);
+  const [query, setQuery] = useState("");
+  const [branch, setBranch] = useState(0);
+  const [col, setCol] = useState<"all" | number>("all");
+  const [sort, setSort] = useState<"all" | "wait" | "new" | "paid" | "back" | "gap" | "no-balance" | "aside">("all");
+  const [open, setOpen] = useState("");
+  const [pageSize, setPageSize] = useState(20);
+  const [pageLeft, setPageLeft] = useState(0);
+  const [pageRight, setPageRight] = useState(0);
+
+  async function loadList() {
+    const res = (await adminSchedule({ data: { token: token(), action: "leadsBoard", branchId: 0 } as never })) as {
+      ok?: boolean;
+      error?: string;
+      items?: Step6Item[];
+      stages?: LeadStage[];
+    };
+    if (!res.ok) {
+      setNote(res.error || "Список не прочитался.");
+      return;
+    }
+    setItems((res.items || []).filter((x) => x.cashState));
+    if (res.stages?.length) setStages(res.stages);
+  }
+
+  useEffect(() => {
+    void loadList().catch(() => setNote("Список не прочитался."));
+  }, []);
+
+  function stageName(id: number) {
+    if (id < 0) return "не в колонке";
+    return stages.find((s) => s.id === id)?.name || `этап ${id}`;
+  }
+
+  function readColumns() {
+    setBusy(true);
+    setNote("Читаю колонки…");
+    void adminSchedule({ data: { token: token(), action: "step6Columns" } as never })
+      .then(async (res) => {
+        const r = res as { ok?: boolean; error?: string; note?: string };
+        setNote(r.ok ? r.note || "Колонки записаны." : r.error || "Не прочиталось.");
+        if (r.ok) await loadList();
+      })
+      .catch((e) => setNote(e instanceof Error ? e.message : "Не прочиталось."))
+      .finally(() => setBusy(false));
+  }
+
+  function readCash() {
+    setBusy(true);
+    setNote("Снимаю кассу…");
+    const run = async () => {
+      for (;;) {
+        const res = (await adminSchedule({ data: { token: token(), action: "step6Cash" } as never })) as {
+          ok?: boolean;
+          error?: string;
+          note?: string;
+          more?: boolean;
+        };
+        if (!res.ok) {
+          setNote(res.error || "Касса не снялась.");
+          return;
+        }
+        setNote(res.note || "");
+        await loadList();
+        if (!res.more) return;
+      }
+    };
+    void run()
+      .catch((e) => setNote(e instanceof Error ? e.message : "Касса не снялась."))
+      .finally(() => setBusy(false));
+  }
+
+  const q = query.trim().toLowerCase();
+  const named = items.filter((x) => !q || x.name.toLowerCase().includes(q) || String(x.id).includes(q));
+  const byBranch = (id: number) => named.filter((x) => x.branchId === id).length;
+  const colIds = [...new Set(named.map((x) => (x.statusId < 0 ? -1 : x.statusId)))];
+  const filtered = named.filter((x) => {
+    if (branch && x.branchId !== branch) return false;
+    if (col === "all") {
+      /* keep */
+    } else if (col === -1) {
+      if (x.statusId >= 0) return false;
+    } else if (x.statusId !== col) return false;
+    if (sort === "all") return true;
+    if (sort === "aside") return x.statusId < 0;
+    if (sort === "wait") return x.cashState === "wait" || !x.cashState;
+    if (sort === "gap" || sort === "no-balance") return x.cashState === sort;
+    return x.cashSort === sort;
+  });
+  const closed = (x: Step6Item) => x.statusId >= 0 && x.cashState === "ok";
+  const left = filtered.filter((x) => !closed(x)).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id);
+  const right = filtered.filter(closed).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id);
+  const pagesL = Math.max(1, Math.ceil(left.length / pageSize) || 1);
+  const pagesR = Math.max(1, Math.ceil(right.length / pageSize) || 1);
+  const safeL = Math.min(pageLeft, pagesL - 1);
+  const safeR = Math.min(pageRight, pagesR - 1);
+  const sliceL = left.slice(safeL * pageSize, safeL * pageSize + pageSize);
+  const sliceR = right.slice(safeR * pageSize, safeR * pageSize + pageSize);
+
+  function pager(page: number, pages: number, set: (n: number) => void) {
+    if (pages <= 1) return null;
+    return (
+      <span className="ml-auto flex flex-wrap items-center gap-1">
+        <button type="button" className={BTN_GHOST_SM} disabled={page <= 0} onClick={() => set(page - 1)}>Назад</button>
+        <span className="text-[0.78rem] text-muted">{page + 1} / {pages}</span>
+        <button type="button" className={BTN_GHOST_SM} disabled={page >= pages - 1} onClick={() => set(page + 1)}>Дальше</button>
+      </span>
+    );
+  }
+
+  function card(x: Step6Item) {
+    const key = `${x.branchId}:${x.id}`;
+    const shown = open === key;
+    const ok = closed(x);
+    const aside = x.statusId < 0;
+    const word = aside ? "не в колонке" : step6CashWord(x.cashState);
+    return (
+      <li key={key} className={cn("rounded-2xl bg-white px-4 py-3 ring-1", ok ? "ring-emerald-200" : aside || x.cashState === "gap" || x.cashState === "no-balance" ? "ring-amber-200" : "ring-black/8")}>
+        <div className="flex items-center gap-3">
+          <button type="button" className="min-w-0 flex-1 truncate text-left font-medium leading-tight" onClick={() => setOpen(shown ? "" : key)}>
+            {x.name || `лид ${x.id}`}
+          </button>
+          <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[0.72rem] font-semibold", ok ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950")}>
+            {word}
+          </span>
+          <button type="button" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-semibold leading-none text-muted ring-1 ring-black/10" onClick={() => setOpen(shown ? "" : key)} aria-label={shown ? "свернуть" : "развернуть"}>
+            {shown ? "−" : "+"}
+          </button>
+        </div>
+        <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
+          №{x.id} · {step6Branch(x.branchId)} · {stageName(x.statusId)} · {step6SortWord(x.cashSort)}
+          {x.cashState && x.cashState !== "wait" ? ` · шапка ${rubAudit(x.cashBalance)} · формула ${rubAudit(x.cashFormula)}` : ""}
+        </p>
+        {shown ? (
+          <div className="mt-3 border-t border-black/5 pt-3 text-[0.72rem] leading-snug">
+            <p>Филиал — {step6Branch(x.branchId)}. Колонка — {stageName(x.statusId)}.</p>
+            <p>Касса — {step6CashWord(x.cashState)}. Разбор — {step6SortWord(x.cashSort)}.</p>
+            <p>Шапка {rubAudit(x.cashBalance)}. Формула {rubAudit(x.cashFormula)}.</p>
+            <p className="mt-1 text-muted">В роль досье и в сверку шага 5 это не пишется. Один id в двух филиалах — две карточки, касса одна.</p>
+          </div>
+        ) : null}
+      </li>
+    );
+  }
+
+  const chips = "h-8 rounded-full px-3 text-[0.78rem] font-semibold";
+  return (
+    <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
+      <div className="font-display text-[1.15rem]">Лиды</div>
+      <p className="mt-1 text-sm text-muted">
+        Активные лиды по филиалам. Колонка — этап воронки. Касса — отдельная кнопка, в роль и в шаг 5 не пишется.
+      </p>
+      <p className="mt-3 text-sm">
+        карточек {items.length} · в колонке {items.filter((x) => x.statusId >= 0).length} · не в колонке {items.filter((x) => x.statusId < 0).length} · касса совпала {items.filter((x) => x.cashState === "ok").length} · не сошлось {items.filter((x) => x.cashState === "gap").length} · ещё не снимали {items.filter((x) => !x.cashState || x.cashState === "wait").length}
+        {note ? ` · ${note}` : ""}
+      </p>
+      <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
+        <button type="button" className={cn(BTN_RED, busy && "ra-progress-run")} disabled={busy} onClick={readColumns}>Прочитать колонки</button>
+        <button type="button" className={BTN_GHOST} disabled={busy || !items.length} onClick={readCash}>Перепроверить кассу</button>
+      </div>
+      <input className="mt-3 h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10" placeholder="Найти лида…" value={query} onChange={(e) => { setQuery(e.target.value); setPageLeft(0); setPageRight(0); }} />
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {[{ id: 0, label: "Все филиалы" }, ...[1, 2, 3, 4].map((id) => ({ id, label: step6Branch(id) }))].map((b) => (
+          <button key={b.id} type="button" className={cn(chips, branch === b.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setBranch(b.id); setPageLeft(0); setPageRight(0); }}>
+            {b.label} · {b.id ? byBranch(b.id) : named.length}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <button type="button" className={cn(chips, col === "all" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol("all")}>Все колонки · {named.length}</button>
+        <button type="button" className={cn(chips, col === -1 ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setCol(-1)}>не в колонке · {named.filter((x) => x.statusId < 0).length}</button>
+        {stages.filter((s) => colIds.includes(s.id) || named.some((x) => x.statusId === s.id)).map((s) => (
+          <button key={s.id} type="button" className={cn(chips, col === s.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setCol(s.id); setPageLeft(0); setPageRight(0); }}>
+            {s.name} · {named.filter((x) => x.statusId === s.id).length}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {([
+          ["all", "Вся касса"],
+          ["wait", "не снята"],
+          ["new", "новый"],
+          ["paid", "новый с деньгами"],
+          ["back", "вернувшийся"],
+          ["gap", "не сошлось"],
+          ["no-balance", "нет balance"],
+          ["aside", "не в колонке"],
+        ] as const).map(([id, label]) => (
+          <button key={id} type="button" className={cn(chips, sort === id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setSort(id); setPageLeft(0); setPageRight(0); }}>
+            {label}
+          </button>
+        ))}
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[0.78rem]">
+          <span className="text-muted">На странице</span>
+          {([10, 20, 30, 100] as const).map((n) => (
+            <button key={n} type="button" className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setPageSize(n); setPageLeft(0); setPageRight(0); }}>{n}</button>
+          ))}
+        </span>
+      </div>
+      {!items.length ? <p className="mt-3 text-sm text-muted">Колонки ещё не читали. Список появится после «Прочитать колонки».</p> : null}
+      <div className="mt-3 grid items-stretch gap-3 lg:grid-cols-2">
+        <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <h4 className="font-display text-[1.05rem] text-rose-900">Не закрыто · {left.length}</h4>
+            {pager(safeL, pagesL, setPageLeft)}
+          </div>
+          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Нет колонки, касса не снята или не сошлась.</p>
+          <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto p-0.5">{sliceL.map(card)}</ul>
+        </section>
+        <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <h4 className="font-display text-[1.05rem] text-emerald-900">Совпало · {right.length}</h4>
+            {pager(safeR, pagesR, setPageRight)}
+          </div>
+          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Колонка есть, шапка и формула сошлись.</p>
+          <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto p-0.5">{sliceR.map(card)}</ul>
+        </section>
+      </div>
+    </section>
+  );
+}
+
 function AuditFillList({
   rows,
   busy,
@@ -2891,8 +3146,6 @@ export function AdminCrmSettings() {
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
   const [syncPolicy, setSyncPolicy] = useState<CrmSyncPolicy>(POLICY_FACTORY);
   const [histTab, setHistTab] = useState<HistTab>("roster");
-  const [step6Note, setStep6Note] = useState("");
-  const [step6Busy, setStep6Busy] = useState(false);
   const [loadGuide, setLoadGuide] = useState<HistLoadTab | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
   const [planFocus, setPlanFocus] = useState<{ cid: number; name: string } | null>(null);
@@ -5259,65 +5512,7 @@ export function AdminCrmSettings() {
               </section>
               ) : null}
 
-              {histTab === "step6" ? (
-              <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <div className="font-display text-[1.15rem]">Лиды</div>
-                <p className="mt-1 text-sm text-muted">
-                  Колонки — активные лиды по филиалам. Касса — отдельная кнопка. В роль досье и в шаг 5 не пишем.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={step6Busy}
-                    className="h-8 rounded-full bg-black px-3 text-[0.78rem] font-semibold text-white disabled:opacity-50"
-                    onClick={() => {
-                      setStep6Busy(true);
-                      setStep6Note("Читаю колонки…");
-                      void adminSchedule({ data: { token: token(), action: "step6Columns" } as never })
-                        .then((res) => {
-                          const r = res as { ok?: boolean; error?: string; note?: string };
-                          setStep6Note(r.ok ? r.note || "Колонки записаны." : r.error || "Не прочиталось.");
-                        })
-                        .catch((e) => setStep6Note(e instanceof Error ? e.message : "Не прочиталось."))
-                        .finally(() => setStep6Busy(false));
-                    }}
-                  >
-                    Прочитать колонки
-                  </button>
-                  <button
-                    type="button"
-                    disabled={step6Busy}
-                    className="h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
-                    onClick={() => {
-                      setStep6Busy(true);
-                      setStep6Note("Снимаю кассу…");
-                      const run = async () => {
-                        for (;;) {
-                          const res = (await adminSchedule({ data: { token: token(), action: "step6Cash" } as never })) as {
-                            ok?: boolean;
-                            error?: string;
-                            note?: string;
-                            more?: boolean;
-                          };
-                          if (!res.ok) {
-                            setStep6Note(res.error || "Касса не снялась.");
-                            return;
-                          }
-                          setStep6Note(res.note || "");
-                          if (!res.more) return;
-                        }
-                      };
-                      void run()
-                        .catch((e) => setStep6Note(e instanceof Error ? e.message : "Касса не снялась."))
-                        .finally(() => setStep6Busy(false));
-                    }}
-                  >
-                    Перепроверить кассу
-                  </button>
-                </div>
-                {step6Note ? <p className="mt-3 text-sm">{step6Note}</p> : null}
-              </section>
-              ) : null}
+              {histTab === "step6" ? <Step6Panel /> : null}
             </div>
           );
         })()}
