@@ -2351,7 +2351,7 @@ function step6Why(x: Step6Item) {
   else if ((x.cashGoodsFit || 0) > 0) bits.push(`В формулу вошёл товар ${rubAudit(-(x.cashGoodsFit || 0))}.`);
   if (x.cashDiskKnown == null && x.cashPayHole == null) return bits.join(" ");
   if (!x.cashDiskKnown) bits.push("Календаря и платежей на диске нет, id сверить не с чем.");
-  else bits.push(`Id: платежи дырки ${x.cashPayHole || 0}, лишние ${x.cashPayExtra || 0}; занятия дырки ${x.cashLesHole || 0}, лишние ${x.cashLesExtra || 0}.`);
+  else bits.push(`На диске нет того, что есть в Alfa: платежей ${x.cashPayExtra || 0}, занятий ${x.cashLesExtra || 0}. На диске лишнего нет: платежей ${x.cashPayHole || 0}, занятий ${x.cashLesHole || 0}.`);
   if ((x.cashNoId || 0) > 0) bits.push(`Без id: ${x.cashNoId}.`);
   if ((x.cashNoCommission || 0) > 0) bits.push(`Занятий без commission этого клиента: ${x.cashNoCommission}.`);
   return bits.join(" ");

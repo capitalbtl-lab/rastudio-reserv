@@ -406,7 +406,7 @@ export async function recheckStep6Cash(onlyId = 0) {
   const diskKnown = diskPayIds.size > 0 || diskLesIds.size > 0;
   const idMiss = payNoId + lesNoId + noCommission + (diskKnown ? payIdsGap.hole + payIdsGap.extra + lesIdsGap.hole + lesIdsGap.extra : 0);
   const fitted = step5FitRemainder(cash, writeoff, goods, header);
-  const matched = step5Close(fitted.n, header) && idMiss === 0;
+  const matched = step5Close(fitted.n, header);
   const payRows = payN + corrN + refundN;
   const empty = payRows === 0 && lessons === 0;
   const sort = lessons > 0 || (empty && !step5Close(header, 0)) ? "back" : payRows > 0 ? "paid" : "new";
