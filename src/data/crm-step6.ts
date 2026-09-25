@@ -49,7 +49,7 @@ function cardOf(row: Record<string, unknown>, branchId: number, stages: LeadStag
   const id = Number(row.id);
   if (!Number.isFinite(id) || id <= 0) return null;
   if (!isApiLeadStudy(row.is_study)) return null;
-  const statusId = step6ColumnId(row.lead_status_ids, stages);
+  const statusId = step6ColumnId(row.lead_status_ids, stages, row.lead_status_id);
   const name = String(row.name || "").trim() || `лид ${id}`;
   return {
     id,
@@ -77,6 +77,9 @@ export async function syncStep6Columns() {
     try {
       const stageRows = await readPages(`/v2api/${branch}/lead-status/index`, {}, tok);
       const stages = stageRows.map(stageOfRow).filter((s): s is LeadStage => Boolean(s));
+      if (!stages.some((s) => String(s.name || "").trim() === "Не разобрано")) {
+        stages.unshift({ id: 0, name: "Не разобрано", color: "#6a6a6a", weight: 0, pipelineId: 0 });
+      }
       const rows = await readPages(`/v2api/${branch}/customer/index`, { is_study: 0, removed: 0 }, tok);
       const byId = new Map<number, LeadCard>();
       for (const row of rows) {

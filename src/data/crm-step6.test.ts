@@ -25,8 +25,10 @@ describe("шаг 6", () => {
     assert.equal(step6ColumnId([], stages), 9);
     assert.equal(step6ColumnId(undefined, stages), 9);
     assert.equal(step6ColumnId([], [{ id: 1, name: "Не разобрано" }, { id: 2, name: "Не разобрано" }]), null);
-    assert.equal(step6ColumnId([], [{ id: 1, name: "Ожидает старта" }]), null);
-    assert.equal(step6ColumnId({ 0: 2 }, stages), null);
+    assert.equal(step6ColumnId([], [{ id: 1, name: "Ожидает старта" }]), 0);
+    assert.equal(step6ColumnId(undefined, stages, 2), 2);
+    assert.equal(step6ColumnId(undefined, stages, null), 9);
+    assert.equal(step6ColumnId({ 0: 2 }, stages), 2);
     assert.equal(step6ColumnId(["x"], stages), null);
   });
 });
