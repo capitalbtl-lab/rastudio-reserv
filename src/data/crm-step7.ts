@@ -5,6 +5,7 @@ import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-le
 import { replaceStep7List } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup } from "./dossiers";
+import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
 import { step7Keep } from "./crm-step7-core";
 import { recheckStep7Cash } from "./crm-step6";
 import type { LeadCard } from "./crm-leads-stages";
@@ -14,15 +15,48 @@ export { recheckStep7Cash };
 const PAGE = 100;
 const BRANCHES = [1, 2, 3, 4];
 
-function liveIds() {
+function diskLive(branch: number, gid: number, ids: Set<number>) {
+  for (const d of dossiersInGroup(branch, gid)) {
+    const cid = Number(d.crmId) || 0;
+    if (!cid) continue;
+    const link = (d.groupLinks || []).find((x) => Number(x.id) === gid);
+    if (link && link.active === false) continue;
+    ids.add(cid);
+  }
+}
+
+/** Живые ученики действующих групп: group/index removed 0 и cgi с живой e_date. */
+async function liveCustomerIds(tok: string) {
   const ids = new Set<number>();
-  for (const g of liveAdminGroups()) {
-    for (const d of dossiersInGroup(g.branchId, g.groupId)) {
-      const cid = Number(d.crmId) || 0;
-      if (!cid) continue;
-      const link = (d.groupLinks || []).find((x) => Number(x.id) === g.groupId);
-      if (link && link.active === false) continue;
-      ids.add(cid);
+  for (const branch of BRANCHES) {
+    let groups: Record<string, unknown>[] = [];
+    try {
+      groups = await readPages(`/v2api/${branch}/group/index`, { removed: 0 }, tok);
+    } catch {
+      groups = liveAdminGroups()
+        .filter((g) => g.branchId === branch)
+        .map((g) => ({ id: g.groupId }));
+    }
+    const active = new Set<number>();
+    for (const g of groups) {
+      const gid = Number(g.id);
+      if (!gid || Number(g.removed) === 2) continue;
+      active.add(gid);
+    }
+    if (!active.size) {
+      for (const g of liveAdminGroups()) if (g.branchId === branch) active.add(g.groupId);
+    }
+    for (const gid of active) {
+      try {
+        const rows = await readPages(`/v2api/${branch}/cgi/index?group_id=${gid}`, { group_id: gid }, tok);
+        for (const row of rows) {
+          if (!cgiRecordLive(row)) continue;
+          const cid = cgiCustomerId(row);
+          if (cid) ids.add(cid);
+        }
+      } catch {
+        diskLive(branch, gid, ids);
+      }
     }
   }
   return ids;
@@ -49,7 +83,7 @@ async function readPages(path: string, body: Record<string, unknown>, tok: strin
 export async function syncStep7List() {
   dropAlfaIndex();
   const tok = await alfaToken();
-  const live = liveIds();
+  const live = await liveCustomerIds(tok);
   const byId = new Map<number, LeadCard>();
   const notes: string[] = [];
   let dropped = 0;

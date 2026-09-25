@@ -17,8 +17,13 @@ describe("шаг 7", () => {
     assert.equal(step7Keep({ id: 8, is_study: 0, removed: 2 }, live), false);
   });
 
-  it("действующий клиент и удалённый не входят", () => {
+  it("активный и удалённый в строке не входят", () => {
     assert.equal(step7Keep({ id: 9, is_study: 1, removed: 0 }, live), false);
     assert.equal(step7Keep({ id: 11, is_study: 1, removed: 1 }, live), false);
+  });
+
+  it("пустое removed в строке не выкидывает: фильтр уже removed 2", () => {
+    assert.equal(step7Keep({ id: 12, is_study: 1 }, live), true);
+    assert.equal(step7Keep({ id: 13, is_study: "1", removed: "" }, live), true);
   });
 });
