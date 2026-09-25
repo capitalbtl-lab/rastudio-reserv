@@ -1783,7 +1783,7 @@ export async function journalPull(opts: {
       return journalJobView();
     }
     if (opts.jobMode === "auto") {
-      const { AUTO_PIPE, AUTO_PIPE_FULL, pipeFromSelection } = await import("./crm-sync-policy-core");
+      const { AUTO_PIPE, AUTO_PIPE_FULL, pipeFromSelection, journalStartOf } = await import("./crm-sync-policy-core");
       const study = opts.study === "2" ? "2" : "1";
       const raw = String(opts.name || "");
       const archGroups = study === "1" && /archGroups=1/.test(raw);
@@ -1795,21 +1795,14 @@ export async function journalPull(opts: {
       const built = custom ? pipeFromSelection(steps.length ? steps : hasSteps ? [] : [1, 2, 3, 4, 5], also, { study, archGroups }) : null;
       if (built && !built.mode) return journalJobView();
       const pipe = built ? built.pipe : study === "1" && archGroups ? [...AUTO_PIPE_FULL] : [...AUTO_PIPE];
-      const head = built?.mode || "roster-recheck";
-      const started =
-        head === "balance" ? { mode: "people" as const, kind: "balance" }
-        : head === "groups" ? { mode: "groups-recheck" as const, kind: "group" }
-        : head === "people" ? { mode: "people-recheck" as const, kind: "students" }
-        : head === "audit" ? { mode: "audit" as const, kind: "audit" }
-        : head === "step6-recount" || head === "step6-columns" || head === "step6-cash" ? { mode: head, kind: "students" }
-        : { mode: "roster-recheck" as const, kind: "roster" };
+      const head = journalStartOf(built?.mode || "roster-recheck");
       const from = String(opts.dateFrom || "2015-01-01");
       const days = Number(opts.recheckDays) > 0 ? Number(opts.recheckDays) : from <= "2015-01-01" ? 4000 : 365;
       startJournalJob({
-        mode: started.mode,
-        kind: started.kind,
+        mode: head.mode as "roster-recheck",
+        kind: head.kind,
         study,
-        recheck: !head.startsWith("step6") && head !== "audit",
+        recheck: head.recheck,
         recheckDays: days,
         dateFrom: from,
         archived: study === "2",

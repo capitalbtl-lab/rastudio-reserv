@@ -30,7 +30,7 @@ export function pipeFromSelection(
   opts: { study: "1" | "2"; archGroups: boolean },
 ): { mode: string; pipe: string[] } {
   const want = [1, 2, 3, 4, 5].filter((n) => steps.includes(n));
-  const tail = STEP6_PIPE.filter((id) => also.includes(id));
+  const tail = STEP6_PIPE.filter((id) => also.includes(id) && !(id === "step6-recount" && also.includes("step6-columns")));
   const full = want.length === 5 && !tail.length;
   if (full) {
     const pipe = opts.study === "2" || opts.archGroups === false ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL];
@@ -50,6 +50,20 @@ export function pipeFromSelection(
   const all = [...modes, ...tail];
   if (!all.length) return { mode: "", pipe: [] };
   return { mode: all[0], pipe: all.slice(1) };
+}
+
+/** Токен трубы → режим очереди. Касса — это people с kind balance, не отдельный mode. */
+export function journalStartOf(token: string): { mode: string; kind: string; recheck: boolean } {
+  if (token === "balance") return { mode: "people", kind: "balance", recheck: true };
+  if (token === "groups" || token === "groups-recheck" || token === "groups-archived") return { mode: "groups-recheck", kind: "group", recheck: true };
+  if (token === "people" || token === "people-recheck") return { mode: "people-recheck", kind: "students", recheck: true };
+  if (token === "people-slow") return { mode: "people-slow", kind: "students", recheck: false };
+  if (token === "audit") return { mode: "audit", kind: "audit", recheck: false };
+  if (token === "roster" || token === "roster-recheck") return { mode: "roster-recheck", kind: "roster", recheck: true };
+  if (token === "archivesPupils" || token === "archives") return { mode: token, kind: token, recheck: false };
+  if (token === "catalog") return { mode: "catalog", kind: "archiveCatalog", recheck: false };
+  if (token === "step6-recount" || token === "step6-columns" || token === "step6-cash") return { mode: token, kind: "students", recheck: false };
+  return { mode: token || "roster-recheck", kind: "students", recheck: false };
 }
 /** После состава: календарь → группы → касса → сверка. */
 export const AUTO_PIPE: HistoryPlanMode[] = ["people", "groups", "balance", "audit"];
@@ -351,11 +365,25 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
       study: rule.study,
       archGroups: rule.archGroups !== false,
     });
+    if (!built.mode) {
+      return {
+        mode: "roster-recheck" as const,
+        kind: "roster",
+        study: rule.study,
+        recheck: true,
+        recheckDays: planFromIdToRecheckDays(fromId),
+        dateFrom: planDateFrom(fromId, now),
+        archived: rule.study === "2",
+        pipe: rule.study === "2" || rule.archGroups === false ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL],
+        skipLeads: Boolean(rule.study === "1" && rule.leads === false),
+      };
+    }
+    const head = journalStartOf(built.mode);
     return {
-      mode: built.mode as HistoryPlanMode,
-      kind: built.mode.startsWith("step6") ? "students" : built.mode.includes("roster") ? "roster" : "students",
+      mode: head.mode as HistoryPlanMode,
+      kind: head.kind,
       study: rule.study,
-      recheck: true,
+      recheck: head.recheck,
       recheckDays: planFromIdToRecheckDays(fromId),
       dateFrom: planDateFrom(fromId, now),
       archived: rule.study === "2",
@@ -364,21 +392,52 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
     };
   }
   if (rule.mode === "step6-recount" || rule.mode === "step6-columns" || rule.mode === "step6-cash") {
+    const nums = rule.steps || [];
     const also = (rule.also || []).filter((id) => id !== rule.mode && (STEP6_PIPE as readonly string[]).includes(id));
+    if (!nums.length) {
+      return {
+        mode: rule.mode,
+        kind: "students",
+        study: rule.study,
+        recheck: false,
+        recheckDays: 32,
+        dateFrom: "",
+        archived: false,
+        pipe: also as unknown as HistoryPlanMode[],
+      };
+    }
+    const built = pipeFromSelection(nums, [rule.mode, ...also], { study: rule.study, archGroups: rule.archGroups !== false });
+    const head = journalStartOf(built.mode);
     return {
-      mode: rule.mode,
-      kind: "students",
+      mode: head.mode as HistoryPlanMode,
+      kind: head.kind,
       study: rule.study,
-      recheck: false,
-      recheckDays: 32,
-      dateFrom: "",
-      archived: false,
-      pipe: also as unknown as HistoryPlanMode[],
+      recheck: head.recheck,
+      recheckDays: planFromIdToRecheckDays(fromId),
+      dateFrom: planDateFrom(fromId, now),
+      archived: rule.study === "2",
+      pipe: built.pipe as HistoryPlanMode[],
+      skipLeads: Boolean(rule.study === "1" && rule.leads === false),
     };
   }
   const meta = planModeMeta(rule.mode);
   const balance = rule.mode === "balance";
   const needFrom = rule.mode === "people" || rule.mode === "people-slow" || rule.mode === "balance";
+  const earlier = (rule.steps || []).some((n) => ownStep(rule.mode) > 0 && n < ownStep(rule.mode));
+  if (earlier) {
+    const built = pipeFromSelection(rule.steps || [], rule.also || [], { study: rule.study, archGroups: rule.archGroups !== false });
+    const head = journalStartOf(built.mode);
+    return {
+      mode: head.mode as HistoryPlanMode,
+      kind: head.kind,
+      study: rule.study,
+      recheck: head.recheck,
+      recheckDays: meta.recheck ? rule.recheckDays : 32,
+      dateFrom: needFrom || head.kind === "students" || head.kind === "balance" || head.kind === "roster" ? planDateFrom(fromId, now) : "",
+      archived: rule.study === "2",
+      pipe: built.pipe as HistoryPlanMode[],
+    };
+  }
   return {
     mode: (balance ? "people" : rule.mode) as HistoryPlanMode | "people",
     kind: balance ? "balance" : "students",

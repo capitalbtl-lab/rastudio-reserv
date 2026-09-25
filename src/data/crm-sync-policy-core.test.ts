@@ -18,6 +18,8 @@ import {
   planHorizon,
   planFireDecision,
   planRuleToJob,
+  pipeFromSelection,
+  journalStartOf,
   stampPlanSkip,
   planLogSessions,
   policyOf,
@@ -409,6 +411,113 @@ describe("пульт Истории", () => {
     const marked = markPlanDue(p, msk(2026, 8, 15, 15, 0));
     assert.equal(marked.plan[0].dueAt, "");
     assert.ok(marked.plan[0].lastFiredAt);
+  });
+
+  it("полный 1–5 без шага 6 — прежняя труба", () => {
+    const live = pipeFromSelection([1, 2, 3, 4, 5], [], { study: "1", archGroups: true });
+    assert.equal(live.mode, "roster-recheck");
+    assert.deepEqual(live.pipe, ["people", "groups", "archivesPupils", "groups-archived", "balance", "audit"]);
+    const arch = pipeFromSelection([1, 2, 3, 4, 5], [], { study: "2", archGroups: true });
+    assert.deepEqual(arch.pipe, ["people", "groups", "balance", "audit"]);
+    const noArch = pipeFromSelection([1, 2, 3, 4, 5], [], { study: "1", archGroups: false });
+    assert.deepEqual(noArch.pipe, ["people", "groups", "balance", "audit"]);
+  });
+
+  it("пустой выбор не стартует шаг 6 молча", () => {
+    assert.deepEqual(pipeFromSelection([], [], { study: "1", archGroups: true }), { mode: "", pipe: [] });
+  });
+
+  it("только касса шага 6 — режим кассы, не календарь", () => {
+    const built = pipeFromSelection([], ["step6-cash"], { study: "1", archGroups: true });
+    assert.equal(built.mode, "step6-cash");
+    assert.deepEqual(journalStartOf(built.mode), { mode: "step6-cash", kind: "students", recheck: false });
+    const job = planRuleToJob(scheduleOf({ id: "c", mode: "auto", steps: [], also: ["step6-cash"], when: { kind: "daily" }, at: "04:00" }));
+    assert.equal(job.mode, "step6-cash");
+    assert.equal(job.recheck, false);
+  });
+
+  it("шаг 4 отдельно — people и kind balance", () => {
+    const job = planRuleToJob(scheduleOf({ id: "p", mode: "auto", steps: [4], when: { kind: "daily" }, at: "04:00", dateFromId: "1" }));
+    assert.equal(job.mode, "people");
+    assert.equal(job.kind, "balance");
+    assert.equal(job.recheck, true);
+    assert.deepEqual(job.pipe, []);
+  });
+
+  it("шаг 3 и шаг 5: группы, потом сверка", () => {
+    const job = planRuleToJob(scheduleOf({ id: "g", mode: "auto", steps: [3, 5], when: { kind: "daily" }, at: "04:00" }));
+    assert.equal(job.mode, "groups-recheck");
+    assert.equal(job.kind, "group");
+    assert.ok(job.pipe.includes("audit"));
+    assert.equal(job.pipe.at(-1), "audit");
+  });
+
+  it("шаг 5 один — audit без перепроверки календаря", () => {
+    const job = planRuleToJob(scheduleOf({ id: "a", mode: "auto", steps: [5], when: { kind: "daily" }, at: "04:00" }));
+    assert.equal(job.mode, "audit");
+    assert.equal(job.kind, "audit");
+    assert.equal(job.recheck, false);
+  });
+
+  it("колонки и пересчет — один проход колонок, касса следом", () => {
+    const built = pipeFromSelection([2], ["step6-recount", "step6-columns", "step6-cash"], { study: "1", archGroups: false });
+    assert.equal(built.mode, "people");
+    assert.deepEqual(built.pipe, ["step6-columns", "step6-cash"]);
+  });
+
+  it("режим кассы шага 6 плюс шаги 2 и 5 идут по порядку, касса в конце", () => {
+    const job = planRuleToJob(scheduleOf({
+      id: "s",
+      mode: "step6-cash",
+      steps: [2, 5],
+      also: ["step6-columns"],
+      when: { kind: "daily" },
+      at: "04:00",
+    }));
+    assert.equal(job.mode, "people-recheck");
+    assert.equal(job.kind, "students");
+    assert.deepEqual(job.pipe, ["audit", "step6-columns", "step6-cash"]);
+  });
+
+  it("шаг 2 плюс касса лидов не трогает состав", () => {
+    const job = planRuleToJob(scheduleOf({
+      id: "b",
+      mode: "people-recheck",
+      steps: [2],
+      also: ["step6-cash"],
+      when: { kind: "daily" },
+      at: "04:00",
+      recheckDays: 32,
+    }));
+    assert.equal(job.mode, "people-recheck");
+    assert.equal(job.recheck, true);
+    assert.deepEqual(job.pipe, ["step6-cash"]);
+  });
+
+  it("шаг 1 отмечен раньше шага 4 — состав первый", () => {
+    const job = planRuleToJob(scheduleOf({
+      id: "o",
+      mode: "balance",
+      steps: [1, 4],
+      when: { kind: "daily" },
+      at: "04:00",
+      dateFromId: "1",
+    }));
+    assert.equal(job.mode, "roster-recheck");
+    assert.equal(job.kind, "roster");
+    assert.ok(job.pipe.includes("balance"));
+  });
+
+  it("старый автомат без steps не меняется", () => {
+    const job = planRuleToJob(scheduleOf({ id: "old", mode: "auto", when: { kind: "daily" }, at: "04:00", dateFromId: "1" }));
+    assert.equal(job.mode, "roster-recheck");
+    assert.deepEqual(job.pipe, ["people", "groups", "archivesPupils", "groups-archived", "balance", "audit"]);
+  });
+
+  it("мусор в also не сохраняется", () => {
+    const r = scheduleOf({ id: "x", mode: "audit", also: ["step6-cash", "drop-me"], steps: [5], when: { kind: "daily" }, at: "04:00" });
+    assert.deepEqual(r.also, ["step6-cash"]);
+    assert.deepEqual(r.steps, [5]);
   });
 
 });
