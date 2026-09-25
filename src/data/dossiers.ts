@@ -88,9 +88,23 @@ function indexMaps(items: Dossier[]) {
   for (const d of items) {
     if (d?.id) byId.set(d.id, d);
     const id = Number(d?.crmId) || 0;
-    if (id) byCrm.set(id, d);
+    if (!id) continue;
+    const prev = byCrm.get(id);
+    if (!prev || dossierRicher(d, prev)) byCrm.set(id, d);
   }
   return { byCrm, byId };
+}
+
+function dossierRicher(a: Dossier, b: Dossier) {
+  const score = (d: Dossier) => {
+    const fio = String(d.child?.fio || "").trim();
+    const named = Boolean(fio) && !/^клиент\s+\d+$/i.test(fio);
+    const study = String(d.extras?.is_study ?? "");
+    const role = study === "0" || study === "1" || String(d.extras?.removed ?? "") === "2";
+    const canon = d.id === `crm-${Number(d.crmId) || 0}`;
+    return (named ? 4 : 0) + (role ? 2 : 0) + (canon ? 1 : 0);
+  };
+  return score(a) > score(b);
 }
 
 function rememberStore(mtime: number, store: Store) {
@@ -466,7 +480,8 @@ export function upsertDossier(patch: {
   const digits = digitsPhone(patch.phone);
   const store = loadStore();
   const byCrm = patch.crmId
-    ? store.items.find((d) => Number(d.crmId) === Number(patch.crmId))
+    ? store.items.find((d) => Number(d.crmId) === Number(patch.crmId) && (!patch.byCrmOnly || d.id === `crm-${patch.crmId}`)) ||
+      (patch.byCrmOnly ? store.items.find((d) => d.id === `crm-${patch.crmId}`) : undefined)
     : undefined;
   const byPhone = patch.byCrmOnly
     ? undefined
@@ -1300,7 +1315,7 @@ export async function ensureCustomerCard(crmId: number, branchId: number) {
       if (!item) continue;
       if (item.is_study == null && spec.study != null) item.is_study = spec.study;
       const branchOf = Number(Array.isArray(item.branch_ids) ? item.branch_ids[0] : item.branch_id) || b;
-      return applyCrmCustomer(item, branchOf, Number(item.removed) === 2);
+      return applyCrmCustomer(item, branchOf, Number(item.removed) === 2, {}, { byCrmOnly: true, quiet: true });
     }
   }
   return have || null;
