@@ -398,6 +398,7 @@ export type LeadCard = {
   cashNoId?: number;
   cashNoCommission?: number;
   cashDiskKnown?: boolean;
+  cashBranches?: string;
 };
 
 /** Карточка лида с диска сайта. Без API. crmId < 0 — заявка ещё не в Alfa. */

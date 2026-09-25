@@ -181,6 +181,16 @@ function posId(raw: unknown) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+function branchTitle(id: number) {
+  return ({ 1: "Гражданская", 2: "ЦМИТ", 3: "Луховицы", 4: "Лето" } as Record<number, string>)[id] || `филиал ${id}`;
+}
+
+function rubPlain(n: number) {
+  const sign = n < 0 ? "−" : n > 0 ? "+" : "";
+  const abs = Math.abs(Math.round(n * 100) / 100);
+  const body = Number.isInteger(abs) ? String(abs) : String(abs).replace(".", ",");
+  return `${sign}${body} ₽`;
+}
 function idGap(disk: Set<number>, alfa: Set<number>) {
   let hole = 0;
   let extra = 0;
@@ -213,7 +223,7 @@ export async function recheckStep6Cash(onlyId = 0) {
   const board = peekLeadBoard();
   const items = board?.items || [];
   const wanted = Number(onlyId) || 0;
-  const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null || x.cashNoCommission == null)));
+  const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null || x.cashNoCommission == null || x.cashBranches == null)));
   const id = wanted || waiting[0]?.id || 0;
   if (!id) return { ok: true as const, more: false, note: "Кассу шага 6 снимать некого. Сначала колонки." };
   if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, error: "Этого лида нет на шаге 6." };
@@ -289,6 +299,8 @@ export async function recheckStep6Cash(onlyId = 0) {
   let lessons = 0;
   let writeoff = 0;
   let noCommission = 0;
+  const payAt = new Map<number, { n: number; sum: number; ids: number[] }>();
+  const lesAt = new Map<number, { n: number; sum: number; ids: number[] }>();
   const payFrom = alfaPayIndexDate("2015-01-01");
   const payTo = alfaPayIndexDate(new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10));
   const lessonTo = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
@@ -317,6 +329,7 @@ export async function recheckStep6Cash(onlyId = 0) {
       if (payIds.has(pid)) continue;
       payIds.add(pid);
       const part = payParts(row);
+      const bid = posId(row.branch_id) || branch;
       if (part.product) {
         if (part.goods > 0) goods.push(part.goods);
         continue;
@@ -331,6 +344,11 @@ export async function recheckStep6Cash(onlyId = 0) {
       } else {
         payN += 1;
         paySum += part.n;
+        const slot = payAt.get(bid) || { n: 0, sum: 0, ids: [] };
+        slot.n += 1;
+        slot.sum += part.n;
+        slot.ids.push(pid);
+        payAt.set(bid, slot);
       }
     }
     const lrows = await readPages(`/v2api/${branch}/lesson/index`, { customer_id: id, status: 3, date_from: "2015-01-01", date_to: lessonTo }, tok);
@@ -351,6 +369,12 @@ export async function recheckStep6Cash(onlyId = 0) {
       }
       lessons += 1;
       writeoff += commission;
+      const lbid = posId(row.branch_id) || branch;
+      const lslot = lesAt.get(lbid) || { n: 0, sum: 0, ids: [] };
+      lslot.n += 1;
+      lslot.sum += commission;
+      lslot.ids.push(lid);
+      lesAt.set(lbid, lslot);
     }
     } catch {
       /* чужой филиал без доступа не обрывает остальные */
@@ -404,6 +428,15 @@ export async function recheckStep6Cash(onlyId = 0) {
   const payIdsGap = idGap(diskPayIds, payIds);
   const lesIdsGap = idGap(diskLesIds, lesIds);
   const diskKnown = diskPayIds.size > 0 || diskLesIds.size > 0;
+  const branchBits = (map: Map<number, { n: number; sum: number; ids: number[] }>, disk: Set<number>) =>
+    [...map.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([bid, v]) => {
+        const miss = diskKnown ? v.ids.filter((x) => !disk.has(x)).length : 0;
+        return `${branchTitle(bid)} ${v.n} (${rubPlain(v.sum)})${miss ? `, нет на диске ${miss}` : ""}`;
+      })
+      .join(" · ");
+  const cashBranches = `платежи: ${branchBits(payAt, diskPayIds) || "нет"} · занятия: ${branchBits(lesAt, diskLesIds) || "нет"}`;
   const idMiss = payNoId + lesNoId + noCommission + (diskKnown ? payIdsGap.hole + payIdsGap.extra + lesIdsGap.hole + lesIdsGap.extra : 0);
   const fitted = step5FitRemainder(cash, writeoff, goods, header);
   const matched = step5Close(fitted.n, header);
@@ -444,6 +477,7 @@ export async function recheckStep6Cash(onlyId = 0) {
     cashNoId: payNoId + lesNoId,
     cashNoCommission: noCommission,
     cashDiskKnown: diskKnown,
+    cashBranches,
   });
   const name = items.find((x) => x.id === id)?.name || `№${id}`;
   const left = wanted ? false : (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");

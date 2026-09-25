@@ -2312,6 +2312,7 @@ type Step6Item = {
   cashNoId?: number;
   cashNoCommission?: number;
   cashDiskKnown?: boolean;
+  cashBranches?: string;
 };
 
 function step6Branch(id: number) {
@@ -2352,6 +2353,7 @@ function step6Why(x: Step6Item) {
   if (x.cashDiskKnown == null && x.cashPayHole == null) return bits.join(" ");
   if (!x.cashDiskKnown) bits.push("Календаря и платежей на диске нет, id сверить не с чем.");
   else bits.push(`На диске нет того, что есть в Alfa: платежей ${x.cashPayExtra || 0}, занятий ${x.cashLesExtra || 0}. На диске лишнего нет: платежей ${x.cashPayHole || 0}, занятий ${x.cashLesHole || 0}.`);
+  if (x.cashBranches) bits.push(x.cashBranches);
   if ((x.cashNoId || 0) > 0) bits.push(`Без id: ${x.cashNoId}.`);
   if ((x.cashNoCommission || 0) > 0) bits.push(`Занятий без commission этого клиента: ${x.cashNoCommission}.`);
   return bits.join(" ");
@@ -2581,6 +2583,10 @@ function Step6Panel() {
                         ? `платежи: дырки ${x.cashPayHole || 0}, лишние ${x.cashPayExtra || 0} · занятия: дырки ${x.cashLesHole || 0}, лишние ${x.cashLesExtra || 0}${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}${(x.cashNoCommission || 0) > 0 ? ` · без commission ${x.cashNoCommission}` : ""}`
                         : `календаря на диске нет${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}${(x.cashNoCommission || 0) > 0 ? ` · без commission ${x.cashNoCommission}` : ""}`}
                   </td>
+                </tr>
+                <tr>
+                  <td>филиалы</td>
+                  <td colSpan={2}>{x.cashBranches || "ещё не снимали"}</td>
                 </tr>
                 <tr>
                   <td>формула</td>
