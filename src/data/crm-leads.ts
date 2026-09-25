@@ -14,6 +14,7 @@ import {
   pinUnsorted,
   crmBranchIds,
   crmLeadStatusId,
+  leadColumnId,
   LEAD_INDEX_QUERY,
   leadMoveFields,
   isCrmLeadRecord,
@@ -65,7 +66,7 @@ export {
   leadCardFromView,
 } from "./crm-leads-stages";
 
-type Bag = { at: number; stages: LeadStage[]; items: LeadCard[]; note?: string };
+type Bag = { at: number; stages: LeadStage[]; items: LeadCard[]; note?: string; delta?: boolean; step6?: boolean };
 
 function withoutStudents(items: LeadCard[]) {
   return items.filter((x) => !dossierIsStudying(x.id));
@@ -112,6 +113,32 @@ function localStageId() {
   const used: number[] = [];
   for (const v of bag().values()) for (const s of v.stages) used.push(s.id);
   return nextLocalId(used);
+}
+
+export function peekLeadBoard() {
+  return bag().get("0") || null;
+}
+
+/** Карточки одного филиала шага 6. Чужой филиал не трогает. Роль в досье не пишет. */
+export function replaceStep6Branch(branchId: number, cards: LeadCard[], stages: LeadStage[]) {
+  const bid = Number(branchId) || 0;
+  const hit = bag().get("0") || { at: Date.now(), stages: LEAD_STAGES.map((s) => ({ ...s })), items: [] as LeadCard[] };
+  const items = hit.items.filter((x) => x.branchId !== bid).concat(cards);
+  const byId = new Map(hit.stages.map((s) => [s.id, s]));
+  for (const s of stages) if (Number.isFinite(s.id)) byId.set(s.id, s);
+  const next: Bag = { at: Date.now(), stages: [...byId.values()], items, note: `шаг 6 · филиал ${bid}: ${cards.length}`, step6: true };
+  bag().set("0", next);
+  persistLeads();
+  return next;
+}
+
+/** Один итог кассы на все карточки этого id. */
+export function stampStep6Cash(id: number, patch: Partial<LeadCard>) {
+  const hit = bag().get("0");
+  if (!hit) return;
+  hit.items = hit.items.map((x) => (x.id === id ? { ...x, ...patch } : x));
+  hit.at = Date.now();
+  persistLeads();
 }
 
 export function cachedLeadBoard(branchId = 0) {
@@ -407,6 +434,125 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
 
 let leadDeltaBusy = false;
 
+const COL_GAP_MS = 250;
+const COL_FRESH_MS = 60_000;
+const colReadAt = new Map<number, number>();
+
+function directoryStages(items: Record<string, unknown>[]): LeadStage[] {
+  const out: LeadStage[] = [];
+  const seen = new Set<number>();
+  for (const s of items) {
+    const id = Number(s.id);
+    if (!Number.isFinite(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      name: String(s.name || "").trim() || `этап ${id}`,
+      color: "#6a6a6a",
+      weight: Number(s.weight ?? 0) || 0,
+      pipelineId: Number(s.pipeline_id ?? 1) || 1,
+    });
+  }
+  return out;
+}
+
+async function pauseCol() {
+  await new Promise((r) => setTimeout(r, COL_GAP_MS));
+}
+
+async function readBranchLeadColumns(branch: number, t: string): Promise<{ cards: LeadCard[]; stages: LeadStage[] }> {
+  let stages: LeadStage[] = [];
+  try {
+    const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/lead-status/index`, { page: 0 }, t);
+    stages = directoryStages(json.items || []);
+  } catch {
+    stages = [];
+  }
+  await pauseCol();
+  const cards: LeadCard[] = [];
+  const seen = new Set<number>();
+  let page = 0;
+  let received = 0;
+  for (;;) {
+    const data = await request<{ total?: number; count?: number; items?: Record<string, unknown>[] }>(
+      `/v2api/${branch}/customer/index`,
+      { is_study: 0, removed: 0, page, pageSize: 100 },
+      t,
+    );
+    const batch = data.items || [];
+    const count = Number.isFinite(Number(data.count)) ? Number(data.count) : batch.length;
+    for (const it of batch) {
+      const id = Number(it.id || 0);
+      if (!id || seen.has(id)) continue;
+      const statusId = leadColumnId(it, stages);
+      if (statusId == null) continue;
+      const packed = packLead(it, branch);
+      if (!packed) continue;
+      seen.add(id);
+      cards.push({ ...packed, branchId: branch, branches: [branch], statusId });
+    }
+    received += count;
+    const total = Number(data.total);
+    if (count === 0) break;
+    if (Number.isFinite(total) && received >= total) break;
+    if (count < 100) break;
+    page += 1;
+    await pauseCol();
+  }
+  return { cards, stages };
+}
+
+/** Колонки открытого филиала: customer/index is_study 0, removed 0. Чужие филиалы не трогает. */
+export async function syncLeadColumnsFromApi(branchId = 0): Promise<Bag> {
+  const key = String(branchId || 0);
+  const hit = bag().get(key);
+  const branches = branchId ? [branchId] : [1, 2, 3, 4];
+  const due = branches.filter((b) => {
+    const at = colReadAt.get(b) || 0;
+    return !(at > 0 && Date.now() - at < COL_FRESH_MS);
+  });
+  if (!due.length) {
+    if (hit?.items.length) return hit;
+    const disk = await boardFromDisk(branchId);
+    if (disk.items.length) {
+      bag().set(key, disk);
+      persistLeads();
+    }
+    return disk;
+  }
+  const t = await alfaToken();
+  let items = (hit?.items || []).map((x) => ({ ...x }));
+  let stages = hit?.stages?.length ? hit.stages : LEAD_STAGES;
+  const notes: string[] = [];
+  let changed = false;
+  for (const b of due) {
+    try {
+      const read = await readBranchLeadColumns(b, t);
+      items = items.filter((x) => x.branchId !== b).concat(read.cards);
+      const byId = new Map<number, LeadStage>();
+      for (const s of stages) byId.set(s.id, s);
+      for (const s of read.stages) byId.set(s.id, s);
+      for (const card of read.cards) {
+        if (!byId.has(card.statusId)) {
+          byId.set(card.statusId, { id: card.statusId, name: `этап ${card.statusId}`, color: "#6a6a6a", weight: 99, pipelineId: 1 });
+        }
+      }
+      stages = [...byId.values()];
+      colReadAt.set(b, Date.now());
+      changed = true;
+      notes.push(`${b}:${read.cards.length}`);
+    } catch {
+      notes.push(`${b}:оставлено`);
+    }
+    await pauseCol();
+  }
+  if (!changed) return hit || (await boardFromDisk(branchId));
+  const next = { at: Date.now(), stages, items, note: `колонки API ${notes.join(" ")}`, delta: true as const };
+  bag().set(key, next);
+  persistLeads();
+  return next;
+}
+
 export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
   const key = String(branchId || 0);
   let hit = bag().get(key);
@@ -557,6 +703,12 @@ export async function boardFromDisk(branchId = 0): Promise<Bag> {
 }
 
 export async function loadLeadsBoard(branchId = 0, force = false, delta = false, light = false): Promise<Bag> {
+  const step6 = bag().get("0");
+  if (step6?.step6 && !force) {
+    const bid = Number(branchId) || 0;
+    const items = bid ? step6.items.filter((x) => x.branchId === bid) : step6.items;
+    return { ...step6, items };
+  }
   const key = String(branchId || 0);
   const hit = bag().get(key);
   const { wantAlfaPull, wantAlfaDelta } = await import("./crm-alfa-link");
@@ -584,15 +736,8 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false,
       bag().set(key, disk);
       persistLeads();
     }
-    if (light && disk.items.length) {
-      return syncLeadsBoardLight(branchId).catch(() => disk);
-    }
-    if (wantAlfaDelta(delta) && disk.items.length) {
-      const age = Date.now() - (hit?.at || 0);
-      if (!hit?.items.length || age > 20_000) {
-        const next = await syncLeadsDelta(branchId).catch(() => disk);
-        return next;
-      }
+    if (light) {
+      return syncLeadColumnsFromApi(branchId).catch(() => disk);
     }
     return disk;
   }

@@ -1198,6 +1198,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "lessonSave"
           | "lessonStatus"
           | "leadsBoard"
+          | "step6Columns"
+          | "step6Cash"
           | "leadMove"
           | "leadArchive"
           | "leadStageSave"
@@ -2591,6 +2593,24 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return { ok: true as const, stages: board.stages, items: board.items, total: board.items.length, note: board.note, delta: Boolean((board as { delta?: boolean }).delta) };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось прочитать воронку лидов." };
+      }
+    }
+    if (data.action === "step6Columns") {
+      const { syncStep6Columns } = await import("./crm-step6");
+      try {
+        const res = await syncStep6Columns();
+        return { ok: true as const, note: res.note };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Шаг 6 не прочитал колонки." };
+      }
+    }
+    if (data.action === "step6Cash") {
+      const { recheckStep6Cash } = await import("./crm-step6");
+      try {
+        const res = await recheckStep6Cash();
+        return { ok: true as const, note: res.note, more: res.more };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Касса шага 6 не снялась." };
       }
     }
     if (data.action === "leadMove") {

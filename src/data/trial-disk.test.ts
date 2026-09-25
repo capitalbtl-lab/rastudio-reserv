@@ -314,9 +314,8 @@ describe("кабинет: новый ученик диск сразу", () => {
     const chunk = src.slice(at, next > at ? next : at + 4000);
     assert.match(chunk, /boardFromDisk/);
     assert.match(chunk, /wantAlfaPull\(force\)/);
-    assert.match(chunk, /wantAlfaDelta\(delta\)/);
-    assert.match(chunk, /syncLeadsDelta/);
-    assert.match(chunk, /20_000/);
+    assert.match(chunk, /syncLeadColumnsFromApi/);
+    assert.doesNotMatch(chunk, /syncLeadsDelta/);
     const syncAt = src.indexOf("export async function syncLeadsDelta");
     const syncChunk = src.slice(syncAt, at);
     assert.ok(syncAt >= 0 && at > syncAt);

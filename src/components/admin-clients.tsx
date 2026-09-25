@@ -526,7 +526,6 @@ export function AdminClients({
       if (kind === "clientsLeads") {
         leadKeysRef.current = null;
         setLeadKeys(null);
-        void loadFunnel(branchRef.current, true);
       }
       setStatus(nextStatus);
       await load(qRef.current, nextStatus, branchRef.current, ageRef.current);
@@ -818,11 +817,7 @@ export function AdminClients({
       if (document.hidden) return;
       void loadFunnel(branchRef.current, false, false, true);
     };
-    const t = window.setInterval(tick, 25_000);
-    const slow = window.setInterval(() => {
-      if (document.hidden) return;
-      void loadFunnel(branchRef.current, false, true, false);
-    }, 5 * 60 * 1000);
+    const t = window.setInterval(tick, 60_000);
     const onShow = () => {
       if (document.hidden) return;
       void loadFunnel(branchRef.current, false, false, true);
@@ -831,7 +826,6 @@ export function AdminClients({
     window.addEventListener("focus", onShow);
     return () => {
       window.clearInterval(t);
-      window.clearInterval(slow);
       document.removeEventListener("visibilitychange", onShow);
       window.removeEventListener("focus", onShow);
     };
@@ -921,7 +915,7 @@ export function AdminClients({
       if (tally[it.branchId] != null) tally[it.branchId] += 1;
     }
     for (const id of [1, 2, 3, 4] as const) {
-      if (tally[id] > 0) next[id] = tally[id];
+      if (tally[id] > 0 || branch === 0 || branch === id) next[id] = tally[id];
     }
     return next;
   }, [branchCounts, funnelOn, funnelItems]);

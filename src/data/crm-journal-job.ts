@@ -247,6 +247,12 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
   if (mode === "person") {
     const cid = Number(opts.customerId) || 0;
     if (!cid) return [];
+    if (opts.study !== "2") {
+      const side = journalPeopleSide("1");
+      const hit = (side.people || []).find((p) => p.cid === cid);
+      const raw = hit ? hit.study : undefined;
+      if (raw === 0) return [];
+    }
     return [{ cid, branchId: Number(opts.branchId) || 1, name: opts.name || opts.oneName || `№${cid}` }];
   }
   if (mode === "count") return [{ name: "отбор архива" }];
@@ -268,11 +274,18 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       return given;
     }
     const side = journalPeopleSide(study, opts.skipLeads ? { skipLeads: true } : undefined);
-    const people = (side.people || []) as PeopleJobRow[];
+    let people = (side.people || []) as (PeopleJobRow & { study?: number })[];
+    if (study !== "2" && (mode === "people" || mode === "people-recheck" || mode === "people-slow" || mode === "probe" || mode === "audit")) {
+      people = people.filter((p) => p.study !== 0);
+    }
     if (mode === "audit") {
       const one = Number(opts.customerId) || 0;
       if (one) {
         const hit = people.find((r) => r.cid === one);
+        if (!hit && study !== "2") {
+          const raw = ((journalPeopleSide(study).people || []) as { cid: number; study?: number }[]).find((p) => p.cid === one);
+          if (raw && raw.study === 0) return [];
+        }
         return [{
           cid: one,
           branchId: Number(hit?.branchId) || Number(opts.branchId) || 1,

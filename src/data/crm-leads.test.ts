@@ -17,8 +17,35 @@ import {
   leadAgeBand,
   leadYears,
   leadCardFromView,
+  leadColumnId,
   type LeadCard,
 } from "./crm-leads-stages.ts";
+
+describe("колонка лида по lead_status_ids", () => {
+  const stages = [
+    { id: 0, name: "Не разобрано" },
+    { id: 1, name: "Разбирается" },
+  ];
+  it("одно число — колонка, несколько чисел и клиент — мимо", () => {
+    assert.equal(leadColumnId({ id: 1, is_study: 0, lead_status_ids: [1] }, stages), 1);
+    assert.equal(leadColumnId({ id: 1, is_study: false, lead_status_ids: [1] }, stages), 1);
+    assert.equal(leadColumnId({ id: 1, is_study: 0, lead_status_ids: [1, 2] }, stages), null);
+    assert.equal(leadColumnId({ id: 1, is_study: 1, lead_status_ids: [1] }, stages), null);
+    assert.equal(leadColumnId({ id: 1, is_study: true, lead_status_ids: [1] }, stages), null);
+  });
+  it("пустой этап — единственная колонка «Не разобрано», иначе никуда", () => {
+    assert.equal(leadColumnId({ id: 1, is_study: 0, lead_status_ids: [] }, stages), 0);
+    assert.equal(leadColumnId({ id: 1, is_study: 0 }, stages), 0);
+    assert.equal(leadColumnId({ id: 1, is_study: 0, lead_status_ids: [] }, [{ id: 1, name: "Разбирается" }, { id: 3, name: "Не разобрано" }, { id: 4, name: "Не разобрано" }]), null);
+  });
+  it("фильтр филиала — только branchId карточки", () => {
+    const items = [
+      { id: 1, customerId: 1, branchId: 2, branches: [1], name: "а", age: "", phone: "", email: "", note: "", assigned: "", statusId: 1, at: "", chats: 0 },
+      { id: 2, customerId: 2, branchId: 1, branches: [2], name: "б", age: "", phone: "", email: "", note: "", assigned: "", statusId: 1, at: "", chats: 0 },
+    ];
+    assert.deepEqual(filterLeadCards(items, { branch: 2 }).map((x) => x.id), [1]);
+  });
+});
 
 describe("воронка AlfaCRM: порядок этапов", () => {
   it("без ответа API колонки как в кабинете: Не разобрано → Разбирается → Ожидает старта → Отложен → Оплатил", () => {

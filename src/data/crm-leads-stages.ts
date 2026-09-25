@@ -155,6 +155,28 @@ export function leadVisibleInBranch(branches: number[], branchId: number) {
   return branches.includes(branchId);
 }
 
+/** Этап колонки из модели Customer: массив lead_status_ids. null — в колонку не класть. */
+export function leadColumnId(it: Record<string, unknown>, stages: { id: number; name: string }[]): number | null {
+  if (!Number(it.id || 0)) return null;
+  const study = it.is_study;
+  if (!(study == null || study === "")) {
+    const lead = study === false || study === 0 || study === "0";
+    const client = study === true || study === 1 || study === "1";
+    if (client || !lead) return null;
+  }
+  const raw = it.lead_status_ids;
+  if (Array.isArray(raw)) {
+    const nums = raw.map((x) => Number(x)).filter((n) => Number.isFinite(n));
+    if (nums.length === 1) return nums[0];
+    if (nums.length > 1) return null;
+  } else if (raw != null && raw !== "") {
+    return null;
+  }
+  const hits = stages.filter((s) => String(s.name || "").trim() === "Не разобрано");
+  if (hits.length === 1) return hits[0].id;
+  return null;
+}
+
 /** «Не разобрано» в кабинете пишет val(null), не 0. */
 export function crmLeadStatusId(it: Record<string, unknown>): number {
   const raw = it.lead_status_id ?? it.status_id ?? it.leadStatusId;
@@ -343,6 +365,11 @@ export type LeadCard = {
   sort?: number;
   at: string;
   chats: number;
+  cashState?: "wait" | "ok" | "gap" | "no-balance";
+  cashSort?: "" | "new" | "paid" | "back";
+  cashBalance?: number;
+  cashFormula?: number;
+  cashAt?: string;
 };
 
 /** Карточка лида с диска сайта. Без API. crmId < 0 — заявка ещё не в Alfa. */
@@ -416,7 +443,7 @@ export function filterLeadCards(
   return items.filter((it) => {
     if (!it.id) return false;
     if (gone?.has(`${it.branchId}:${it.id}`)) return false;
-    if (branch && it.branchId !== branch && !(it.branches || []).includes(branch)) return false;
+    if (branch && it.branchId !== branch) return false;
     if (age) {
       const band = leadAgeBand(it.age, `${it.name} ${it.note}`);
       if (band && band !== age) return false;

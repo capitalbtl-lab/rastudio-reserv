@@ -795,7 +795,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
   }));
 
   function studentSide(study: JournalPullStudy) {
-    const people = rankedStudentIds(study);
+    const people = rankedStudentIds(study).filter((p) => study === "2" || p.study !== 0);
     const missJ: { id: number; name: string; extra: string }[] = [];
     const missC: { id: number; name: string; extra: string }[] = [];
     const peopleRows: {
@@ -2083,19 +2083,17 @@ export async function journalPull(opts: {
     const study = opts.study === "2" ? "2" : "1";
     const people = rankedStudentIds(study).filter((p) => {
       if (study === "2") return diskIsArchive({ is_study: p.study, removed: p.removed, status: p.status });
-      const d = findDossier({ crmId: p.cid });
-      return (
-        dossierAuditRole({
-          is_study: p.study,
-          status: p.status,
-          removed: p.removed,
-          crm_funnel: d?.extras?.crm_funnel,
-          lead_status_id: d?.extras?.lead_status_id,
-        }) === "клиент"
-      );
+      return Number(p.study) !== 0;
     });
     const wanted = Number(opts.customerId) || 0;
     const fromList = wanted ? rankedStudentIds(study).find((p) => p.cid === wanted) : null;
+    const rawStudy = fromList ? fromList.study : findDossier({ crmId: wanted })?.extras?.is_study;
+    if (study !== "2" && wanted && (rawStudy === 0 || rawStudy === "0")) {
+      store.note = "Лид на шаге 5 не сверяем. Его сверяет шаг 6.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ...snap(), ok: false as const, error: store.note, more: false };
+    }
     const dossier = wanted ? findDossier({ crmId: wanted }) : null;
     const fallback = wanted
       ? {
@@ -2110,7 +2108,7 @@ export async function journalPull(opts: {
       store.note = study === "2"
         ? "Нет рабочего архива. Шаг 2 — «Посчитать отбор». Архивных лидов не сверяем."
         : rankedStudentIds("1").length
-          ? "Лиды и архив не сверяем: шапки клиента в Alfa нет."
+          ? "На шаге 5 только клиенты. Лиды — шаг 6, архив — «Сверить рабочий архив»."
           : "Нет текущих учеников на диске.";
       store.at = new Date().toISOString();
       saveStore(store);

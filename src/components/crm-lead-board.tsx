@@ -76,6 +76,15 @@ function CardFace({
           <span className="rounded-full bg-surface-2 px-1.5 py-0.5">{CRM_BRANCH[it.branchId]?.short}</span>
         ) : null}
         {it.assigned ? <span className="truncate">{it.assigned}</span> : null}
+        {it.cashState === "wait" ? <span>кассу ещё не снимали</span> : null}
+        {it.cashState === "no-balance" ? <span>нет balance</span> : null}
+        {it.cashState === "ok" || it.cashState === "gap" ? (
+          <span>
+            {it.cashSort === "new" ? "новый" : it.cashSort === "paid" ? "новый с деньгами" : it.cashSort === "back" ? "вернувшийся" : ""}
+            {it.cashSort ? " · " : ""}
+            {it.cashState === "ok" ? "совпало" : "не сошлось"}
+          </span>
+        ) : null}
       </span>
     </>
   );

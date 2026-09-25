@@ -238,10 +238,10 @@ const HINT = {
   recheckOneGroups: "Синяя очередь групп, пять волн. 1/3/5 — жёлтые целиком, чип не режет, лишнее снимает везде. 2 — все, кто сейчас зелёный, окном с чипа. 4 — только кто стал зелёным в волне 3, тем же окном. Кто прошёл 2 и остался зелёным — в 3–5 не входит. Пустую пропускаем, 6-й нет. Пауза по чипу и слева: неделя/две — 2 с, месяц — 2,5 с, 3 мес — 3 с, 6 мес — 4 с, 3 года / 7 лет / 2015 — 5 с. 8 отказов — эту группу этой кнопкой не берём. «Стоп» после текущей. В Alfa не пишет.",
   recheckOneMoney: "Синяя очередь кассы. Сначала справа, потом недочитанные слева, кто дочитался — снова справа. Сумма — шаг 5. Журнал не качает. Пауза от 1 до 5 секунд. «Стоп» после текущего. В Alfa не пишет.",
   tabRoster: "Шаг 1. Сначала узнаём, кто числится в группе. Без этого шага программа не знает, кого ставить в календарь и кассу. Красная читает состав одной группы из Alfa и пишет людей к нам. Выбывших не удаляет — только «уже не в этой группе». Журнал, деньги и домашку не качает. Живые и архивные группы — две таблетки на этом же шаге. Школа сверху сужает очередь. Пульт «1–5» тоже начинает отсюда. В Alfa ничего не меняет.",
-  tabStudents: "Шаг 2. Личный календарь одного ребёнка: все его уроки из всех групп, одним списком. Смотрим набор номеров уроков, не «244 против 254». Красная рамка — загрузить и сколько лет. Синяя — перепроверить кусок дат. Жёлтая — в Alfa есть номера, которых нет у нас. «Сейчас ходят» — люди из живых групп шага 1, ученики и лиды. «Архивные клиенты» — только те, кто когда-то был клиентом; архивных лидов сюда не берём. Год или два, не с 2015 всем скопом. В Alfa не пишем.",
+  tabStudents: "Шаг 2. Личный календарь одного ребёнка: все его уроки из всех групп, одним списком. Смотрим набор номеров уроков, не «244 против 254». Красная рамка — загрузить и сколько лет. Синяя — перепроверить кусок дат. Жёлтая — в Alfa есть номера, которых нет у нас. «Сейчас ходят» — ученики из живых групп шага 1. Лидов (is_study 0) этот шаг не берёт, их сверяет шаг 6. «Архивные клиенты» — только те, кто когда-то был клиентом; архивных лидов сюда не берём. Год или два, не с 2015 всем скопом. В Alfa не пишем.",
   tabGroups: "Шаг 3. Журнал одной группы: все уроки этой группы, кто был. Не дневник ребёнка. Цвет — вся группа сейчас: только жёлтый и зелёный. Зелёный: перепись всего журнала дошла, дырок нет нигде, лишнего нет. Не «порция чистая» и не «3/8». Чип цвет не сужает. Карточка — группа. Красная очередь — порции. Синяя — группы. Тема и ДЗ цвет не меняют. Живые и архивные группы — две таблетки, не архив людей. В Alfa журнал не проводим.",
   tabMoney: "Шаг 4. Касса: платежи по номеру, не уроки и не «остаток на карточке». Товары (тип 2 и 9) не грузим — ломают шапку. Те же люди, что шаги 1–2. «Касса загружена» — страницы дочитали. Сошлась ли сумма — шаг 5. Архивных берём тем же набором, что шаг 2. В Alfa оплату не создаём.",
-  tabAudit: "Шаг 5. Сверка остатка. Вправо только если три цифры рядом: «Клиенты» на сайте, шапка Alfa и наша касса — с точностью около рубля. Лид с пустой лентой: нули, шапка balance, 0=0 — вправо. Рабочий архив — отдельная таблетка, после календаря и кассы. Слева — сегмент и что поправить. Цифру из Alfa в файл не записываем. В Alfa не пишем.",
+  tabAudit: "Шаг 5. Сверка остатка клиентов. Вправо только если три цифры рядом: «Клиенты» на сайте, шапка Alfa и наша касса — с точностью около рубля. Лидов (is_study 0) этот шаг не берёт, их сверяет шаг 6. Рабочий архив — отдельная таблетка, после календаря и кассы. Слева — сегмент и что поправить. Цифру из Alfa в файл не записываем. В Alfa не пишем.",
   auditAll: "Красная проходит текущих клиентов по одному. Лидов пропускает. Между людьми пауза 5 секунд. Сравнивает «Клиенты» с шапкой Alfa (общий остаток, не остаток одного абонемента). Журнал и кассу не качает и не чинит. Если не сошлось — на карточке написано, какой шаг: календарь (2) или касса (4). Цифру Alfa в кассу не записывает. В Alfa ничего не пишет. «Стоп» после текущего. Архивных — соседняя таблетка, тем же набором шага 2.",
   auditRecheck: "Синяя на карточке сверки. Ещё раз снимает шапку Alfa только этого человека и считает. Журнал, кассу, платежи и списания не переписывает. Чужих не трогает. Если не сошлось — какой шаг чинить, написано на карточке. После совпадения уйдёт вправо, даже если есть непроведённые уроки с ценой. Если снова «показ» — это как рисует страница «Клиенты», не его личная дыра. В Alfa ничего не сохраняет.",
   scopeLive: "Люди в живых группах после состава шага 1. Не «все клиенты Alfa». Красная очередь и сверка идут только по этому списку. Архивных эта таблетка не трогает. Цифра на кнопке — сколько таких людей. Переключение само ничего не качает. Для календаря, кассы и сверки это один и тот же переключатель.",
@@ -373,13 +373,14 @@ const CRM_SET_TABS = [
   { id: "branches", label: "Филиалы" },
 ] as const;
 type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
-type HistTab = "roster" | "groups" | "students" | "money" | "audit";
+type HistTab = "roster" | "groups" | "students" | "money" | "audit" | "step6";
 const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "roster", label: "Шаг 1 · Группы и состав" },
   { id: "students", label: "Шаг 2 · Календарь ученика" },
   { id: "groups", label: "Шаг 3 · Занятия в группах" },
   { id: "money", label: "Шаг 4 · Деньги на карточке" },
   { id: "audit", label: "Шаг 5 · Сверка остатка" },
+  { id: "step6", label: "Шаг 6 · Лиды" },
 ];
 const PEOPLE_LOAD_GAP_MS = 5000;
 const CATALOG_GAP_MS = 5000;
@@ -2890,7 +2891,9 @@ export function AdminCrmSettings() {
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
   const [syncPolicy, setSyncPolicy] = useState<CrmSyncPolicy>(POLICY_FACTORY);
   const [histTab, setHistTab] = useState<HistTab>("roster");
-  const [loadGuide, setLoadGuide] = useState<HistTab | null>(null);
+  const [step6Note, setStep6Note] = useState("");
+  const [step6Busy, setStep6Busy] = useState(false);
+  const [loadGuide, setLoadGuide] = useState<HistLoadTab | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
   const [planFocus, setPlanFocus] = useState<{ cid: number; name: string } | null>(null);
   const [logStep, setLogStep] = useState<null | 0 | 1 | 2 | 3 | 4 | 5>(null);
@@ -2929,7 +2932,7 @@ export function AdminCrmSettings() {
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
       const tab = t === "historyAuto" ? "history" : t;
       if (CRM_SET_TABS.some((x) => x.id === tab)) setCrmTab(tab as CrmSetTab);
-      if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit") setHistTab(h);
+      if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit" || h === "step6") setHistTab(h);
     } catch {
       /* */
     }
@@ -4352,7 +4355,7 @@ export function AdminCrmSettings() {
                     >
                       {t.label}
                     </button>
-                    <LoadGuideBtn tab={t.id} onOpen={setLoadGuide} />
+                    {t.id === "step6" ? null : <LoadGuideBtn tab={t.id as HistLoadTab} onOpen={setLoadGuide} />}
                   </span>
                 ))}
               </div>
@@ -5253,6 +5256,66 @@ export function AdminCrmSettings() {
                     </>
                   );
                 })()}
+              </section>
+              ) : null}
+
+              {histTab === "step6" ? (
+              <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
+                <div className="font-display text-[1.15rem]">Лиды</div>
+                <p className="mt-1 text-sm text-muted">
+                  Колонки — активные лиды по филиалам. Касса — отдельная кнопка. В роль досье и в шаг 5 не пишем.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={step6Busy}
+                    className="h-8 rounded-full bg-black px-3 text-[0.78rem] font-semibold text-white disabled:opacity-50"
+                    onClick={() => {
+                      setStep6Busy(true);
+                      setStep6Note("Читаю колонки…");
+                      void adminSchedule({ data: { token: token(), action: "step6Columns" } as never })
+                        .then((res) => {
+                          const r = res as { ok?: boolean; error?: string; note?: string };
+                          setStep6Note(r.ok ? r.note || "Колонки записаны." : r.error || "Не прочиталось.");
+                        })
+                        .catch((e) => setStep6Note(e instanceof Error ? e.message : "Не прочиталось."))
+                        .finally(() => setStep6Busy(false));
+                    }}
+                  >
+                    Прочитать колонки
+                  </button>
+                  <button
+                    type="button"
+                    disabled={step6Busy}
+                    className="h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
+                    onClick={() => {
+                      setStep6Busy(true);
+                      setStep6Note("Снимаю кассу…");
+                      const run = async () => {
+                        for (;;) {
+                          const res = (await adminSchedule({ data: { token: token(), action: "step6Cash" } as never })) as {
+                            ok?: boolean;
+                            error?: string;
+                            note?: string;
+                            more?: boolean;
+                          };
+                          if (!res.ok) {
+                            setStep6Note(res.error || "Касса не снялась.");
+                            return;
+                          }
+                          setStep6Note(res.note || "");
+                          if (!res.more) return;
+                        }
+                      };
+                      void run()
+                        .catch((e) => setStep6Note(e instanceof Error ? e.message : "Касса не снялась."))
+                        .finally(() => setStep6Busy(false));
+                    }}
+                  >
+                    Перепроверить кассу
+                  </button>
+                </div>
+                {step6Note ? <p className="mt-3 text-sm">{step6Note}</p> : null}
               </section>
               ) : null}
             </div>
