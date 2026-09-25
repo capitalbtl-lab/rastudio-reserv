@@ -6,13 +6,35 @@ import { kindFromAlfaPay } from "./crm-pay-core";
 import { lessonWriteoffAmount } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon } from "./crm-step5-canon";
 import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, readCrmLeadColumns } from "./crm-leads";
+import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
 import { isApiLeadStudy, step6ColumnId } from "./crm-step6-core";
 import type { LeadCard, LeadStage } from "./crm-leads-stages";
+import type { StepLogRow, StepLogSettings } from "./crm-step-run-log-core";
 
 export { isApiClientStudy, isApiLeadStudy, step6ColumnId } from "./crm-step6-core";
 
 const PAGE = 100;
 const BRANCHES = [1, 2, 3, 4];
+const COL_LOG: StepLogSettings = { kind: "step6", recheck: false, src: "hands" };
+const CASH_LOG: StepLogSettings = { kind: "step6", recheck: true, src: "hands" };
+
+function writeStep6(settings: StepLogSettings, rows: Omit<StepLogRow, "id" | "at" | "runId" | "settings">[], close: boolean) {
+  try {
+    const run = beginStepRun({ step: 6, settings });
+    const at = new Date().toISOString();
+    const next: StepLogRow[] = rows.map((row, i) => ({
+      ...row,
+      id: `r6-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 5)}`,
+      at,
+      runId: run.id,
+      settings,
+    }));
+    const saved = saveRun({ ...run, rows: [...run.rows, ...next] });
+    if (close) closeStepRun(saved.id);
+  } catch {
+    /* лог не роняет шаг */
+  }
+}
 
 async function readPages(path: string, body: Record<string, unknown>, tok: string) {
   const items: Record<string, unknown>[] = [];
@@ -73,6 +95,7 @@ export async function syncStep6Columns() {
   dropAlfaIndex();
   const tok = await alfaToken();
   const notes: string[] = [];
+  const logRows: Omit<StepLogRow, "id" | "at" | "runId" | "settings">[] = [];
   for (const branch of BRANCHES) {
     try {
       const stageRows = await readPages(`/v2api/${branch}/lead-status/index`, {}, tok);
@@ -105,11 +128,37 @@ export async function syncStep6Columns() {
       replaceStep6Branch(branch, cards, stages);
       const placed = cards.filter((c) => c.statusId >= 0).length;
       notes.push(`${branch}: ${placed}`);
+      for (const card of cards) {
+        const col = card.statusId < 0 ? "не в колонке" : stages.find((s) => s.id === card.statusId)?.name || `этап ${card.statusId}`;
+        logRows.push({
+          step: 6,
+          cid: card.id,
+          branchId: branch,
+          name: card.name,
+          action: "load",
+          result: card.statusId < 0 ? "left" : "right",
+          ok: true,
+          matched: card.statusId >= 0,
+          note: col,
+          extra: col,
+        });
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "обрыв";
       notes.push(`${branch}: оставлено · ${msg}`);
+      logRows.push({
+        step: 6,
+        branchId: branch,
+        name: `филиал ${branch}`,
+        action: "fail",
+        result: "fail",
+        ok: false,
+        note: msg,
+        error: msg,
+      });
     }
   }
+  writeStep6(COL_LOG, logRows, true);
   return { ok: true as const, note: `Шаг 6 · колонки · ${notes.join(" · ")}` };
 }
 
@@ -156,10 +205,35 @@ export async function recheckStep6Cash() {
       failed += 1;
     }
   }
-  if (!saw && failed > 0) throw new Error(`№${id} · Alfa не ответила`);
+  if (!saw && failed > 0) {
+    const who = items.find((x) => x.id === id)?.name || `№${id}`;
+    writeStep6(CASH_LOG, [{
+      step: 6,
+      cid: id,
+      branchId: branches[0],
+      name: who,
+      action: "fail",
+      result: "fail",
+      ok: false,
+      note: "Alfa не ответила",
+      error: "Alfa не ответила",
+    }], false);
+    throw new Error(`№${id} · Alfa не ответила`);
+  }
   if (!saw || !Number.isFinite(header)) {
     stampStep6Cash(id, { cashState: "no-balance", cashSort: "", cashAt: new Date().toISOString() });
     const left = (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");
+    const who = items.find((x) => x.id === id)?.name || `№${id}`;
+    writeStep6(CASH_LOG, [{
+      step: 6,
+      cid: id,
+      branchId: branches[0],
+      name: who,
+      action: "recheck",
+      result: "skip",
+      ok: true,
+      note: "нет balance",
+    }], !left);
     return { ok: true as const, more: left, note: `№${id} · нет balance` };
   }
   let cash = 0;
@@ -201,6 +275,18 @@ export async function recheckStep6Cash() {
   const name = items.find((x) => x.id === id)?.name || `№${id}`;
   const left = (peekLeadBoard()?.items || []).some((x) => x.cashState === "wait");
   const sortRu = sort === "new" ? "новый" : sort === "paid" ? "новый с деньгами" : "вернувшийся";
+  writeStep6(CASH_LOG, [{
+    step: 6,
+    cid: id,
+    branchId: branches[0],
+    name,
+    action: "recheck",
+    result: matched ? "right" : "left",
+    ok: true,
+    matched,
+    note: `${sortRu} · шапка ${header} · формула ${fitted.n}`,
+    after: { header, formula: fitted.n },
+  }], !left);
   return {
     ok: true as const,
     more: left,

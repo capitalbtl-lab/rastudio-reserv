@@ -2316,6 +2316,7 @@ function Step6Panel() {
   const [col, setCol] = useState<"all" | number>("all");
   const [sort, setSort] = useState<"all" | "wait" | "new" | "paid" | "back" | "gap" | "no-balance" | "aside">("all");
   const [open, setOpen] = useState("");
+  const [logOpen, setLogOpen] = useState(false);
   const [pageSize, setPageSize] = useState(20);
   const [pageLeft, setPageLeft] = useState(0);
   const [pageRight, setPageRight] = useState(0);
@@ -2486,7 +2487,11 @@ function Step6Panel() {
   }
   return (
     <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-      <div className="font-display text-[1.15rem]">Лиды</div>
+      <div className="flex items-center gap-2 font-display text-[1.15rem]">
+        Лиды
+        <button type="button" className="ml-auto h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setLogOpen(true)}>Лог шага</button>
+      </div>
+      <StepRunLogModal open={logOpen} step={6} onClose={() => setLogOpen(false)} tick={note} />
       <p className="mt-1 text-sm text-muted">
         Активные лиды по филиалам. Колонка — этап воронки. Касса — отдельная кнопка, в роль и в шаг 5 не пишется.
       </p>

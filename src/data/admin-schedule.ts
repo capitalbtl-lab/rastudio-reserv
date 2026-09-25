@@ -3133,7 +3133,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const op = String(data.kind || "list");
       const runId = String(data.runId || data.name || "").trim();
       const rowId = String(data.rowId || "").trim();
-      const stepN = Number(data.step) as 0 | 1 | 2 | 3 | 4 | 5;
+      const stepN = Number(data.step) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
       if (op === "get") {
         const run = runId ? loadRun(runId) : null;
         if (!run) return { ok: false as const, error: "Прогон не найден." };
@@ -3199,7 +3199,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           summary: summarizeRows(all.rows),
         };
       }
-      const runs = stepN >= 1 && stepN <= 5 ? listRunsByStep(stepN) : listRunIndex();
+      const runs = stepN >= 1 && stepN <= 6 ? listRunsByStep(stepN) : listRunIndex();
       return { ok: true as const, runs };
     }
     if (data.action === "journalPull") {

@@ -1,6 +1,6 @@
-/** Чистое ядро лога шагов 1–5. Без fs, без Alfa. Только считает и подписывает. */
+/** Чистое ядро лога шагов 1–6. Без fs, без Alfa. Только считает и подписывает. */
 
-export type StepN = 1 | 2 | 3 | 4 | 5;
+export type StepN = 1 | 2 | 3 | 4 | 5 | 6;
 export type StepLogAction = "load" | "recheck" | "probe" | "fail" | "skip";
 export type StepLogResult = "ok" | "hole" | "extra" | "mismatch" | "fail" | "skip" | "more" | "empty" | "right" | "left";
 
@@ -126,6 +126,7 @@ export const STEP_RU: Record<StepN, string> = {
   3: "Шаг 3 · группы",
   4: "Шаг 4 · касса",
   5: "Шаг 5 · сверка",
+  6: "Шаг 6 · лиды",
 };
 
 export function emptySummary(): StepLogSummary {
