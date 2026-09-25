@@ -2307,6 +2307,8 @@ function step6CashWord(state?: string) {
 function Step6Panel() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [cashing, setCashing] = useState(false);
+  const stopCash = useRef(false);
   const [items, setItems] = useState<Step6Item[]>([]);
   const [stages, setStages] = useState<LeadStage[]>(LEAD_STAGES);
   const [query, setQuery] = useState("");
@@ -2356,7 +2358,9 @@ function Step6Panel() {
   }
 
   function readCash() {
+    stopCash.current = false;
     setBusy(true);
+    setCashing(true);
     setNote("Снимаю кассу…");
     const run = async () => {
       for (;;) {
@@ -2372,12 +2376,20 @@ function Step6Panel() {
         }
         setNote(res.note || "");
         await loadList();
+        if (stopCash.current) {
+          setNote((prev) => `${prev || "Касса"} · стоп`);
+          return;
+        }
         if (!res.more) return;
       }
     };
     void run()
       .catch((e) => setNote(e instanceof Error ? e.message : "Касса не снялась."))
-      .finally(() => setBusy(false));
+      .finally(() => {
+        setBusy(false);
+        setCashing(false);
+        stopCash.current = false;
+      });
   }
 
   const q = query.trim().toLowerCase();
@@ -2467,6 +2479,7 @@ function Step6Panel() {
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
         <button type="button" className={cn(BTN_RED, busy && "ra-progress-run")} disabled={busy} onClick={readColumns}>Прочитать колонки</button>
         <button type="button" className={BTN_GHOST} disabled={busy || !items.length} onClick={readCash}>Перепроверить кассу</button>
+        <button type="button" className={BTN_GHOST} disabled={!cashing} onClick={() => { stopCash.current = true; setNote("Стоп после этого лида."); }}>Стоп</button>
       </div>
       <input className="mt-3 h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10" placeholder="Найти лида…" value={query} onChange={(e) => { setQuery(e.target.value); setPageLeft(0); setPageRight(0); }} />
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
