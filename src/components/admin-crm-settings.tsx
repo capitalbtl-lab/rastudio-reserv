@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
+import { step7Shows, type Step7Years } from "@/data/crm-step7-core";
 import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage } from "@/data/crm-leads-stages";
 import { FUNNEL_AUTO_DEFAULT, type FunnelAuto } from "@/data/funnel-auto-core";
 import { CRM_BRANCH } from "@/data/ids";
@@ -2285,6 +2286,10 @@ type Step6Item = {
   cashSort?: "" | "new" | "paid" | "back";
   rejectId?: number;
   rejectName?: string;
+  study?: 0 | 1;
+  dob?: string;
+  hadGroups?: boolean;
+  archivedAt?: string;
   cashBalance?: number;
   cashFormula?: number;
   cashPayN?: number;
@@ -2374,7 +2379,17 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [branch, setBranch] = useState(0);
   const [col, setCol] = useState<"all" | number>("all");
   const [sort, setSort] = useState<"all" | "wait" | "new" | "paid" | "back" | "gap" | "no-balance" | "aside">("all");
-  const [reason, setReason] = useState<"all" | number>("all");
+  const [reason, setReason] = useState<"all" | string>("all");
+  const [archClients, setArchClients] = useState(true);
+  const [archLeads, setArchLeads] = useState(true);
+  const [archAgeFrom, setArchAgeFrom] = useState("");
+  const [archAgeTo, setArchAgeTo] = useState("");
+  const [archDobYes, setArchDobYes] = useState(false);
+  const [archDobNo, setArchDobNo] = useState(false);
+  const [archFio, setArchFio] = useState(false);
+  const [archGrpYes, setArchGrpYes] = useState(false);
+  const [archGrpNo, setArchGrpNo] = useState(false);
+  const [archYears, setArchYears] = useState<Step7Years>(0);
   const [open, setOpen] = useState("");
   const [logOpen, setLogOpen] = useState(false);
   const [pageSize, setPageSize] = useState(20);
@@ -2473,9 +2488,27 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const q = query.trim().toLowerCase();
   const named = items.filter((x) => !q || x.name.toLowerCase().includes(q) || String(x.id).includes(q));
   const byBranch = (id: number) => named.filter((x) => x.branchId === id).length;
+  const ageFromN = archAgeFrom === "" ? undefined : Number(archAgeFrom);
+  const ageToN = archAgeTo === "" ? undefined : Number(archAgeTo);
+  const archPick = {
+    clients: archClients,
+    leads: archLeads,
+    ageFrom: Number.isFinite(ageFromN) ? ageFromN : undefined,
+    ageTo: Number.isFinite(ageToN) ? ageToN : undefined,
+    dobYes: archDobYes,
+    dobNo: archDobNo,
+    fio: archFio,
+    groupsYes: archGrpYes,
+    groupsNo: archGrpNo,
+    years: archYears,
+  };
   const filtered = named.filter((x) => {
     if (branch && x.branchId !== branch) return false;
-    if (archive && reason !== "all" && (x.rejectId || 0) !== reason) return false;
+    if (archive && !step7Shows(x, archPick)) return false;
+    if (archive && reason !== "all") {
+      const key = x.rejectId ? `${x.study === 0 ? "l" : "c"}:${x.rejectId}` : "0";
+      if (key !== reason) return false;
+    }
     if (col === "all") {
       /* keep */
     } else if (col === -1) {
@@ -2539,7 +2572,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           </button>
         </div>
         <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
-          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? (x.rejectId ? x.rejectName || `причина ${x.rejectId}` : "без причины") : stageName(x.statusId)} · {archive ? step6CashWord(x.cashState) : step6SortWord(x.cashSort)}
+          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? `${x.study === 0 ? "лид" : "клиент"} · ${x.rejectId ? x.rejectName || `причина ${x.rejectId}` : "без причины"}` : stageName(x.statusId)} · {archive ? step6CashWord(x.cashState) : step6SortWord(x.cashSort)}
           {x.cashState && x.cashState !== "wait" ? ` · шапка ${rubAudit(x.cashBalance)} · формула ${rubAudit(x.cashFormula)}` : ""}
         </p>
         {ok ? null : (
@@ -2626,17 +2659,18 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
 
   const chips = "h-8 rounded-full px-3 text-[0.78rem] font-semibold";
   const inBranch = named.filter((x) => !branch || x.branchId === branch);
-  const reasonSeen = new Map<number, { id: number; label: string; n: number }>();
+  const reasonSeen = new Map<string, { id: string; label: string; n: number }>();
   if (archive) {
     for (const x of inBranch) {
-      const id = x.rejectId || 0;
-      const label = id ? x.rejectName || `причина ${id}` : "без причины";
+      if (!step7Shows(x, archPick)) continue;
+      const id = x.rejectId ? `${x.study === 0 ? "l" : "c"}:${x.rejectId}` : "0";
+      const label = x.rejectId ? x.rejectName || `причина ${x.rejectId}` : "без причины";
       const hit = reasonSeen.get(id);
       if (hit) hit.n += 1;
       else reasonSeen.set(id, { id, label, n: 1 });
     }
   }
-  const reasonChips = [...reasonSeen.values()].sort((a, b) => (a.id === 0 ? -1 : b.id === 0 ? 1 : a.label.localeCompare(b.label, "ru")));
+  const reasonChips = [...reasonSeen.values()].sort((a, b) => (a.id === "0" ? -1 : b.id === "0" ? 1 : a.label.localeCompare(b.label, "ru")));
   const asideN = inBranch.filter((x) => x.statusId < 0).length;
   const colCount = new Map<number, number>();
   for (const x of inBranch) {
@@ -2664,11 +2698,44 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       <StepRunLogModal open={logOpen} step={archive ? 7 : 6} onClose={() => setLogOpen(false)} tick={note} />
       <p className="mt-1 text-sm text-muted">
         {archive
-          ? "Архивные клиенты, которых нет в живых группах. Касса считается как на шаге 6: шапка Alfa и формула. В роль и в шаг 5 не пишется."
+          ? "Архив, кого нет в живых группах: клиенты и лиды. Касса как на шаге 6. В роль и в шаг 5 не пишется."
           : "Активные лиды по филиалам. Колонка — этап воронки. Касса — отдельная кнопка, в роль и в шаг 5 не пишется."}
       </p>
+      {archive ? (
+        <div className="mt-3 rounded-2xl bg-white px-3.5 py-3 ring-1 ring-black/10">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button type="button" className={cn(chips, archClients && archLeads ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchClients(true); setArchLeads(true); setPageLeft(0); setPageRight(0); }}>
+              Все архивные · {inBranch.length}
+            </button>
+            <button type="button" className={cn(chips, archClients ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchClients((v) => !v); setPageLeft(0); setPageRight(0); }}>
+              Архивные клиенты · {inBranch.filter((x) => x.study !== 0).length}
+            </button>
+            <button type="button" className={cn(chips, archLeads ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchLeads((v) => !v); setPageLeft(0); setPageRight(0); }}>
+              Архивные лиды · {inBranch.filter((x) => x.study === 0).length}
+            </button>
+          </div>
+          <p className="mt-3 font-display text-[1.02rem] leading-none">Кого писать на диск</p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-white px-2.5 ring-1 ring-black/10">
+              <span className="text-[0.72rem] text-muted">возраст</span>
+              <input className="h-6 w-8 bg-transparent text-center text-[0.82rem] font-semibold outline-none" inputMode="numeric" value={archAgeFrom} placeholder="от" aria-label="Возраст от" onChange={(e) => { setArchAgeFrom(e.target.value.replace(/\D/g, "").slice(0, 2)); setPageLeft(0); setPageRight(0); }} />
+              <span className="text-muted/50">–</span>
+              <input className="h-6 w-8 bg-transparent text-center text-[0.82rem] font-semibold outline-none" inputMode="numeric" value={archAgeTo} placeholder="до" aria-label="Возраст до" onChange={(e) => { setArchAgeTo(e.target.value.replace(/\D/g, "").slice(0, 2)); setPageLeft(0); setPageRight(0); }} />
+            </span>
+            <button type="button" className={cn(chips, archDobYes ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchDobYes((v) => !v); setPageLeft(0); setPageRight(0); }}>с д/р</button>
+            <button type="button" className={cn(chips, archDobNo ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchDobNo((v) => !v); setPageLeft(0); setPageRight(0); }}>без д/р</button>
+            <button type="button" className={cn(chips, archFio ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchFio((v) => !v); setPageLeft(0); setPageRight(0); }}>только с ФИО</button>
+            <button type="button" className={cn(chips, archGrpYes ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchGrpYes((v) => !v); setPageLeft(0); setPageRight(0); }}>учился в группах</button>
+            <button type="button" className={cn(chips, archGrpNo ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchGrpNo((v) => !v); setPageLeft(0); setPageRight(0); }}>не учился в группах</button>
+            {([[1, "за год"], [2, "за 2 года"], [4, "за 4 года"], [6, "за 6 лет"], [2015, "с 2015"]] as const).map(([n, label]) => (
+              <button key={n} type="button" className={cn(chips, archYears === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchYears((v) => (v === n ? 0 : n)); setPageLeft(0); setPageRight(0); }}>{label}</button>
+            ))}
+          </div>
+          <p className="mt-2 text-[0.72rem] leading-snug text-muted">ФИО — не «тест» и не телефон. Группы — были в Alfa. Срок — дата архива. Клиенты и лиды включаются вместе.</p>
+        </div>
+      ) : null}
       <p className="mt-3 text-sm">
-        карточек {inBranch.length}{archive ? "" : `${colParts.length ? ` · ${colParts.join(" · ")}` : ""} · не в колонке ${asideN}`} · касса совпала {inBranch.filter((x) => x.cashState === "ok").length} · не сошлось {inBranch.filter((x) => x.cashState === "gap").length} · ещё не снимали {inBranch.filter((x) => !x.cashState || x.cashState === "wait").length}
+        карточек {archive ? filtered.length : inBranch.length}{archive ? "" : `${colParts.length ? ` · ${colParts.join(" · ")}` : ""} · не в колонке ${asideN}`} · касса совпала {(archive ? filtered : inBranch).filter((x) => x.cashState === "ok").length} · не сошлось {(archive ? filtered : inBranch).filter((x) => x.cashState === "gap").length} · ещё не снимали {(archive ? filtered : inBranch).filter((x) => !x.cashState || x.cashState === "wait").length}
         {note ? ` · ${note}` : ""}
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">

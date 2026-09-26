@@ -402,6 +402,11 @@ export type LeadCard = {
   /** Шаг 7. Причина архива клиента: Customer.customer_reject_id. 0 — в Alfa не указана. */
   rejectId?: number;
   rejectName?: string;
+  /** Шаг 7: 1 клиент, 0 архивный лид. */
+  study?: 0 | 1;
+  dob?: string;
+  hadGroups?: boolean;
+  archivedAt?: string;
 };
 
 /** Карточка лида с диска сайта. Без API. crmId < 0 — заявка ещё не в Alfa. */

@@ -6,7 +6,7 @@ import { replaceStep7List } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup } from "./dossiers";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-import { step7Keep, step7RejectId } from "./crm-step7-core";
+import { step7ArchiveDay, step7HadGroups, step7KeepAny, step7RejectId, step7Study } from "./crm-step7-core";
 import { recheckStep7Cash } from "./crm-step6";
 import type { LeadCard } from "./crm-leads-stages";
 
@@ -80,11 +80,11 @@ async function readPages(path: string, body: Record<string, unknown>, tok: strin
   throw new Error("список не кончился");
 }
 
-async function rejectNames(tok: string) {
+async function rejectNames(tok: string, kind: "customer-reject" | "lead-reject") {
   const byBranch = new Map<string, string>();
   for (const branch of BRANCHES) {
     try {
-      const rows = await readPages(`/v2api/${branch}/customer-reject/index`, {}, tok);
+      const rows = await readPages(`/v2api/${branch}/${kind}/index`, {}, tok);
       for (const row of rows) {
         const id = Number(row.id);
         const name = String(row.name || "").trim();
@@ -98,45 +98,62 @@ async function rejectNames(tok: string) {
   return byBranch;
 }
 
+function dobOf(row: Record<string, unknown>) {
+  return String(row.dob || row.b_date || row.born || "").trim();
+}
+
 export async function syncStep7List() {
   dropAlfaIndex();
   const tok = await alfaToken();
   const live = await liveCustomerIds(tok);
-  const names = await rejectNames(tok);
+  const clientReasons = await rejectNames(tok, "customer-reject");
+  const leadReasons = await rejectNames(tok, "lead-reject");
   const byId = new Map<number, LeadCard>();
   const notes: string[] = [];
   let dropped = 0;
+  let clients = 0;
+  let leads = 0;
   for (const branch of BRANCHES) {
     try {
-      const rows = await readPages(`/v2api/${branch}/customer/index`, { is_study: 1, removed: 2 }, tok);
       let n = 0;
-      for (const row of rows) {
-        if (!step7Keep(row, live)) {
-          if (live.has(Number(row.id))) dropped += 1;
-          continue;
+      for (const studyFilter of [1, 0] as const) {
+        const rows = await readPages(`/v2api/${branch}/customer/index`, { is_study: studyFilter, removed: 2 }, tok);
+        for (const row of rows) {
+          if (!step7KeepAny(row, live)) {
+            if (live.has(Number(row.id))) dropped += 1;
+            continue;
+          }
+          const id = Number(row.id);
+          if (byId.has(id)) continue;
+          const study = step7Study(row) === 0 ? 0 : 1;
+          const rejectId = step7RejectId(row, study);
+          const names = study === 0 ? leadReasons : clientReasons;
+          byId.set(id, {
+            id,
+            customerId: id,
+            branchId: branch,
+            branches: [branch],
+            name: String(row.name || "").trim() || (study === 0 ? `лид ${id}` : `клиент ${id}`),
+            age: "",
+            phone: "",
+            email: "",
+            note: "",
+            assigned: "",
+            statusId: 0,
+            at: new Date().toISOString(),
+            chats: 0,
+            cashState: "wait",
+            rejectId,
+            rejectName: rejectId ? names.get(`${branch}:${rejectId}`) || `причина ${rejectId}` : "",
+            study,
+            dob: dobOf(row),
+            hadGroups: step7HadGroups(row),
+            archivedAt: step7ArchiveDay(row),
+          });
+          n += 1;
+          if (study === 0) leads += 1;
+          else clients += 1;
         }
-        const id = Number(row.id);
-        if (byId.has(id)) continue;
-        const rejectId = step7RejectId(row);
-        byId.set(id, {
-          id,
-          customerId: id,
-          branchId: branch,
-          branches: [branch],
-          name: String(row.name || "").trim() || `клиент ${id}`,
-          age: "",
-          phone: "",
-          email: "",
-          note: "",
-          assigned: "",
-          statusId: 0,
-          at: new Date().toISOString(),
-          chats: 0,
-          cashState: "wait",
-          rejectId,
-          rejectName: rejectId ? names.get(`${branch}:${rejectId}`) || `причина ${rejectId}` : "",
-        });
-        n += 1;
       }
       notes.push(`${branch}: ${n}`);
     } catch (e) {
@@ -144,5 +161,5 @@ export async function syncStep7List() {
     }
   }
   const board = replaceStep7List([...byId.values()]);
-  return { ok: true as const, note: `Шаг 7 · архив ${board.items.length} · в живых группах снято ${dropped} · ${notes.join(" · ")}` };
+  return { ok: true as const, note: `Шаг 7 · архив ${board.items.length} · клиенты ${clients} · лиды ${leads} · в живых группах снято ${dropped} · ${notes.join(" · ")}` };
 }
