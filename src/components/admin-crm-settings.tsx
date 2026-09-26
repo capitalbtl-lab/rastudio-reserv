@@ -2415,8 +2415,30 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   }
 
   useEffect(() => {
-    void loadList().catch(() => setNote("Список не прочитался."));
+    let dead = false;
+    const modes = archive ? ["step7-list", "step7-cash"] : ["step6-recount", "step6-columns", "step6-cash"];
+    void (async () => {
+      try {
+        await loadList();
+      } catch {
+        if (!dead) setNote("Список не прочитался.");
+      }
+      if (dead) return;
+      try {
+        const res = (await adminSchedule({ data: { token: token(), action: "journalPull", kind: "jobStatus" } as never })) as {
+          job?: { running?: boolean; stop?: boolean; mode?: string; msg?: string };
+        };
+        const job = res.job;
+        if (dead || !job?.running || job.stop || !modes.includes(String(job.mode || ""))) return;
+        setBusy(true);
+        setNote(job.msg || "Идёт на сервере…");
+        watchServer();
+      } catch {
+        /* список уже на экране, сервер догонит следующим заходом */
+      }
+    })();
     return () => {
+      dead = true;
       if (pollJob.current) clearInterval(pollJob.current);
     };
   }, []);
