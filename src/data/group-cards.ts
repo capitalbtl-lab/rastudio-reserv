@@ -325,6 +325,30 @@ export function replaceCustomerCalendar(customerId: number, lessons: GroupCalLes
   return list;
 }
 
+/** Шаг 6: дописать недостающие уроки. Уже лежащие строки не трогает. Потолок 2500 не поднимает. */
+export function appendMissingCustomerLessons(customerId: number, rows: GroupCalLesson[]) {
+  const id = Number(customerId) || 0;
+  if (!id) return { wrote: 0, capped: false };
+  const prev = loadCustomerCalendar(id);
+  const room = 2500 - prev.length;
+  if (room <= 0) return { wrote: 0, capped: rows.length > 0 };
+  const have = new Set(prev.map((x) => Number(x.lessonId) || 0).filter((n) => n > 0));
+  const take: GroupCalLesson[] = [];
+  for (const row of rows) {
+    const lid = Number(row.lessonId) || 0;
+    if (!lid || have.has(lid)) continue;
+    if (take.length >= room) break;
+    have.add(lid);
+    take.push(row);
+  }
+  if (!take.length) return { wrote: 0, capped: false };
+  saveCustomerCalendarList(id, prev.concat(take));
+  return { wrote: take.length, capped: rows.some((row) => {
+    const lid = Number(row.lessonId) || 0;
+    return lid > 0 && !prev.some((x) => Number(x.lessonId) === lid) && !take.some((x) => Number(x.lessonId) === lid);
+  }) };
+}
+
 function fioOf(cid: number) {
   const d = findDossier({ crmId: cid });
   const fromDossier = String(d?.child?.fio || d?.parent?.fio || "").trim();

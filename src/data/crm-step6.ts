@@ -9,7 +9,8 @@ import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, peekStep7Board, stam
 import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
 import { loadCustomerCalendar } from "./group-cards";
 import { paysOf } from "./crm-pay";
-import { isApiLeadStudy, step6ColumnId } from "./crm-step6-core";
+import { isApiLeadStudy, step6ColumnId, step6LessonDisk } from "./crm-step6-core";
+import { toAlfaLessonDate } from "./crm-journal-periods";
 import type { LeadCard, LeadStage } from "./crm-leads-stages";
 import type { StepLogRow, StepLogSettings } from "./crm-step-run-log-core";
 
@@ -331,6 +332,7 @@ export async function recheckCashPass(opts: CashPass) {
   let noCommission = 0;
   const payAt = new Map<number, { n: number; sum: number; ids: number[] }>();
   const lesAt = new Map<number, { n: number; sum: number; ids: number[] }>();
+  const alfaLessons: { row: Record<string, unknown>; commission: number; branch: number }[] = [];
   const payFrom = alfaPayIndexDate("2015-01-01");
   const payTo = alfaPayIndexDate(new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10));
   const lessonTo = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
@@ -406,6 +408,7 @@ export async function recheckCashPass(opts: CashPass) {
       lslot.sum += commission;
       lslot.ids.push(lid);
       lesAt.set(lbid, lslot);
+      if (opts.step === 6) alfaLessons.push({ row, commission, branch });
     }
     } catch {
       /* чужой филиал без доступа не обрывает остальные */
@@ -417,6 +420,30 @@ export async function recheckCashPass(opts: CashPass) {
     wrotePays = absorbAlfaPays(id, branches[0] || scan[0] || 1, alfaPayRows);
   } catch {
     wrotePays = -1;
+  }
+  let wroteLessons = 0;
+  let lessonNote = "";
+  if (opts.step === 6 && alfaLessons.length) {
+    try {
+      const packed = [];
+      let noDate = 0;
+      for (const item of alfaLessons) {
+        const lesson = step6LessonDisk(item.row, id, item.commission, item.branch);
+        if (!lesson) {
+          if (!toAlfaLessonDate(String(item.row.date || ""))) noDate += 1;
+          continue;
+        }
+        packed.push(lesson);
+      }
+      const { appendMissingCustomerLessons } = await import("./group-cards");
+      const saved = appendMissingCustomerLessons(id, packed);
+      wroteLessons = saved.wrote;
+      if (noDate) lessonNote = `без даты ${noDate}`;
+      if (saved.capped) lessonNote = lessonNote ? `${lessonNote} · потолок 2500` : "потолок 2500";
+    } catch {
+      wroteLessons = -1;
+      lessonNote = "занятия не легли";
+    }
   }
   const cal = loadCustomerCalendar(id);
   const diskLesIds = new Set<number>();
@@ -540,7 +567,7 @@ export async function recheckCashPass(opts: CashPass) {
     result: matched ? "right" : "left",
     ok: true,
     matched,
-    note: `${sortRu} · шапка ${header} · формула ${fitted.n}${wrotePays > 0 ? ` · платежи дописаны ${wrotePays}` : ""}${idMiss ? ` · id не сошлись ${idMiss}` : ""}`,
+    note: `${sortRu} · шапка ${header} · формула ${fitted.n}${wrotePays > 0 ? ` · платежи дописаны ${wrotePays}` : ""}${wroteLessons > 0 ? ` · занятия дописаны ${wroteLessons}` : ""}${lessonNote ? ` · ${lessonNote}` : ""}${idMiss ? ` · id не сошлись ${idMiss}` : ""}`,
     after: { header, formula: fitted.n },
   }], !left, opts.step);
   return {
