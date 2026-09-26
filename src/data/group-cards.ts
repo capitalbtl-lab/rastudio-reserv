@@ -7,7 +7,7 @@ import { nextLocalId } from "./crm-local-id";
 import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar, countAlfaLessonUniq, foldLessonAmount } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm-journal-core";
 import { chargeFromPupils, amountGiven, chargeAmountGiven } from "./crm-ledger-core";
-import { mergeMissingLessons } from "./crm-step6-core";
+import { lessonsAbsentFromAlfa, mergeMissingLessons } from "./crm-step6-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
 import { tryLockStudentAlfa, unlockStudentAlfa, ownsStudentAlfa, noteAlfaLessonsLanded } from "./crm-customer-sync";
@@ -335,6 +335,17 @@ export function appendMissingCustomerLessons(customerId: number, rows: GroupCalL
   if (!merged.wrote && !merged.opened) return { wrote: 0, opened: 0, capped: false };
   saveCustomerCalendarList(id, merged.list);
   return { wrote: merged.wrote, opened: merged.opened, capped: false };
+}
+
+/** Снять с диска этого клиента проведённые номера, которых Альфа не отдала. В Альфу не пишет. */
+export function dropCustomerLessonsAbsentFromAlfa(customerId: number, alfaIds: Set<number>) {
+  const id = Number(customerId) || 0;
+  if (!id) return 0;
+  const prev = loadCustomerCalendar(id);
+  const { keep, removed } = lessonsAbsentFromAlfa(prev, alfaIds);
+  if (!removed) return 0;
+  saveCustomerCalendarList(id, keep);
+  return removed;
 }
 
 function fioOf(cid: number) {

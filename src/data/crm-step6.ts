@@ -510,6 +510,16 @@ export async function recheckCashPass(opts: CashPass) {
       lessonNote = "занятия не легли";
     }
   }
+  let droppedLessons = 0;
+  if (!cut) {
+    try {
+      const { dropCustomerLessonsAbsentFromAlfa } = await import("./group-cards");
+      droppedLessons = dropCustomerLessonsAbsentFromAlfa(id, lesIds);
+      if (droppedLessons > 0) lessonNote = lessonNote ? `${lessonNote} · лишние занятия сняты ${droppedLessons}` : `лишние занятия сняты ${droppedLessons}`;
+    } catch {
+      lessonNote = lessonNote ? `${lessonNote} · лишние занятия не снялись` : "лишние занятия не снялись";
+    }
+  }
   if (cut) return park(cut);
   const cal = loadCustomerCalendar(id);
   const diskLesIds = new Set<number>();

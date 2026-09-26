@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk, mergeMissingLessons, cashRetryPlan, cashAttemptMs, raceUntil } from "./crm-step6-core.ts";
+import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk, mergeMissingLessons, lessonsAbsentFromAlfa, cashRetryPlan, cashAttemptMs, raceUntil } from "./crm-step6-core.ts";
 
 describe("шаг 6", () => {
   it("лид по is_study, клиент не лид", () => {
@@ -98,5 +98,17 @@ describe("шаг 6", () => {
     assert.equal(merged.list[0].pupils?.[0].amount, 0);
     assert.equal(merged.list[1].amount, 50);
     assert.equal(merged.list[2].lessonId, 3);
+  });
+
+  it("проведённый номер, которого нет в Альфе, снимается; план и строка без номера остаются", () => {
+    const rows = [
+      { lessonId: 10, status: 3 },
+      { lessonId: 11, status: 3 },
+      { lessonId: 12, status: 1 },
+      { status: 3 },
+    ];
+    const out = lessonsAbsentFromAlfa(rows, new Set([10]));
+    assert.equal(out.removed, 1);
+    assert.deepEqual(out.keep.map((x) => x.lessonId), [10, 12, undefined]);
   });
 });

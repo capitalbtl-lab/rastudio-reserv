@@ -133,6 +133,21 @@ export function mergeMissingLessons<T extends { lessonId?: number; status?: numb
   return { list: next, wrote, opened };
 }
 
+/** Проведённый урок с номером, которого нет в Альфе. Своих занятий сайта нет, это не урок администратора. Статус не 3 и строку без номера не трогаем. */
+export function lessonsAbsentFromAlfa<T extends { lessonId?: number; status?: number }>(rows: T[], alfaIds: Set<number>) {
+  const keep: T[] = [];
+  let removed = 0;
+  for (const lesson of rows) {
+    const lid = Number(lesson.lessonId) || 0;
+    if (Number(lesson.status) === 3 && lid > 0 && !alfaIds.has(lid)) {
+      removed += 1;
+      continue;
+    }
+    keep.push(lesson);
+  }
+  return { keep, removed };
+}
+
 export const CASH_RETRY_MS = 30_000;
 export const CASH_RETRY_PAUSE_MS = 5_000;
 
