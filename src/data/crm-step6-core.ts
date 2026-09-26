@@ -8,6 +8,11 @@ export function isApiClientStudy(raw: unknown) {
   return raw === true || raw === 1 || raw === "1";
 }
 
+/** Шаги 6 и 7. null в balance — число 0. Поля нет — это не шапка. */
+export function step67NullBalance(hasBalance: boolean, raw: unknown) {
+  return hasBalance && raw == null ? 0 : null;
+}
+
 /** Номер колонки. null — в колонку не класть. Пустой этап — «Не разобрано». */
 export function step6ColumnId(leadStatusIds: unknown, stages: { id: number; name: string }[], leadStatusId?: unknown): number | null {
   if (!(leadStatusIds == null || leadStatusIds === "")) {

@@ -9,7 +9,7 @@ import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, peekStep7Board, stam
 import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
 import { loadCustomerCalendar } from "./group-cards";
 import { paysOf } from "./crm-pay";
-import { isApiLeadStudy, step6ColumnId, step6LessonDisk, cashRetryPlan } from "./crm-step6-core";
+import { isApiLeadStudy, step6ColumnId, step6LessonDisk, cashRetryPlan, step67NullBalance } from "./crm-step6-core";
 import { step7HeaderQuery, step7Shows, step7Study, type Step7Pick } from "./crm-step7-core";
 import { toAlfaLessonDate } from "./crm-journal-periods";
 import type { LeadCard, LeadStage } from "./crm-leads-stages";
@@ -350,8 +350,12 @@ export async function recheckCashPass(opts: CashPass) {
         if (role != null) opts.stamp(id, { study: role });
       }
       if (Object.prototype.hasOwnProperty.call(hit, "balance")) {
-        const parsed = parseAlfaHeaderCanon(hit);
-        if (parsed.ok) header = parsed.header;
+        const nil = step67NullBalance(true, hit.balance);
+        if (nil === 0) header = 0;
+        else {
+          const parsed = parseAlfaHeaderCanon(hit);
+          if (parsed.ok) header = parsed.header;
+        }
       }
       break;
     } catch (e) {

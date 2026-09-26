@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk, mergeMissingLessons, lessonsAbsentFromAlfa, cashRetryPlan, cashAttemptMs, raceUntil } from "./crm-step6-core.ts";
+import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk, mergeMissingLessons, lessonsAbsentFromAlfa, cashRetryPlan, cashAttemptMs, raceUntil, step67NullBalance } from "./crm-step6-core.ts";
 
 describe("шаг 6", () => {
   it("лид по is_study, клиент не лид", () => {
@@ -110,5 +110,12 @@ describe("шаг 6", () => {
     const out = lessonsAbsentFromAlfa(rows, new Set([10]));
     assert.equal(out.removed, 1);
     assert.deepEqual(out.keep.map((x) => x.lessonId), [10, 12, undefined]);
+  });
+
+  it("на шагах 6 и 7 null в balance — ноль, отсутствие поля — не шапка", () => {
+    assert.equal(step67NullBalance(true, null), 0);
+    assert.equal(step67NullBalance(false, null), null);
+    assert.equal(step67NullBalance(true, 0), null);
+    assert.equal(step67NullBalance(true, 10), null);
   });
 });
