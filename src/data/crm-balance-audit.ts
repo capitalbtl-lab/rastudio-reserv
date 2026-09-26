@@ -584,7 +584,7 @@ async function alfaShow(branch: number, cid: number, _study = Number.NaN) {
     switched,
     token: t,
     request,
-    study: Number(found.is_study),
+    study: step5StudyNum(found.is_study),
     removed: Number(found.removed),
     authStop: false,
     rejectCid: false,
