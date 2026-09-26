@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { step7Keep } from "./crm-step7-core.ts";
+import { step7Keep, step7RejectId } from "./crm-step7-core.ts";
 
 describe("шаг 7", () => {
   const live = new Set([10]);
@@ -25,5 +25,14 @@ describe("шаг 7", () => {
   it("пустое removed в строке не выкидывает: фильтр уже removed 2", () => {
     assert.equal(step7Keep({ id: 12, is_study: 1 }, live), true);
     assert.equal(step7Keep({ id: 13, is_study: "1", removed: "" }, live), true);
+  });
+
+  it("причина архива — customer_reject_id, пустое не причина", () => {
+    assert.equal(step7RejectId({ customer_reject_id: 6 }), 6);
+    assert.equal(step7RejectId({ customer_reject_id: "6" }), 6);
+    assert.equal(step7RejectId({}), 0);
+    assert.equal(step7RejectId({ customer_reject_id: 0 }), 0);
+    assert.equal(step7RejectId({ customer_reject_id: "" }), 0);
+    assert.equal(step7RejectId({ customer_reject_id: null }), 0);
   });
 });

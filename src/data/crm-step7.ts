@@ -6,7 +6,7 @@ import { replaceStep7List } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup } from "./dossiers";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-import { step7Keep } from "./crm-step7-core";
+import { step7Keep, step7RejectId } from "./crm-step7-core";
 import { recheckStep7Cash } from "./crm-step6";
 import type { LeadCard } from "./crm-leads-stages";
 
@@ -80,10 +80,29 @@ async function readPages(path: string, body: Record<string, unknown>, tok: strin
   throw new Error("список не кончился");
 }
 
+async function rejectNames(tok: string) {
+  const byBranch = new Map<string, string>();
+  for (const branch of BRANCHES) {
+    try {
+      const rows = await readPages(`/v2api/${branch}/customer-reject/index`, {}, tok);
+      for (const row of rows) {
+        const id = Number(row.id);
+        const name = String(row.name || "").trim();
+        if (!Number.isFinite(id) || id <= 0 || !name) continue;
+        byBranch.set(`${branch}:${id}`, name);
+      }
+    } catch {
+      /* имя останется «причина N» */
+    }
+  }
+  return byBranch;
+}
+
 export async function syncStep7List() {
   dropAlfaIndex();
   const tok = await alfaToken();
   const live = await liveCustomerIds(tok);
+  const names = await rejectNames(tok);
   const byId = new Map<number, LeadCard>();
   const notes: string[] = [];
   let dropped = 0;
@@ -98,6 +117,7 @@ export async function syncStep7List() {
         }
         const id = Number(row.id);
         if (byId.has(id)) continue;
+        const rejectId = step7RejectId(row);
         byId.set(id, {
           id,
           customerId: id,
@@ -113,6 +133,8 @@ export async function syncStep7List() {
           at: new Date().toISOString(),
           chats: 0,
           cashState: "wait",
+          rejectId,
+          rejectName: rejectId ? names.get(`${branch}:${rejectId}`) || `причина ${rejectId}` : "",
         });
         n += 1;
       }

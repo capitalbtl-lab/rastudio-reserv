@@ -2283,6 +2283,8 @@ type Step6Item = {
   statusId: number;
   cashState?: "wait" | "ok" | "gap" | "no-balance";
   cashSort?: "" | "new" | "paid" | "back";
+  rejectId?: number;
+  rejectName?: string;
   cashBalance?: number;
   cashFormula?: number;
   cashPayN?: number;
@@ -2372,6 +2374,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [branch, setBranch] = useState(0);
   const [col, setCol] = useState<"all" | number>("all");
   const [sort, setSort] = useState<"all" | "wait" | "new" | "paid" | "back" | "gap" | "no-balance" | "aside">("all");
+  const [reason, setReason] = useState<"all" | number>("all");
   const [open, setOpen] = useState("");
   const [logOpen, setLogOpen] = useState(false);
   const [pageSize, setPageSize] = useState(20);
@@ -2472,6 +2475,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const byBranch = (id: number) => named.filter((x) => x.branchId === id).length;
   const filtered = named.filter((x) => {
     if (branch && x.branchId !== branch) return false;
+    if (archive && reason !== "all" && (x.rejectId || 0) !== reason) return false;
     if (col === "all") {
       /* keep */
     } else if (col === -1) {
@@ -2535,7 +2539,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           </button>
         </div>
         <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
-          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? "архив, не в живой группе" : stageName(x.statusId)} · {step6SortWord(x.cashSort)}
+          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? (x.rejectId ? x.rejectName || `причина ${x.rejectId}` : "без причины") : stageName(x.statusId)} · {archive ? step6CashWord(x.cashState) : step6SortWord(x.cashSort)}
           {x.cashState && x.cashState !== "wait" ? ` · шапка ${rubAudit(x.cashBalance)} · формула ${rubAudit(x.cashFormula)}` : ""}
         </p>
         {ok ? null : (
@@ -2547,7 +2551,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         )}
         {shown ? (
           <div className="mt-3 border-t border-black/5 pt-3 text-[0.72rem] leading-snug">
-            <p>Филиал — {step6Branch(x.branchId)}. {archive ? "Архивный клиент, в живых группах его нет." : `Колонка — ${stageName(x.statusId)}.`} Разбор — {step6SortWord(x.cashSort)}.</p>
+            <p>Филиал — {step6Branch(x.branchId)}. {archive ? `Причина архива — ${x.rejectId ? x.rejectName || `причина ${x.rejectId}` : "не указана"}.` : `Колонка — ${stageName(x.statusId)}. Разбор — ${step6SortWord(x.cashSort)}.`}</p>
             <table className="mt-2 w-full text-left text-[0.72rem] leading-snug">
               <thead>
                 <tr className="text-muted">
@@ -2622,6 +2626,17 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
 
   const chips = "h-8 rounded-full px-3 text-[0.78rem] font-semibold";
   const inBranch = named.filter((x) => !branch || x.branchId === branch);
+  const reasonSeen = new Map<number, { id: number; label: string; n: number }>();
+  if (archive) {
+    for (const x of inBranch) {
+      const id = x.rejectId || 0;
+      const label = id ? x.rejectName || `причина ${id}` : "без причины";
+      const hit = reasonSeen.get(id);
+      if (hit) hit.n += 1;
+      else reasonSeen.set(id, { id, label, n: 1 });
+    }
+  }
+  const reasonChips = [...reasonSeen.values()].sort((a, b) => (a.id === 0 ? -1 : b.id === 0 ? 1 : a.label.localeCompare(b.label, "ru")));
   const asideN = inBranch.filter((x) => x.statusId < 0).length;
   const colCount = new Map<number, number>();
   for (const x of inBranch) {
@@ -2690,7 +2705,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           ["gap", "не сошлось"],
           ["no-balance", "нет balance"],
           ["aside", "не в колонке"],
-        ] as const).filter(([id]) => !archive || id !== "aside").map(([id, label]) => (
+        ] as const).filter(([id]) => (archive ? id === "all" || id === "wait" || id === "gap" || id === "no-balance" : true)).map(([id, label]) => (
           <button key={id} type="button" className={cn(chips, sort === id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setSort(id); setPageLeft(0); setPageRight(0); }}>
             {label}
           </button>
@@ -2702,6 +2717,18 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           ))}
         </span>
       </div>
+      {archive && reasonChips.length ? (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <button type="button" className={cn(chips, reason === "all" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setReason("all"); setPageLeft(0); setPageRight(0); }}>
+            Все причины · {inBranch.length}
+          </button>
+          {reasonChips.map((r) => (
+            <button key={r.id} type="button" className={cn(chips, reason === r.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setReason(r.id); setPageLeft(0); setPageRight(0); }}>
+              {r.label} · {r.n}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {!items.length ? <p className="mt-3 text-sm text-muted">{archive ? "Архив ещё не читали. Список появится после «Прочитать архив»." : "Колонки ещё не читали. Список появится после «Прочитать колонки»."}</p> : null}
       <div className="mt-3 grid items-stretch gap-3 lg:grid-cols-2">
         <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
