@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CRM_BRANCH } from "@/data/ids";
 import { LEAD_STAGES, pinUnsorted, type LeadCard, type LeadStage } from "@/data/crm-leads-stages";
+import { step6DiskAgrees } from "@/data/crm-step5-canon";
 import { RA_POP } from "@/data/admin-ui";
 import { cn } from "@/lib/utils";
 
@@ -82,7 +83,7 @@ function CardFace({
           <span>
             {it.cashSort === "new" ? "новый" : it.cashSort === "paid" ? "новый с деньгами" : it.cashSort === "back" ? "вернувшийся" : ""}
             {it.cashSort ? " · " : ""}
-            {it.cashState === "ok" ? "совпало" : "не сошлось"}
+            {it.cashState === "ok" && step6DiskAgrees(it) ? "совпало" : "не сошлось"}
           </span>
         ) : null}
       </span>

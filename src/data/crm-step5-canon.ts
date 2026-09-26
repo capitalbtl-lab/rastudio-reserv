@@ -216,6 +216,31 @@ export function step5Close(a: number, b: number) {
   return frac > 0.001 || lo < 100;
 }
 
+/** Совпало только если шапка сошлась и на диске те же id платежей и занятий, что в Alfa. */
+export function step6DiskAgrees(x: {
+  cashDiskKnown?: boolean;
+  cashPayHole?: number;
+  cashPayExtra?: number;
+  cashLesHole?: number;
+  cashLesExtra?: number;
+  cashNoId?: number;
+  cashNoCommission?: number;
+  cashPayN?: number;
+  cashLesN?: number;
+}) {
+  if (x.cashPayHole == null && x.cashDiskKnown == null) return true;
+  const gaps =
+    (x.cashPayHole || 0) +
+    (x.cashPayExtra || 0) +
+    (x.cashLesHole || 0) +
+    (x.cashLesExtra || 0) +
+    (x.cashNoId || 0) +
+    (x.cashNoCommission || 0);
+  if (gaps > 0) return false;
+  if (x.cashDiskKnown === false && ((x.cashPayN || 0) > 0 || (x.cashLesN || 0) > 0)) return false;
+  return true;
+}
+
 export function step5UnitScale(disk: number, header: number) {
   if (!step5Close(disk, header) || Math.abs(disk - header) <= 1) return 1;
   return Math.abs(disk) > Math.abs(header) ? 100 : 1;

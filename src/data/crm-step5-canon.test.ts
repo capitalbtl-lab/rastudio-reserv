@@ -20,12 +20,20 @@ import {
   step5Close,
   step5UnitScale,
   step5ReviveEmptySkip,
+  step6DiskAgrees,
 } from "./crm-step5-canon.ts";
 
 describe("шаг 5 канон", () => {
   it("id как число", () => {
     assert.equal(sameCustomerId("12", 12), true);
     assert.equal(sameCustomerId(12, 13), false);
+  });
+
+  it("шапка 0 не закрывает карточку, если в Alfa платежей больше, чем на диске", () => {
+    assert.equal(step6DiskAgrees({ cashDiskKnown: true, cashPayHole: 0, cashPayExtra: 2, cashLesHole: 0, cashLesExtra: 4, cashPayN: 17, cashLesN: 83 }), false);
+    assert.equal(step6DiskAgrees({ cashDiskKnown: true, cashPayHole: 0, cashPayExtra: 0, cashLesHole: 0, cashLesExtra: 0, cashPayN: 17, cashLesN: 83 }), true);
+    assert.equal(step6DiskAgrees({ cashDiskKnown: false, cashPayHole: 0, cashPayExtra: 0, cashLesHole: 0, cashLesExtra: 0, cashPayN: 17, cashLesN: 0 }), false);
+    assert.equal(step6DiskAgrees({ cashDiskKnown: false, cashPayHole: 0, cashPayExtra: 0, cashLesHole: 0, cashLesExtra: 0, cashPayN: 0, cashLesN: 0 }), true);
   });
 
   it("роль по removed=2 и старому диску is_study=2", () => {

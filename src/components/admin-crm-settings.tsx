@@ -18,7 +18,7 @@ import { RECHECK_DAY_OPTS, clampRecheckDays, groupJournalGreen, type RecheckDays
 import { POLICY_FACTORY, planDateFrom, planFromIdOf, planFromIdToRecheckDays, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
 import { HistoryPlanModal } from "@/components/admin-history-plan";
 import { StepRunLogModal } from "@/components/admin-step-run-log";
-import { step5Close, step5FitRemainder, step5ReviveEmptySkip } from "@/data/crm-step5-canon";
+import { step5Close, step5FitRemainder, step5ReviveEmptySkip, step6DiskAgrees } from "@/data/crm-step5-canon";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
   let n = from?.parentElement || null;
@@ -2334,13 +2334,6 @@ function step6SortWord(sort?: string) {
   return "кассу не разбирали";
 }
 
-function step6CashWord(state?: string) {
-  if (state === "ok") return "совпало";
-  if (state === "gap") return "не сошлось";
-  if (state === "no-balance") return "нет balance";
-  return "касса не снята";
-}
-
 function step6Count(n: number | undefined, sum: number | undefined, minus = false) {
   if (n == null) return "ещё не снимали";
   const v = minus ? -Math.abs(Number(sum) || 0) : Number(sum) || 0;
@@ -2352,7 +2345,10 @@ function step6Why(x: Step6Item) {
   if (x.cashState === "no-balance") return "В ответе Alfa нет balance. Платежи и занятия не считали, шапку сравнить не с чем.";
   if (x.cashPayN == null && x.cashLesN == null) return "Разбивки ещё нет, только шапка и формула. Нажмите «Перепроверить кассу» ещё раз.";
   const bits: string[] = [];
-  if (x.cashState === "ok") bits.push("Шапка и формула сошлись.");
+  const idsOk = step6DiskAgrees(x);
+  const moneyOk = x.cashFormula != null && x.cashBalance != null && step5Close(Number(x.cashFormula), Number(x.cashBalance));
+  if (x.cashState === "ok" && idsOk) bits.push("Шапка и формула сошлись. Номера платежей и занятий на диске те же, что в Alfa.");
+  else if (moneyOk && !idsOk) bits.push(`Деньги шапки сошлись (${rubAudit(x.cashBalance)}), но на диске не все платежи и занятия Alfa. Это не совпало.`);
   else bits.push(`Не сошлось: формула ${rubAudit(x.cashFormula)}, шапка ${rubAudit(x.cashBalance)}.`);
   const tape = (x.cashPayN || 0) + (x.cashCorrN || 0) + (x.cashRefundN || 0) + (x.cashLesN || 0);
   if (!tape) bits.push("Лента платежей и проведённых занятий пустая.");
@@ -2520,7 +2516,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     if (sort === "gap" || sort === "no-balance") return x.cashState === sort;
     return x.cashSort === sort;
   });
-  const closed = (x: Step6Item) => x.cashState === "ok";
+  const closed = (x: Step6Item) => x.cashState === "ok" && step6DiskAgrees(x);
   const onePerson = (list: Step6Item[]) => {
     if (branch) return list;
     const seen = new Set<number>();
@@ -2557,9 +2553,9 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     const shown = open === key;
     const ok = closed(x);
     const aside = x.statusId < 0;
-    const word = aside ? "не в колонке" : step6CashWord(x.cashState);
+    const word = aside ? "не в колонке" : ok ? "совпало" : x.cashState === "no-balance" ? "нет balance" : !x.cashState || x.cashState === "wait" ? "касса не снята" : "не сошлось";
     return (
-      <li key={key} className={cn("rounded-2xl bg-white px-4 py-3 ring-1", ok ? "ring-emerald-200" : aside || x.cashState === "gap" || x.cashState === "no-balance" ? "ring-amber-200" : "ring-black/8")}>
+      <li key={key} className={cn("rounded-2xl bg-white px-4 py-3 ring-1", ok ? "ring-emerald-200" : aside || (x.cashState && x.cashState !== "wait") ? "ring-amber-200" : "ring-black/8")}>
         <div className="flex items-center gap-3">
           <button type="button" className="min-w-0 flex-1 truncate text-left font-medium leading-tight" onClick={() => setOpen(shown ? "" : key)}>
             {x.name || (archive ? `клиент ${x.id}` : `лид ${x.id}`)}
@@ -2572,7 +2568,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           </button>
         </div>
         <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
-          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? `${x.study === 0 ? "лид" : "клиент"} · ${x.rejectId ? x.rejectName || `причина ${x.rejectId}` : "без причины"}` : stageName(x.statusId)} · {archive ? step6CashWord(x.cashState) : step6SortWord(x.cashSort)}
+          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? `${x.study === 0 ? "лид" : "клиент"} · ${x.rejectId ? x.rejectName || `причина ${x.rejectId}` : "без причины"}` : stageName(x.statusId)} · {archive ? word : step6SortWord(x.cashSort)}
           {x.cashState && x.cashState !== "wait" ? ` · шапка ${rubAudit(x.cashBalance)} · формула ${rubAudit(x.cashFormula)}` : ""}
         </p>
         {ok ? null : (
@@ -2735,7 +2731,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         </div>
       ) : null}
       <p className="mt-3 text-sm">
-        карточек {archive ? filtered.length : inBranch.length}{archive ? "" : `${colParts.length ? ` · ${colParts.join(" · ")}` : ""} · не в колонке ${asideN}`} · касса совпала {(archive ? filtered : inBranch).filter((x) => x.cashState === "ok").length} · не сошлось {(archive ? filtered : inBranch).filter((x) => x.cashState === "gap").length} · ещё не снимали {(archive ? filtered : inBranch).filter((x) => !x.cashState || x.cashState === "wait").length}
+        карточек {archive ? filtered.length : inBranch.length}{archive ? "" : `${colParts.length ? ` · ${colParts.join(" · ")}` : ""} · не в колонке ${asideN}`} · касса совпала {(archive ? filtered : inBranch).filter((x) => x.cashState === "ok" && step6DiskAgrees(x)).length} · не сошлось {(archive ? filtered : inBranch).filter((x) => x.cashState === "gap" || (x.cashState === "ok" && !step6DiskAgrees(x))).length} · ещё не снимали {(archive ? filtered : inBranch).filter((x) => !x.cashState || x.cashState === "wait").length}
         {note ? ` · ${note}` : ""}
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">

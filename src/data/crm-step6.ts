@@ -4,7 +4,7 @@ import { request, token as alfaToken, dropAlfaIndex } from "./alfacrm";
 import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
 import { kindFromAlfaPay, alfaPayIndexDate, extraPayTypeIds, payCustomerIdOf } from "./crm-pay-core";
 import { writeoffSumOf, uniqueBranches } from "./crm-ledger-core";
-import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon } from "./crm-step5-canon";
+import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon, step6DiskAgrees } from "./crm-step5-canon";
 import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, peekStep7Board, stampStep7Cash, readCrmLeadColumns } from "./crm-leads";
 import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
 import { loadCustomerCalendar } from "./group-cards";
@@ -468,7 +468,18 @@ export async function recheckCashPass(opts: CashPass) {
   const cashBranches = `платежи: ${branchBits(payAt, diskPayIds) || "нет"} · занятия: ${branchBits(lesAt, diskLesIds) || "нет"}`;
   const idMiss = payNoId + lesNoId + noCommission + (diskKnown ? payIdsGap.hole + payIdsGap.extra + lesIdsGap.hole + lesIdsGap.extra : 0);
   const fitted = step5FitRemainder(cash, writeoff, goods, header);
-  const matched = step5Close(fitted.n, header);
+  const idsOk = step6DiskAgrees({
+    cashDiskKnown: diskKnown,
+    cashPayHole: diskKnown ? payIdsGap.hole : 0,
+    cashPayExtra: diskKnown ? payIdsGap.extra : 0,
+    cashLesHole: diskKnown ? lesIdsGap.hole : 0,
+    cashLesExtra: diskKnown ? lesIdsGap.extra : 0,
+    cashNoId: payNoId + lesNoId,
+    cashNoCommission: noCommission,
+    cashPayN: payN,
+    cashLesN: lessons,
+  });
+  const matched = step5Close(fitted.n, header) && idsOk;
   const payRows = payN + corrN + refundN;
   const empty = payRows === 0 && lessons === 0;
   const sort = lessons > 0 || (empty && !step5Close(header, 0)) ? "back" : payRows > 0 ? "paid" : "new";
