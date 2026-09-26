@@ -84,29 +84,4 @@ jobs:
             tail -n 80 /root/.pm2/logs/rastudio-error-8.log 2>/dev/null
             echo "=== port ==="
             ss -ltnp | grep 3000 || echo no-3000
-            echo "=== step7 filter ==="
-            cat > /tmp/ra-filter.mjs <<'NODE'
-            import { readFileSync } from "fs";
-            import { step7Shows } from "/var/www/rastudio/src/data/crm-step7-core.ts";
-            const items = JSON.parse(readFileSync("/var/www/rastudio/storage/crm-leads-board.json", "utf8")).keys?.["7"]?.items || [];
-            const base = { clients: true, leads: true, dobYes: false, dobNo: false, fio: false, groupsYes: false, groupsNo: false, years: 0 };
-            const n = (pick) => items.filter((x) => step7Shows(x, pick)).length;
-            const lesson = (x) => (Number(x.cashLesN) || 0) + (Number(x.cashNoCommission) || 0);
-            const pay = (x) => (Number(x.cashPayN) || 0) + (Number(x.cashCorrN) || 0) + (Number(x.cashRefundN) || 0);
-            console.log(JSON.stringify({
-              total: items.length,
-              clients: items.filter((x) => x.study === 1).length,
-              dob: n({ ...base, dobYes: true }),
-              age: n({ ...base, dobYes: true, ageFrom: 1, ageTo: 15 }),
-              fio: n({ ...base, dobYes: true, ageFrom: 1, ageTo: 15, fio: true }),
-              year: n({ ...base, dobYes: true, ageFrom: 1, ageTo: 15, fio: true, years: 2015 }),
-              studiedOnly: n({ ...base, groupsYes: true }),
-              all: n({ ...base, dobYes: true, ageFrom: 1, ageTo: 15, fio: true, years: 2015, groupsYes: true }),
-              cashRead: items.filter((x) => x.cashState && x.cashState !== "wait").length,
-              withLesson: items.filter((x) => lesson(x) > 0).length,
-              withPay: items.filter((x) => pay(x) > 0).length,
-              both: items.filter((x) => x.study === 1 && lesson(x) > 0 && pay(x) > 0).length,
-            }));
-            NODE
-            node --experimental-strip-types --import ./scripts/ts-ext-register.mjs /tmp/ra-filter.mjs
             exit 0
