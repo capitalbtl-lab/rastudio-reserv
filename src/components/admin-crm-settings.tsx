@@ -2327,6 +2327,8 @@ type Step6Item = {
   cashNoCommission?: number;
   cashDiskKnown?: boolean;
   cashBranches?: string;
+  cashGiveUp?: boolean;
+  cashFail?: string;
 };
 
 function step6Branch(id: number) {
@@ -2347,6 +2349,7 @@ function step6Count(n: number | undefined, sum: number | undefined, minus = fals
 }
 
 function step6Why(x: Step6Item) {
+  if (x.cashGiveUp) return x.cashFail ? `Не дочитали за 3 попытки. ${x.cashFail}` : "Не дочитали за 3 попытки по 30 секунд.";
   if (!x.cashState || x.cashState === "wait") return "Кассу ещё не снимали.";
   if (x.cashState === "no-balance") return "В ответе Alfa нет balance. Платежи и занятия не считали, шапку сравнить не с чем.";
   if (x.cashPayN == null && x.cashLesN == null) return "Разбивки ещё нет, только шапка и формула. Нажмите «Перепроверить кассу» ещё раз.";
@@ -2440,19 +2443,46 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     setCashing(true);
     setNote("Снимаю кассу…");
     const run = async () => {
+      let first = true;
       for (;;) {
-        const res = (await adminSchedule({ data: { token: token(), action: archive ? "step7Cash" : "step6Cash" } as never })) as {
+        const res = (await adminSchedule({
+          data: {
+            token: token(),
+            action: archive ? "step7Cash" : "step6Cash",
+            cashRestart: first,
+            ...(archive ? { step7Pick: archPick } : {}),
+          } as never,
+        })) as {
           ok?: boolean;
           error?: string;
           note?: string;
           more?: boolean;
+          pauseMs?: number;
+        };
+        first = false;
+        const pause = async (ms: number) => {
+          const end = Date.now() + Math.max(0, ms);
+          while (Date.now() < end) {
+            if (stopCash.current) return;
+            await new Promise((r) => setTimeout(r, Math.min(250, end - Date.now())));
+          }
         };
         if (!res.ok) {
           setNote(res.error || "Касса не снялась.");
-          return;
+          await pause(5000);
+          if (stopCash.current) {
+            setNote((prev) => `${prev || "Касса"} · стоп`);
+            return;
+          }
+          continue;
         }
         setNote(res.note || "");
         await loadList();
+        if (stopCash.current) {
+          setNote((prev) => `${prev || "Касса"} · стоп`);
+          return;
+        }
+        if (res.pauseMs) await pause(res.pauseMs);
         if (stopCash.current) {
           setNote((prev) => `${prev || "Касса"} · стоп`);
           return;
@@ -2707,16 +2737,16 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
               <span className="text-muted/50">–</span>
               <input className="h-6 w-8 bg-transparent text-center text-[0.82rem] font-semibold outline-none" inputMode="numeric" value={archAgeTo} placeholder="до" aria-label="Возраст до" onChange={(e) => { setArchAgeTo(e.target.value.replace(/\D/g, "").slice(0, 2)); setPageLeft(0); setPageRight(0); }} />
             </span>
-            <button type="button" className={cn(chips, archDobYes ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchDobYes((v) => !v); setPageLeft(0); setPageRight(0); }}>с д/р</button>
-            <button type="button" className={cn(chips, archDobNo ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchDobNo((v) => !v); setPageLeft(0); setPageRight(0); }}>без д/р</button>
+            <button type="button" className={cn(chips, archDobYes ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchDobYes((v) => !v); setArchDobNo(false); setPageLeft(0); setPageRight(0); }}>с д/р</button>
+            <button type="button" className={cn(chips, archDobNo ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchDobNo((v) => !v); setArchDobYes(false); setPageLeft(0); setPageRight(0); }}>без д/р</button>
             <button type="button" className={cn(chips, archFio ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchFio((v) => !v); setPageLeft(0); setPageRight(0); }}>только с ФИО</button>
-            <button type="button" className={cn(chips, archGrpYes ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchGrpYes((v) => !v); setPageLeft(0); setPageRight(0); }}>учился в группах</button>
-            <button type="button" className={cn(chips, archGrpNo ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchGrpNo((v) => !v); setPageLeft(0); setPageRight(0); }}>не учился в группах</button>
+            <button type="button" className={cn(chips, archGrpYes ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchGrpYes((v) => !v); setArchGrpNo(false); setPageLeft(0); setPageRight(0); }}>учился в группах</button>
+            <button type="button" className={cn(chips, archGrpNo ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchGrpNo((v) => !v); setArchGrpYes(false); setPageLeft(0); setPageRight(0); }}>не учился в группах</button>
             {([[1, "за год"], [2, "за 2 года"], [4, "за 4 года"], [6, "за 6 лет"], [2015, "с 2015"]] as const).map(([n, label]) => (
               <button key={n} type="button" className={cn(chips, archYears === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchYears((v) => (v === n ? 0 : n)); setPageLeft(0); setPageRight(0); }}>{label}</button>
             ))}
           </div>
-          <p className="mt-2 text-[0.72rem] leading-snug text-muted">ФИО — не «тест» и не телефон. Группы — были в Alfa. Срок — дата архива. Клиенты и лиды включаются вместе.</p>
+          <p className="mt-2 text-[0.72rem] leading-snug text-muted">ФИО — не «тест» и не телефон. Группы — любое участие в cgi, не только живое. Срок — дата архива, пустая дата в срок не входит. «Перепроверить кассу» пишет только этот отбор.</p>
         </div>
       ) : null}
       <p className="mt-3 text-sm">

@@ -132,3 +132,42 @@ export function mergeMissingLessons<T extends { lessonId?: number; status?: numb
   }
   return { list: next, wrote, opened };
 }
+
+export const CASH_RETRY_MS = 30_000;
+export const CASH_RETRY_PAUSE_MS = 5_000;
+
+/** Сколько можно ждать один запрос. 0 — срок уже вышел, запрос не начинать. */
+export function cashAttemptMs(until: number, now: number) {
+  if (!until) return 18_000;
+  const left = until - now;
+  if (left <= 0) return 0;
+  return Math.min(18_000, left);
+}
+
+export function cashCutError() {
+  const err = new Error("30 секунд");
+  err.name = "CashCut";
+  return err;
+}
+
+/** Ждать работу не дольше срока. Чужую работу не отменяет. */
+export function raceUntil<T>(work: Promise<T>, until: number): Promise<T> {
+  if (!until) return work;
+  const ms = cashAttemptMs(until, Date.now());
+  if (ms <= 0) return Promise.reject(cashCutError());
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(cashCutError()), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
+/** Первая ошибка — в конец без лимита. Дальше три чтения по 30 секунд. После третьего в конец не ставим. */
+export function cashRetryPlan(doneTries: number, timed: boolean, incomplete: boolean) {
+  const done = Math.max(0, Number(doneTries) || 0);
+  if (!incomplete) return { again: false, tries: done, giveUp: false, pauseMs: timed ? CASH_RETRY_PAUSE_MS : 0 };
+  if (!timed) return { again: true, tries: done, giveUp: false, pauseMs: 0 };
+  const tries = done + 1;
+  const giveUp = tries >= 3;
+  return { again: !giveUp, tries, giveUp, pauseMs: CASH_RETRY_PAUSE_MS };
+}

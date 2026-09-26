@@ -1365,19 +1365,27 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   if (mode === "step6-recount" || mode === "step6-columns" || mode === "step6-cash" || mode === "step7-list" || mode === "step7-cash") {
     if (mode === "step6-cash" || mode === "step7-cash") {
       const only = Number(job.customerId) || 0;
-      const got = await awaitWhileJob(id, mode === "step7-cash" ? (await import("./crm-step6")).recheckStep7Cash(only) : (await import("./crm-step6")).recheckStep6Cash(only));
+      const restart = !only && (Number(job.n) || 0) === 0;
+      const got = await awaitWhileJob(id, mode === "step7-cash"
+        ? (await import("./crm-step6")).recheckStep7Cash(only, undefined, restart)
+        : (await import("./crm-step6")).recheckStep6Cash(only, restart));
       if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
       const res = got.value;
       if (loadJournalJob().id !== id) return { done: true, gap: 0 };
       const n = job.n + 1;
       const note = "note" in res ? res.note : res.error || "";
-      if (!res.ok || !("more" in res) || !res.more || only) {
+      const pause = Math.max(0, Number("pauseMs" in res ? res.pauseMs : 0) || 0);
+      if (!res.ok) {
+        patch({ id, n, cur: note, msg: note, running: true });
+        return { done: false, gap: pause || 5000 };
+      }
+      if (!("more" in res) || !res.more || only) {
         const msg = note || (mode === "step7-cash" ? "Касса архива снята." : "Касса лидов снята.");
         patch({ id, running: false, n, total: Math.max(Number(job.total) || 0, n), cur: "", fill: null, msg });
         return { done: true, gap: 0, msg };
       }
       patch({ id, n, total: Math.max(Number(job.total) || 0, n + 1), cur: note, msg: note });
-      return { done: false, gap: 800 };
+      return { done: false, gap: pause || 800 };
     }
     if (mode === "step7-list") {
       const { syncStep7List } = await import("./crm-step7");

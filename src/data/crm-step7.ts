@@ -6,7 +6,7 @@ import { replaceStep7List } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup } from "./dossiers";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-import { step7ArchiveDay, step7HadGroups, step7KeepAny, step7RejectId, step7Study } from "./crm-step7-core";
+import { step7ArchiveDay, step7Dob, step7HadGroups, step7KeepAny, step7RejectId, step7Study } from "./crm-step7-core";
 import { recheckStep7Cash } from "./crm-step6";
 import type { LeadCard } from "./crm-leads-stages";
 
@@ -25,41 +25,53 @@ function diskLive(branch: number, gid: number, ids: Set<number>) {
   }
 }
 
-/** Живые ученики действующих групп: group/index removed 0 и cgi с живой e_date. */
-async function liveCustomerIds(tok: string) {
-  const ids = new Set<number>();
+/** Живые — cgi с e_date не в прошлом. Учился — любой cgi, в том числе архивная группа и уже закрытое участие. */
+async function membershipSets(tok: string) {
+  const live = new Set<number>();
+  const studied = new Set<number>();
   for (const branch of BRANCHES) {
-    let groups: Record<string, unknown>[] = [];
-    try {
-      groups = await readPages(`/v2api/${branch}/group/index`, { removed: 0 }, tok);
-    } catch {
-      groups = liveAdminGroups()
-        .filter((g) => g.branchId === branch)
-        .map((g) => ({ id: g.groupId }));
-    }
-    const active = new Set<number>();
-    for (const g of groups) {
-      const gid = Number(g.id);
-      if (!gid || Number(g.removed) === 2) continue;
-      active.add(gid);
-    }
-    if (!active.size) {
-      for (const g of liveAdminGroups()) if (g.branchId === branch) active.add(g.groupId);
-    }
-    for (const gid of active) {
-      try {
-        const rows = await readPages(`/v2api/${branch}/cgi/index?group_id=${gid}`, { group_id: gid }, tok);
-        for (const row of rows) {
-          if (!cgiRecordLive(row)) continue;
-          const cid = cgiCustomerId(row);
-          if (cid) ids.add(cid);
-        }
-      } catch {
-        diskLive(branch, gid, ids);
-      }
+    const active = await groupIds(branch, 0, tok);
+    const archived = await groupIds(branch, 2, tok);
+    for (const gid of active) await readCgi(branch, gid, tok, live, studied, true);
+    for (const gid of archived) {
+      if (active.has(gid)) continue;
+      await readCgi(branch, gid, tok, live, studied, false);
     }
   }
+  return { live, studied };
+}
+
+async function groupIds(branch: number, removed: 0 | 2, tok: string) {
+  const ids = new Set<number>();
+  try {
+    const groups = await readPages(`/v2api/${branch}/group/index`, { removed }, tok);
+    for (const g of groups) {
+      const gid = Number(g.id);
+      if (!gid) continue;
+      if (removed === 0 && Number(g.removed) === 2) continue;
+      ids.add(gid);
+    }
+  } catch {
+    /* ниже — диск только для живых */
+  }
+  if (removed === 0 && !ids.size) {
+    for (const g of liveAdminGroups()) if (g.branchId === branch) ids.add(g.groupId);
+  }
   return ids;
+}
+
+async function readCgi(branch: number, gid: number, tok: string, live: Set<number>, studied: Set<number>, markLive: boolean) {
+  try {
+    const rows = await readPages(`/v2api/${branch}/cgi/index?group_id=${gid}`, { group_id: gid }, tok);
+    for (const row of rows) {
+      const cid = cgiCustomerId(row);
+      if (!cid) continue;
+      studied.add(cid);
+      if (markLive && cgiRecordLive(row)) live.add(cid);
+    }
+  } catch {
+    if (markLive) diskLive(branch, gid, live);
+  }
 }
 
 async function readPages(path: string, body: Record<string, unknown>, tok: string) {
@@ -99,13 +111,13 @@ async function rejectNames(tok: string, kind: "customer-reject" | "lead-reject")
 }
 
 function dobOf(row: Record<string, unknown>) {
-  return String(row.dob || row.b_date || row.born || "").trim();
+  return step7Dob(row.dob);
 }
 
 export async function syncStep7List() {
   dropAlfaIndex();
   const tok = await alfaToken();
-  const live = await liveCustomerIds(tok);
+  const { live, studied } = await membershipSets(tok);
   const clientReasons = await rejectNames(tok, "customer-reject");
   const leadReasons = await rejectNames(tok, "lead-reject");
   const byId = new Map<number, LeadCard>();
@@ -147,7 +159,7 @@ export async function syncStep7List() {
             rejectName: rejectId ? names.get(`${branch}:${rejectId}`) || `причина ${rejectId}` : "",
             study,
             dob: dobOf(row),
-            hadGroups: step7HadGroups(row),
+            hadGroups: studied.has(id) || step7HadGroups(row),
             archivedAt: step7ArchiveDay(row),
           });
           n += 1;

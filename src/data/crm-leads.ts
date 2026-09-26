@@ -197,6 +197,10 @@ function cashFields(old: LeadCard): Partial<LeadCard> {
     cashNoCommission: old.cashNoCommission,
     cashDiskKnown: old.cashDiskKnown,
     cashBranches: old.cashBranches,
+    cashTries: old.cashTries,
+    cashRetry: old.cashRetry,
+    cashGiveUp: old.cashGiveUp,
+    cashFail: old.cashFail,
   };
 }
 
@@ -204,6 +208,36 @@ export function stampStep7Cash(id: number, patch: Partial<LeadCard>) {
   const hit = bag().get("7");
   if (!hit) return;
   hit.items = hit.items.map((x) => (x.id === id ? { ...x, ...patch } : x));
+  hit.at = Date.now();
+  persistLeads();
+}
+
+/** Новое нажатие «Перепроверить кассу»: три неудачи прошлого прогона снова в очередь. */
+export function reopenStepCash(step: 6 | 7) {
+  const hit = bag().get(step === 6 ? "0" : "7");
+  if (!hit) return;
+  let changed = false;
+  hit.items = hit.items.map((row) => {
+    if (!row.cashGiveUp) return row;
+    changed = true;
+    return { ...row, cashGiveUp: false, cashRetry: false, cashTries: 0, cashFail: "" };
+  });
+  if (!changed) return;
+  hit.at = Date.now();
+  persistLeads();
+}
+
+/** Ошибка чтения: карточка в конец своей доски. Чужую доску не трогает. */
+export function deferStepCash(step: 6 | 7, id: number, patch: Partial<LeadCard>) {
+  const hit = bag().get(step === 6 ? "0" : "7");
+  if (!hit) return;
+  const stay: LeadCard[] = [];
+  const moved: LeadCard[] = [];
+  for (const row of hit.items) {
+    if (row.id === id) moved.push({ ...row, ...patch });
+    else stay.push(row);
+  }
+  hit.items = [...stay, ...moved];
   hit.at = Date.now();
   persistLeads();
 }

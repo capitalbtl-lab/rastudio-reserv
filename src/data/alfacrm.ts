@@ -10,6 +10,7 @@ import { formatRuPhone } from "./ru-phone";
 import { crmIndexAccumTotal, crmIndexShouldStop, crmUnwrapIndex } from "./crm-leads-stages";
 import { lessonAllowsGroup, lessonOmitsRoom } from "./lesson-type-rules";
 import { wantAlfaPipe } from "./crm-alfa-link";
+import { cashAttemptMs, cashCutError, raceUntil } from "./crm-step6-core";
 
 const HOST = () => (serverEnv("ALFACRM_HOST") || "https://studiyarazvivaysya.s20.online").replace(/\/$/, "");
 const EMAIL = () => serverEnv("ALFACRM_EMAIL") || "";
@@ -267,7 +268,17 @@ export function leadUrl(branch: number, id: number) {
   return `https://studiyarazvivaysya.s20.online/company/${branch}/lead/view?id=${id}`;
 }
 
-export async function request<T>(path: string, body: unknown, tok?: string): Promise<T> {
+function cashCut(): never {
+  throw cashCutError();
+}
+
+function waitOwn<T>(work: Promise<T>, until: number): Promise<T> {
+  if (!until) return work;
+  void work.catch(() => {});
+  return raceUntil(work, until);
+}
+
+export async function request<T>(path: string, body: unknown, tok?: string, until = 0): Promise<T> {
   let url = path;
   if (body && typeof body === "object" && /\/(update|delete)(\?|$)/.test(url) && !/[?&]id=/.test(url)) {
     const id = Number((body as { id?: unknown }).id);
@@ -279,40 +290,52 @@ export async function request<T>(path: string, body: unknown, tok?: string): Pro
     const hit = indexCache.get(key);
     if (hit && Date.now() - hit.at < INDEX_TTL) return hit.json as T;
     const pending = inflight.get(key);
-    if (pending) return pending as Promise<T>;
+    if (pending) return waitOwn(pending as Promise<T>, until);
   }
   const run = enqueue(async () => {
+    if (until && cashAttemptMs(until, Date.now()) <= 0) cashCut();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json",
     };
     if (tok) headers["X-ALFACRM-TOKEN"] = tok;
-    const send = () =>
-      fetch(`${HOST()}${url}`, {
+    const send = () => {
+      const ms = cashAttemptMs(until, Date.now());
+      if (until && ms <= 0) cashCut();
+      return fetch(`${HOST()}${url}`, {
         method: "POST",
         headers,
         body: JSON.stringify(body ?? {}),
-        signal: AbortSignal.timeout(18000),
+        signal: AbortSignal.timeout(ms),
       });
+    };
     let res: Response;
     try {
       res = await send();
-    } catch {
+    } catch (e) {
+      if (e instanceof Error && e.name === "CashCut") throw e;
+      if (until && cashAttemptMs(until, Date.now()) <= 700) cashCut();
       await sleep(700);
       lastAt = Date.now();
+      if (until && cashAttemptMs(until, Date.now()) <= 0) cashCut();
       res = await send();
     }
     if (res.status === 401 && tok && pipeOn("retry401") && !/\/auth\/login/.test(url)) {
+      if (until && cashAttemptMs(until, Date.now()) <= 0) cashCut();
       cache = null;
-      const fresh = await loginFetch();
+      const fresh = await loginFetch(until);
       headers["X-ALFACRM-TOKEN"] = fresh;
       lastAt = Date.now();
+      if (until && cashAttemptMs(until, Date.now()) <= 0) cashCut();
       res = await send();
       if (res.status === 401) throw new Error("alfacrm 401 ключ API или пользователь");
     }
     if (res.status === 429 || res.status === 503) {
-      await sleep(2000);
+      const pause = until ? Math.min(2000, cashAttemptMs(until, Date.now())) : 2000;
+      if (until && pause <= 0) cashCut();
+      await sleep(pause);
       lastAt = Date.now();
+      if (until && cashAttemptMs(until, Date.now()) <= 0) cashCut();
       res = await send();
     }
     const text = await res.text();
@@ -329,15 +352,14 @@ export async function request<T>(path: string, body: unknown, tok?: string): Pro
   });
   if (key) {
     inflight.set(key, run);
-    try {
-      const json = await run;
-      indexCache.set(key, { at: Date.now(), json });
-      return json;
-    } finally {
-      inflight.delete(key);
-    }
+    void run.finally(() => {
+      if (inflight.get(key) === run) inflight.delete(key);
+    });
+    const json = await waitOwn(run, until);
+    indexCache.set(key, { at: Date.now(), json });
+    return json;
   }
-  const json = await run;
+  const json = await waitOwn(run, until);
   if (write) dropIndexCache(url);
   return json;
 }
@@ -379,16 +401,24 @@ export function dropAlfaAuth() {
   dropIndexCache();
 }
 
-async function loginFetch() {
+async function loginFetch(until = 0) {
   const email = EMAIL();
   const apiKey = API_KEY();
   if (!email || !apiKey) throw new Error("no-alfacrm");
-  const res = await fetch(`${HOST()}/v2api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ email, api_key: apiKey }),
-    signal: AbortSignal.timeout(18000),
-  });
+  const ms = until ? cashAttemptMs(until, Date.now()) : 18_000;
+  if (until && ms <= 0) cashCut();
+  let res: Response;
+  try {
+    res = await fetch(`${HOST()}/v2api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ email, api_key: apiKey }),
+      signal: AbortSignal.timeout(ms),
+    });
+  } catch (e) {
+    if (until && cashAttemptMs(until, Date.now()) <= 0) cashCut();
+    throw e;
+  }
   const text = await res.text();
   let json: { token?: string } = {};
   try {
@@ -401,16 +431,17 @@ async function loginFetch() {
   return json.token;
 }
 
-export async function token() {
+export async function token(until = 0) {
   if (cache && cache.exp > Date.now()) return cache.token;
-  if (tokenFlight) return tokenFlight;
+  if (tokenFlight) return waitOwn(tokenFlight, until);
   tokenFlight = enqueue(async () => {
     if (cache && cache.exp > Date.now()) return cache.token;
-    return loginFetch();
+    if (until && cashAttemptMs(until, Date.now()) <= 0) cashCut();
+    return loginFetch(until);
   }).finally(() => {
     tokenFlight = null;
   });
-  return tokenFlight;
+  return waitOwn(tokenFlight, until);
 }
 
 type Customer = {

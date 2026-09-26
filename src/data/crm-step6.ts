@@ -5,11 +5,12 @@ import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-le
 import { kindFromAlfaPay, alfaPayIndexDate, extraPayTypeIds, payCustomerIdOf } from "./crm-pay-core";
 import { writeoffSumOf, uniqueBranches } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon, step6DiskAgrees } from "./crm-step5-canon";
-import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, peekStep7Board, stampStep7Cash, readCrmLeadColumns } from "./crm-leads";
+import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, peekStep7Board, stampStep7Cash, readCrmLeadColumns, deferStepCash, reopenStepCash } from "./crm-leads";
 import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
 import { loadCustomerCalendar } from "./group-cards";
 import { paysOf } from "./crm-pay";
-import { isApiLeadStudy, step6ColumnId, step6LessonDisk } from "./crm-step6-core";
+import { isApiLeadStudy, step6ColumnId, step6LessonDisk, cashRetryPlan } from "./crm-step6-core";
+import { step7HeaderQuery, step7Shows, type Step7Pick } from "./crm-step7-core";
 import { toAlfaLessonDate } from "./crm-journal-periods";
 import type { LeadCard, LeadStage } from "./crm-leads-stages";
 import type { StepLogRow, StepLogSettings } from "./crm-step-run-log-core";
@@ -39,12 +40,28 @@ function writeStep6(settings: StepLogSettings, rows: Omit<StepLogRow, "id" | "at
   }
 }
 
-async function readPages(path: string, body: Record<string, unknown>, tok: string) {
+class CashCut extends Error {
+  constructor() {
+    super("30 секунд");
+    this.name = "CashCut";
+  }
+}
+
+function isCashCut(e: unknown) {
+  return e instanceof CashCut || (e instanceof Error && e.name === "CashCut");
+}
+
+function cashCut(until: number) {
+  if (until && Date.now() >= until) throw new CashCut();
+}
+
+async function readPages(path: string, body: Record<string, unknown>, tok: string, until = 0) {
   const items: Record<string, unknown>[] = [];
   let loaded = 0;
   let total = Number.POSITIVE_INFINITY;
   for (let page = 0; page < 200; page += 1) {
-    const json = await request<unknown>(path, { ...body, page, pageSize: PAGE }, tok);
+    cashCut(until);
+    const json = await request<unknown>(path, { ...body, page, pageSize: PAGE }, tok, until);
     const pack = crmUnwrapIndex(json);
     const batch = pack.items;
     const count = Number.isFinite(Number(pack.count)) ? Number(pack.count) : batch.length;
@@ -228,9 +245,11 @@ type CashPass = {
   customer: (id: number) => Record<string, unknown>;
   emptyNote: string;
   missingNote: string;
+  keep?: (card: LeadCard) => boolean;
 };
 
-export async function recheckStep6Cash(onlyId = 0) {
+export async function recheckStep6Cash(onlyId = 0, restart = false) {
+  if (restart) reopenStepCash(6);
   return recheckCashPass({
     step: 6,
     onlyId,
@@ -242,35 +261,87 @@ export async function recheckStep6Cash(onlyId = 0) {
   });
 }
 
-export async function recheckStep7Cash(onlyId = 0) {
+export async function recheckStep7Cash(onlyId = 0, pick?: Step7Pick, restart = false) {
+  if (restart) reopenStepCash(7);
   return recheckCashPass({
     step: 7,
     onlyId,
     items: () => peekStep7Board()?.items || [],
     stamp: stampStep7Cash,
-    customer: (id) => ({ id, is_study: 1, removed: 2, page: 0, pageSize: 1 }),
+    customer: (id) => step7HeaderQuery(id, (peekStep7Board()?.items || []).find((x) => x.id === id)?.study),
     emptyNote: "Кассу шага 7 снимать некого. Сначала прочитайте архив.",
     missingNote: "Этого клиента нет на шаге 7.",
+    keep: pick ? (card) => step7Shows(card, pick) : undefined,
   });
 }
 
 export async function recheckCashPass(opts: CashPass) {
   const items = opts.items();
   const wanted = Number(opts.onlyId) || 0;
-  const waiting = items.filter((x) => x.cashState === "wait" || !x.cashState || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null || x.cashNoCommission == null || x.cashBranches == null || !step6DiskAgrees(x))));
-  const id = wanted || waiting[0]?.id || 0;
-  if (!id) return { ok: true as const, more: false, note: opts.emptyNote };
-  if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, error: opts.missingNote };
+  const pass = (x: LeadCard) => wanted > 0 || !opts.keep || opts.keep(x);
+  const queued = (x: LeadCard) => pass(x) && !x.cashGiveUp && (x.cashState === "wait" || !x.cashState || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null || x.cashNoCommission == null || x.cashBranches == null || !step6DiskAgrees(x))));
+  const waiting = items.filter(queued);
+  const fresh = waiting.filter((x) => !x.cashState || x.cashState === "wait");
+  const id = wanted || fresh[0]?.id || waiting[0]?.id || 0;
+  if (!id) {
+    if (opts.keep && items.length && !items.some((x) => opts.keep?.(x))) return { ok: true as const, more: false, pauseMs: 0, note: "По фильтру «кого писать на диск» кассу снимать некого." };
+    if (opts.keep && items.some((x) => opts.keep?.(x))) return { ok: true as const, more: false, pauseMs: 0, note: "По этому отбору новых для кассы нет." };
+    return { ok: true as const, more: false, pauseMs: 0, note: opts.emptyNote };
+  }
+  if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, pauseMs: 0, error: opts.missingNote };
+  const card0 = items.find((x) => x.id === id);
+  const card = wanted && card0?.cashGiveUp
+    ? (opts.stamp(id, { cashGiveUp: false, cashRetry: false, cashTries: 0, cashFail: "" }), { ...card0, cashGiveUp: false, cashRetry: false, cashTries: 0, cashFail: "" })
+    : card0;
+  const timed = Boolean(card?.cashRetry);
+  const triesDone = Number(card?.cashTries) || 0;
+  const until = timed ? Date.now() + 30_000 : 0;
+  const who = () => opts.items().find((x) => x.id === id)?.name || card?.name || `№${id}`;
+  const still = () => wanted ? false : opts.items().some((x) => queued(x) && (!x.cashState || x.cashState === "wait"));
+  const park = (msg: string) => {
+    const plan = cashRetryPlan(triesDone, timed, true);
+    const name = who();
+    const attempt = timed ? `попытка ${plan.tries}/3 · ` : "";
+    const tail = plan.giveUp ? "больше не ставим в конец" : "в конец";
+    const note = `${name} · ${attempt}${msg} · ${tail}`;
+    writeStep6(CASH_LOG, [{
+      step: opts.step,
+      cid: id,
+      branchId: branchesOf(),
+      name,
+      action: "fail",
+      result: "fail",
+      ok: false,
+      note,
+      error: msg,
+    }], false, opts.step);
+    const patch = { cashTries: plan.tries, cashRetry: plan.again, cashGiveUp: plan.giveUp, cashFail: msg };
+    if (plan.again) deferStepCash(opts.step, id, patch);
+    else opts.stamp(id, patch);
+    return { ok: true as const, more: still(), pauseMs: plan.pauseMs, note };
+  };
+  const branchesOf = () => {
+    const rows = opts.items().filter((x) => x.id === id);
+    const list = [...new Set(rows.map((x) => x.branchId).filter((n) => n > 0))];
+    return list[0];
+  };
   const branches = [...new Set(items.filter((x) => x.id === id).map((x) => x.branchId).filter((n) => n > 0))];
   const scan = uniqueBranches(branches[0] || 1);
   dropAlfaIndex();
-  const tok = await alfaToken();
+  let tok = "";
+  try {
+    cashCut(until);
+    tok = await alfaToken(until);
+  } catch (e) {
+    return park(e instanceof Error && isCashCut(e) ? "30 секунд, карточка не дочитана" : e instanceof Error ? e.message : "нет входа в Alfa");
+  }
   let header = Number.NaN;
   let saw = false;
   let failed = 0;
   for (const branch of scan) {
     try {
-      const json = await request<unknown>(`/v2api/${branch}/customer/index`, opts.customer(id), tok);
+      cashCut(until);
+      const json = await request<unknown>(`/v2api/${branch}/customer/index`, opts.customer(id), tok, until);
       const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === id);
       if (!hit) continue;
       saw = true;
@@ -279,40 +350,27 @@ export async function recheckCashPass(opts: CashPass) {
         if (parsed.ok) header = parsed.header;
       }
       break;
-    } catch {
+    } catch (e) {
+      if (isCashCut(e)) return park("30 секунд, карточка не дочитана");
       failed += 1;
     }
   }
-  if (!saw && failed > 0) {
-    const who = items.find((x) => x.id === id)?.name || `№${id}`;
-    writeStep6(CASH_LOG, [{
-      step: opts.step,
-      cid: id,
-      branchId: branches[0],
-      name: who,
-      action: "fail",
-      result: "fail",
-      ok: false,
-      note: "Alfa не ответила",
-      error: "Alfa не ответила",
-    }], false, opts.step);
-    throw new Error(`№${id} · Alfa не ответила`);
-  }
+  if (!saw && failed > 0) return park("Alfa не ответила");
   if (!saw || !Number.isFinite(header)) {
-    opts.stamp(id, { cashState: "no-balance", cashSort: "", cashAt: new Date().toISOString() });
-    const left = wanted ? false : opts.items().some((x) => x.cashState === "wait");
-    const who = items.find((x) => x.id === id)?.name || `№${id}`;
+    opts.stamp(id, { cashState: "no-balance", cashSort: "", cashAt: new Date().toISOString(), cashRetry: false, cashGiveUp: false });
+    const left = still();
+    const name = who();
     writeStep6(CASH_LOG, [{
       step: opts.step,
       cid: id,
       branchId: branches[0],
-      name: who,
+      name,
       action: "recheck",
       result: "skip",
       ok: true,
       note: "нет balance",
     }], !left, opts.step);
-    return { ok: true as const, more: left, note: `№${id} · нет balance` };
+    return { ok: true as const, more: left, pauseMs: timed ? 5000 : 0, note: `№${id} · нет balance` };
   }
   let cash = 0;
   const goods: number[] = [];
@@ -336,19 +394,18 @@ export async function recheckCashPass(opts: CashPass) {
   const payFrom = alfaPayIndexDate("2015-01-01");
   const payTo = alfaPayIndexDate(new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10));
   const lessonTo = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+  let cut = "";
   for (const branch of scan) {
     try {
+    cashCut(until);
     const payBodies = [
       { customer_id: id, date_from: payFrom, date_to: payTo },
       ...extraPayTypeIds().map((pay_type_id) => ({ customer_id: id, pay_type_id, date_from: payFrom, date_to: payTo })),
     ];
     const pays: Record<string, unknown>[] = [];
     for (const body of payBodies) {
-      try {
-        pays.push(...await readPages(`/v2api/${branch}/pay/index`, body, tok));
-      } catch {
-        /* один тип не гасит остальные */
-      }
+      cashCut(until);
+      pays.push(...await readPages(`/v2api/${branch}/pay/index`, body, tok, until));
     }
     for (const row of pays) {
       if (row.deleted === true || row.deleted === 1 || row.deleted === "1") continue;
@@ -384,7 +441,8 @@ export async function recheckCashPass(opts: CashPass) {
         payAt.set(bid, slot);
       }
     }
-    const lrows = await readPages(`/v2api/${branch}/lesson/index`, { customer_id: id, status: 3, date_from: "2015-01-01", date_to: lessonTo }, tok);
+    cashCut(until);
+    const lrows = await readPages(`/v2api/${branch}/lesson/index`, { customer_id: id, status: 3, date_from: "2015-01-01", date_to: lessonTo }, tok, until);
     for (const row of lrows) {
       const st = Number(row.status);
       if (Number.isFinite(st) && st !== 3) continue;
@@ -410,8 +468,11 @@ export async function recheckCashPass(opts: CashPass) {
       lesAt.set(lbid, lslot);
       alfaLessons.push({ row, commission, branch });
     }
-    } catch {
-      /* чужой филиал без доступа не обрывает остальные */
+    } catch (e) {
+      if (isCashCut(e)) cut = "30 секунд, карточка не дочитана";
+      else if (e instanceof Error && e.message === "список не кончился") cut = "список не кончился";
+      else cut = e instanceof Error ? e.message.slice(0, 180) : "ошибка чтения";
+      break;
     }
   }
   let wrotePays = 0;
@@ -445,6 +506,7 @@ export async function recheckCashPass(opts: CashPass) {
       lessonNote = "занятия не легли";
     }
   }
+  if (cut) return park(cut);
   const cal = loadCustomerCalendar(id);
   const diskLesIds = new Set<number>();
   for (const lesson of cal) {
@@ -554,9 +616,12 @@ export async function recheckCashPass(opts: CashPass) {
     cashNoCommission: noCommission,
     cashDiskKnown: diskKnown,
     cashBranches,
+    cashRetry: false,
+    cashGiveUp: false,
+    cashFail: "",
   });
-  const name = items.find((x) => x.id === id)?.name || `№${id}`;
-  const left = wanted ? false : opts.items().some((x) => x.cashState === "wait");
+  const name = who();
+  const left = still();
   const sortRu = sort === "new" ? "новый" : sort === "paid" ? "новый с деньгами" : "вернувшийся";
   writeStep6(CASH_LOG, [{
     step: opts.step,
@@ -573,6 +638,7 @@ export async function recheckCashPass(opts: CashPass) {
   return {
     ok: true as const,
     more: left,
+    pauseMs: timed ? 5000 : 0,
     note: `${name} · ${sortRu} · ${matched ? "совпало" : "не сошлось"}${left ? " · дальше" : ""}`,
   };
 }

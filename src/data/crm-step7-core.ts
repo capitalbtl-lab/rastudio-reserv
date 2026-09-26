@@ -1,5 +1,10 @@
-/**
- * Архивный клиент и не в живой группе.
+/** Шапка архива. Фильтры customer/index складываются через И.
+ * Лид — is_study 0, клиент — 1. removed 2 — только архив. Чужой is_study лида не находит. */
+export function step7HeaderQuery(id: number, study?: number) {
+  return { id, is_study: study === 0 ? 0 : 1, removed: 2, page: 0, pageSize: 1 };
+}
+
+/** Архивный клиент и не в живой группе.
  * Фильтр customer/index: is_study 1 (клиент), removed 2 (только архив).
  * В строке ответа removed дока не обещает: пустое поле не выкидываем.
  * Явные 0 (активный) и 1 (в строке — не архив) не берём.
@@ -38,11 +43,33 @@ export function step7KeepAny(row: { id?: unknown; is_study?: unknown; removed?: 
 }
 
 export function step7HadGroups(row: { group_ids?: unknown; groups?: unknown }) {
-  const ids = row.group_ids;
-  if (Array.isArray(ids) && ids.some((x) => Number(x) > 0)) return true;
-  const groups = row.groups;
-  if (Array.isArray(groups) && groups.length > 0) return true;
-  return false;
+  return idList(row.group_ids).length > 0 || idList(row.groups).length > 0;
+}
+
+function idList(raw: unknown): number[] {
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    if (!s) return [];
+    try {
+      return idList(JSON.parse(s));
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(raw)) {
+    return raw
+      .map((x) => {
+        if (x && typeof x === "object") {
+          const rec = x as { id?: unknown; group_id?: unknown };
+          return Number(rec.group_id || rec.id);
+        }
+        return Number(x);
+      })
+      .filter((n) => Number.isFinite(n) && n > 0);
+  }
+  if (raw && typeof raw === "object") return idList(Object.values(raw as Record<string, unknown>));
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? [n] : [];
 }
 
 /** Дата ухода в архив. Пустое, 0000-00-00 и заглушка 31.12.2030 — даты нет. */
@@ -80,25 +107,37 @@ export function step7FioOk(name?: string) {
   return true;
 }
 
-export function step7AgeYears(dob?: string, now = new Date()) {
-  const t = String(dob || "").trim();
-  if (!t) return undefined;
+/** Customer.dob. Пустое, 0000-00-00 и недата — дня рождения нет. b_date сюда не входит: в CGI это начало обучения. */
+export function step7Dob(raw?: unknown, now = new Date()): string {
+  const s = String(raw ?? "").trim();
+  if (!s || s.startsWith("0000")) return "";
   let y = 0;
-  let mo = 1;
-  let da = 1;
-  const ru = t.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
-  const iso = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  let m = 0;
+  let d = 0;
+  const ru = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (ru) {
-    da = Number(ru[1]);
-    mo = Number(ru[2]);
+    d = Number(ru[1]);
+    m = Number(ru[2]);
     y = Number(ru[3]);
   } else if (iso) {
     y = Number(iso[1]);
-    mo = Number(iso[2]);
-    da = Number(iso[3]);
-  }
-  if (!y || y < 1920 || y > now.getFullYear() + 1) return undefined;
-  const born = new Date(y, mo - 1, da || 1);
+    m = Number(iso[2]);
+    d = Number(iso[3]);
+  } else return "";
+  if (!y || y < 1920 || y > now.getFullYear() + 1 || m < 1 || m > 12 || d < 1 || d > 31) return "";
+  const born = new Date(y, m - 1, d);
+  if (born.getFullYear() !== y || born.getMonth() !== m - 1 || born.getDate() !== d) return "";
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+export function step7AgeYears(dob?: string, now = new Date()) {
+  const iso = step7Dob(dob, now);
+  if (!iso) return undefined;
+  const y = Number(iso.slice(0, 4));
+  const mo = Number(iso.slice(5, 7));
+  const da = Number(iso.slice(8, 10));
+  const born = new Date(y, mo - 1, da);
   let years = now.getFullYear() - born.getFullYear();
   const m = now.getMonth() - born.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < born.getDate())) years -= 1;
@@ -108,13 +147,20 @@ export function step7AgeYears(dob?: string, now = new Date()) {
 
 export type Step7Years = 0 | 1 | 2 | 4 | 6 | 2015;
 
+function dayBack(now: Date, span: number) {
+  const y = now.getFullYear() - span;
+  const m = now.getMonth();
+  const last = new Date(y, m + 1, 0).getDate();
+  const d = Math.min(now.getDate(), last);
+  return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Срок от даты архива. «За N лет» — календарный день, не 365.25. Пустая дата в срок не входит. */
 export function step7InYears(day: string, span: Step7Years, now = new Date()) {
   if (!span) return true;
-  if (span === 2015) return !day || day >= "2015-01-01";
   if (!day) return false;
-  const t = Date.parse(`${day}T12:00:00`);
-  if (!Number.isFinite(t)) return false;
-  return now.getTime() - t <= span * 365.25 * 86400000;
+  if (span === 2015) return day >= "2015-01-01";
+  return day >= dayBack(now, span);
 }
 
 export type Step7Pick = {
@@ -138,10 +184,9 @@ export function step7Shows(
   const lead = card.study === 0;
   if (lead && !pick.leads) return false;
   if (!lead && !pick.clients) return false;
-  const dob = String(card.dob || "").trim();
+  const dob = step7Dob(card.dob, now);
   const age = step7AgeYears(dob, now);
   if (pick.dobYes !== pick.dobNo) {
-    if (pick.dobYes && age == null && !dob) return false;
     if (pick.dobYes && !dob) return false;
     if (pick.dobNo && dob) return false;
   }
@@ -157,4 +202,29 @@ export function step7Shows(
   }
   if (!step7InYears(String(card.archivedAt || ""), pick.years, now)) return false;
   return true;
+}
+
+/** То, что пришло с кнопки шага 7. Пустое — фильтра нет. */
+export function step7PickOf(raw: unknown): Step7Pick | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Partial<Step7Pick>;
+  const years = Number(o.years);
+  const allowed = [0, 1, 2, 4, 6, 2015];
+  const age = (v: unknown) => {
+    if (v == null || v === "") return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  return {
+    clients: o.clients !== false,
+    leads: o.leads !== false,
+    ageFrom: age(o.ageFrom),
+    ageTo: age(o.ageTo),
+    dobYes: Boolean(o.dobYes),
+    dobNo: Boolean(o.dobNo),
+    fio: Boolean(o.fio),
+    groupsYes: Boolean(o.groupsYes),
+    groupsNo: Boolean(o.groupsNo),
+    years: (allowed.includes(years) ? years : 0) as Step7Years,
+  };
 }

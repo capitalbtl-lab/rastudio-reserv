@@ -399,6 +399,10 @@ export type LeadCard = {
   cashNoCommission?: number;
   cashDiskKnown?: boolean;
   cashBranches?: string;
+  cashTries?: number;
+  cashRetry?: boolean;
+  cashGiveUp?: boolean;
+  cashFail?: string;
   /** Шаг 7. Причина архива клиента: Customer.customer_reject_id. 0 — в Alfa не указана. */
   rejectId?: number;
   rejectName?: string;

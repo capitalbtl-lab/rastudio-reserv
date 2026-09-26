@@ -76,7 +76,7 @@ export function loadRun(id: string): StepLogRun | null {
   const raw = readJson<Partial<StepLogRun> | null>(runFile(id), null);
   if (!raw || !raw.id) return null;
   const step = Number(raw.step) as StepN;
-  if (step < 1 || step > 5) return null;
+  if (step < 1 || step > 7) return null;
   const rows = Array.isArray(raw.rows) ? raw.rows.filter((r) => r && r.id) : [];
   return {
     id: String(raw.id),

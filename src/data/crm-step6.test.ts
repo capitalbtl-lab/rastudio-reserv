@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk, mergeMissingLessons } from "./crm-step6-core.ts";
+import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk, mergeMissingLessons, cashRetryPlan, cashAttemptMs, raceUntil } from "./crm-step6-core.ts";
 
 describe("шаг 6", () => {
   it("лид по is_study, клиент не лид", () => {
@@ -30,6 +30,29 @@ describe("шаг 6", () => {
     assert.equal(step6ColumnId(undefined, stages, null), 9);
     assert.equal(step6ColumnId({ 0: 2 }, stages), 2);
     assert.equal(step6ColumnId(["x"], stages), 9);
+  });
+
+  it("ошибка чтения встаёт в конец три раза по 30 секунд", () => {
+    assert.deepEqual(cashRetryPlan(0, false, true), { again: true, tries: 0, giveUp: false, pauseMs: 0 });
+    assert.deepEqual(cashRetryPlan(0, true, true), { again: true, tries: 1, giveUp: false, pauseMs: 5000 });
+    assert.deepEqual(cashRetryPlan(1, true, true), { again: true, tries: 2, giveUp: false, pauseMs: 5000 });
+    assert.deepEqual(cashRetryPlan(2, true, true), { again: false, tries: 3, giveUp: true, pauseMs: 5000 });
+    assert.deepEqual(cashRetryPlan(1, true, false), { again: false, tries: 1, giveUp: false, pauseMs: 5000 });
+    assert.equal(cashRetryPlan(0, false, false).pauseMs, 0);
+  });
+
+  it("30 секунд обрывают запрос, а не ждут его конца", () => {
+    assert.equal(cashAttemptMs(0, 1_000), 18_000);
+    assert.equal(cashAttemptMs(5_000, 5_000), 0);
+    assert.equal(cashAttemptMs(5_400, 5_000), 400);
+    assert.equal(cashAttemptMs(30_000, 0), 18_000);
+  });
+
+  it("чужой запрос не держит попытку дольше 30 секунд", async () => {
+    const hung = new Promise<number>(() => {});
+    const start = Date.now();
+    await assert.rejects(raceUntil(hung, start + 40), (e: unknown) => e instanceof Error && e.name === "CashCut");
+    assert.ok(Date.now() - start < 500);
   });
 
   it("урок на диск: 0 пишется, без даты нет, явка не выдумывается", () => {
