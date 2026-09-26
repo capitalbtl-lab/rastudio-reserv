@@ -1783,26 +1783,28 @@ export async function journalPull(opts: {
       return journalJobView();
     }
     if (opts.jobMode === "auto") {
-      const { AUTO_PIPE, AUTO_PIPE_FULL, pipeFromSelection, journalStartOf } = await import("./crm-sync-policy-core");
+      const { AUTO_PIPE, AUTO_PIPE_FULL, pipeFromSelection, journalStartOf, redModeOf } = await import("./crm-sync-policy-core");
       const study = opts.study === "2" ? "2" : "1";
       const raw = String(opts.name || "");
       const archGroups = study === "1" && /archGroups=1/.test(raw);
       const stepsRaw = raw.match(/(?:^|&)steps=([^&]*)/)?.[1] || "";
-      const also = (raw.match(/(?:^|&)also=([^&]*)/)?.[1] || "").split(",").filter((id) => id === "step6-recount" || id === "step6-columns" || id === "step6-cash");
+      const also = (raw.match(/(?:^|&)also=([^&]*)/)?.[1] || "").split(",").filter((id) => id === "step6-recount" || id === "step6-columns" || id === "step6-cash" || id === "step7-list" || id === "step7-cash");
       const steps = stepsRaw ? stepsRaw.split(",").map((n) => Number(n)).filter((n) => n >= 1 && n <= 7) : [];
       const hasSteps = /(?:^|&)steps=/.test(raw);
       const custom = hasSteps || also.length > 0;
       const built = custom ? pipeFromSelection(steps.length ? steps : hasSteps ? [] : [1, 2, 3, 4, 5], also, { study, archGroups }) : null;
       if (built && !built.mode) return journalJobView();
-      const pipe = built ? built.pipe : study === "1" && archGroups ? [...AUTO_PIPE_FULL] : [...AUTO_PIPE];
+      const full = /(?:^|&)depth=full(?:&|$)/.test(raw);
+      const pipe0 = built ? built.pipe : study === "1" && archGroups ? [...AUTO_PIPE_FULL] : [...AUTO_PIPE];
+      const pipe = full ? [...pipe0, "depth=full"] : pipe0;
       const head = journalStartOf(built?.mode || "roster-recheck");
       const from = String(opts.dateFrom || "2015-01-01");
       const days = Number(opts.recheckDays) > 0 ? Number(opts.recheckDays) : from <= "2015-01-01" ? 4000 : 365;
       startJournalJob({
-        mode: head.mode as "roster-recheck",
+        mode: (full ? redModeOf(head.mode) : head.mode) as "roster-recheck",
         kind: head.kind,
         study,
-        recheck: head.recheck,
+        recheck: full ? false : head.recheck,
         recheckDays: days,
         dateFrom: from,
         archived: study === "2",
@@ -1820,13 +1822,17 @@ export async function journalPull(opts: {
         .filter((n) => n === 2 || n === 4 || n === 5);
       const order = [2, 4, 5].filter((n) => want.includes(n));
       const cid = Number(opts.customerId) || 0;
-      if (!cid || !order.length) return journalJobView();
+      const rawEarly = String(opts.name || "");
+      const tailEarly = (rawEarly.match(/(?:^|&)also=([^&]*)/)?.[1] || "")
+        .split(",")
+        .filter((id) => id === "step6-columns" || id === "step6-cash" || id === "step7-list" || id === "step7-cash");
+      if (!cid || (!order.length && !tailEarly.length)) return journalJobView();
       let steps = order;
       if (steps.includes(5) && !steps.includes(4)) {
         const { payCustomerFilled } = await import("./crm-pay");
         if (!payCustomerFilled(cid)) steps = [...steps.filter((n) => n < 5), 4, 5];
       }
-      let oneName = String(opts.name || `№${cid}`);
+      let oneName = String(opts.name || `№${cid}`).split("&")[0] || `№${cid}`;
       try {
         const card = await ensureCustomerCard(cid, Number(opts.branchId) || 1);
         const fio = String(card?.child?.fio || "").trim();
@@ -1835,15 +1841,33 @@ export async function journalPull(opts: {
         /* карточка не открылась — шаги идут как раньше */
       }
       const [first, ...rest] = steps;
+      const raw = String(opts.name || "");
+      const tail = (raw.match(/(?:^|&)also=([^&]*)/)?.[1] || "")
+        .split(",")
+        .filter((id) => id === "step6-columns" || id === "step6-cash" || id === "step7-list" || id === "step7-cash");
+      const pipe = [...rest.map((n) => `one:${n}`), ...tail];
+      if (!first) {
+        startJournalJob({
+          mode: tail[0] as "step6-cash",
+          kind: "students",
+          study: opts.study === "2" ? "2" : "1",
+          customerId: cid,
+          pipe: tail.slice(1),
+          src: "hands",
+          name: oneName,
+        });
+        return journalJobView();
+      }
       startOnePersonStep({
         step: first,
-        pipe: rest.map((n) => `one:${n}`),
+        pipe,
         customerId: cid,
         branchId: Number(opts.branchId) || 1,
         oneName,
         study: opts.study === "2" ? "2" : "1",
         dateFrom: opts.dateFrom || "",
         recheckDays: opts.recheckDays,
+        recheck: opts.recheck !== false,
       });
       return journalJobView();
     }

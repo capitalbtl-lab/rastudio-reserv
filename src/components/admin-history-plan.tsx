@@ -6,7 +6,15 @@ import {
   HISTORY_PLAN_MODES,
   PLAN_FROM_OPTS,
   PLAN_RECHECK_OPTS,
+  CHECK_STEP_LABEL,
+  CHECK_WHO_LABEL,
+  applyTemplateToSlots,
+  checkBand,
+  checkCode,
+  checkRunFields,
+  checkStepWhy,
   mskWall,
+  nextCheckNum,
   nextSlotAt,
   pad2,
   planFromIdToRecheckDays,
@@ -14,6 +22,9 @@ import {
   planLogSessions,
   whenLabel,
   STEP6_PIPE,
+  type CheckAudience,
+  type CheckDepth,
+  type CheckTemplate,
   type CrmSyncPolicy,
   type HistoryPlanMode,
   type HistorySchedule,
@@ -469,214 +480,443 @@ function DraftForm({
   );
 }
 
-function NowWizard({
+const WHO_ORDER: CheckAudience[] = ["one", "live", "leads-in", "leads-out", "arch-in", "arch-out"];
+const ALSO_ORDER = ["step6-columns", "step6-cash", "step7-list", "step7-cash"] as const;
+const ALSO_LABEL: Record<string, string> = {
+  "step6-columns": "Колонки лидов",
+  "step6-cash": "Касса лида",
+  "step7-list": "Прочитать архив",
+  "step7-cash": "Касса архива",
+};
+
+export type CheckRun = {
+  one: boolean;
+  cid: number;
+  personName: string;
+  leads: boolean;
+  archGroups: boolean;
+  steps: number[];
+  also: string[];
+  dateFromId: PlanFromId;
+  depth: CheckDepth;
+  templateId: string;
+  meaning: string;
+  who: string;
+  window: string;
+};
+
+function blankCheck(): CheckTemplate {
+  return {
+    id: "",
+    num: 0,
+    seed: "",
+    name: "",
+    meaning: "",
+    audience: [],
+    steps: [],
+    also: [],
+    dateFromId: "1",
+    depth: "recheck",
+    cid: 0,
+    on: true,
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
+function whoLine(audience: CheckAudience[]) {
+  return audience.map((id) => CHECK_WHO_LABEL[id]).join(", ");
+}
+
+function stepLine(steps: number[], also: string[]) {
+  return [...steps.map((n) => CHECK_STEP_LABEL[n] || String(n)), ...also.map((id) => ALSO_LABEL[id] || id)].join(", ");
+}
+
+function CheckEditor({
   busy,
   run,
   people,
-  seed,
-  onRunAuto,
-  onRunOne,
+  seedPerson,
+  draft,
+  onRun,
+  onSaveTemplate,
 }: {
   busy?: boolean;
   run?: boolean;
   people?: PlanPerson[];
-  seed?: PlanPerson | null;
-  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean; steps?: number[]; also?: string[] }) => void;
-  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar" | "step6-cash" | "step6-columns" | "step6-recount"; dateFromId: PlanFromId }) => void;
+  seedPerson?: PlanPerson | null;
+  draft: CheckTemplate;
+  onRun?: (opts: CheckRun) => void;
+  onSaveTemplate: (row: CheckTemplate) => void;
 }) {
-  const [step, setStep] = useState(seed?.cid ? 1 : 0);
-  const [whoKind, setWhoKind] = useState<"one" | "live" | "arch">("one");
-  const [act, setAct] = useState<"audit" | "calendar" | "all" | "step6-cash" | "step6-columns" | "step6-recount">("audit");
-  const [who, setWho] = useState(seed?.name || "");
-  const [picked, setPicked] = useState<PlanPerson | null>(seed?.cid ? seed : null);
-  const [from, setFrom] = useState<PlanFromId>("1");
-  const [leads, setLeads] = useState(true);
-  const [archGroups, setArchGroups] = useState(true);
-  const [stepsOn, setStepsOn] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [also, setAlso] = useState<string[]>([]);
+  const [audience, setAudience] = useState<CheckAudience[]>(draft.audience);
+  const [stepsOn, setStepsOn] = useState<number[]>(draft.steps);
+  const [also, setAlso] = useState<string[]>(draft.also);
+  const [from, setFrom] = useState<PlanFromId>(draft.dateFromId || "1");
+  const [depth, setDepth] = useState<CheckDepth>(draft.depth === "full" ? "full" : "recheck");
+  const [name, setName] = useState(draft.name === "Проверка" ? "" : draft.name);
+  const [meaning, setMeaning] = useState(draft.meaning);
+  const [who, setWho] = useState(seedPerson?.name || "");
+  const [picked, setPicked] = useState<PlanPerson | null>(seedPerson?.cid ? seedPerson : null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    setStepsOn((cur) => {
+      const next = cur.filter((n) => !checkStepWhy(audience, n));
+      return next.length === cur.length ? cur : next;
+    });
+    setAlso((cur) => {
+      const next = cur.filter((id) => !checkStepWhy(audience, id.startsWith("step7") ? 7 : 6));
+      return next.length === cur.length ? cur : next;
+    });
+  }, [audience]);
   const hits = matchPeople(people || [], who);
   const q = who.trim();
   const numeric = /^\d+$/.test(q);
   const exact = numeric ? (people || []).find((p) => String(p.cid) === q) : undefined;
   const typedId = exact ? exact.cid : numeric && hits.length === 0 && q.length >= 3 ? Number(q) : 0;
   const cid = typedId || (picked && foldName(picked.name) === foldName(who) ? picked.cid : 0) || (!numeric && hits.length === 1 ? hits[0].cid : 0);
-  const pickedName = picked && picked.cid === cid ? picked.name : hits.find((p) => p.cid === cid)?.name || "";
-  const titles = ["Кого", "Что сделать", "Окно", "Запуск"];
-  const one = whoKind === "one";
-  const canNext =
-    (step !== 1 || (one ? act === "audit" || act === "calendar" : true)) &&
-    (step !== 2 || !one || cid > 0);
+  const pickedName = picked && picked.cid === cid ? picked.name : hits.find((p) => p.cid === cid)?.name || (exact?.name || "");
+  const band = checkBand(audience);
+  const onlyOne = audience.length === 1 && audience[0] === "one";
+  const withWalkers = audience.includes("one") && audience.some((id) => id === "live" || id === "leads-in" || id === "arch-in");
+  const windowOn = stepsOn.some((n) => n === 2 || n === 3 || n === 4);
+  const legalSteps = stepsOn.filter((n) => !checkStepWhy(audience, n));
+  const legalAlso = also.filter((id) => !checkStepWhy(audience, id.startsWith("step7") ? 7 : 6));
+  const whyLine =
+    band === "empty" || band === "mix"
+      ? checkStepWhy(audience, 1)
+      : [1, 2, 3, 4, 5, 6, 7].map((n) => checkStepWhy(audience, n)).find(Boolean) || "";
 
-  function go() {
-    if (one) {
-      if (!onRunOne || !cid) return;
-      const kind = act === "calendar" ? "calendar" : act === "step6-cash" || act === "step6-columns" || act === "step6-recount" ? act : "audit";
-      const whoLine = pickedName ? `${pickedName} · №${cid}` : `№${cid}`;
-      const ask = kind === "calendar" ? `Календарь ${whoLine}? Кассу не трогаем.` : kind === "audit" ? `Шаг 5 только ${whoLine}? Календарь и кассу не трогаем.` : `Шаг 6 · ${kind === "step6-cash" ? "касса" : kind === "step6-columns" ? "колонки" : "пересчет лидов"} ${whoLine}?`;
-      if (!window.confirm(ask)) return;
-      onRunOne({ cid, kind, dateFromId: from });
+  function toggleWho(id: CheckAudience) {
+    setErr("");
+    setAudience((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }
+
+  function toggleStep(n: number) {
+    const why = checkStepWhy(audience, n);
+    if (why) return;
+    setErr("");
+    setStepsOn((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort((a, b) => a - b)));
+  }
+
+  function toggleAlso(id: string) {
+    const why = checkStepWhy(audience, id.startsWith("step7") ? 7 : 6);
+    if (why) return;
+    setErr("");
+    setAlso((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }
+
+  function askFull() {
+    if (depth === "full") {
+      setDepth("recheck");
       return;
     }
-    if (!onRunAuto) return;
-    if (!window.confirm("Перепроверить шаги 1–5 сейчас? Сначала дырки слева, потом все справа. Та же очередь.")) return;
-    onRunAuto({
-      study: whoKind === "arch" ? "2" : "1",
+    const ok = window.confirm(
+      "С нуля не стирает диск и не пишет в Alfa. Уже лежащие уроки и платежи не удаляются. По школе пойдут только те, у кого шаг ещё пустой. У одного человека дописывается недостающее, без сноса того, что уже лежит.",
+    );
+    if (ok) setDepth("full");
+  }
+
+  function build(): CheckTemplate | null {
+    if (band === "empty") {
+      setErr("Сначала отметьте, кого проверять.");
+      return null;
+    }
+    if (band === "mix") {
+      setErr("Это разные проверки. Снимите лишнюю галку или сделайте два шаблона.");
+      return null;
+    }
+    if (!legalSteps.length && !legalAlso.length) {
+      setErr("Отметьте хотя бы один шаг.");
+      return null;
+    }
+    return {
+      ...draft,
+      name: name.trim() || "Проверка",
+      meaning: meaning.trim(),
+      audience,
+      steps: legalSteps,
+      also: legalAlso,
       dateFromId: from,
-      leads: whoKind === "live" && leads,
-      archGroups: whoKind === "live" && archGroups,
-      steps: stepsOn,
-      also,
+      depth,
+      cid: onlyOne ? cid : 0,
+      on: draft.on !== false,
+    };
+  }
+
+  function save() {
+    const row = build();
+    if (!row) return;
+    if (!row.meaning.trim()) {
+      setErr("Напишите, когда применять эту проверку.");
+      return;
+    }
+    onSaveTemplate(row);
+  }
+
+  function go() {
+    const row = build();
+    if (!row || !onRun) return;
+    if (onlyOne && !cid) {
+      setErr("Напишите фамилию или номер.");
+      return;
+    }
+    const whoText = whoLine(row.audience);
+    const win = PLAN_FROM_OPTS.find((o) => o.id === from)?.label || "";
+    const ask =
+      depth === "full"
+        ? "С нуля не стирает диск и не пишет в Alfa. Уже лежащие строки не удаляются. По школе пойдут только пустые шаги. Запустить?"
+        : "Перепроверить: дописать недостающее. Уже лежащие строки не стираем. В Alfa не пишем. Запустить?";
+    if (!window.confirm(ask)) return;
+    const fields = checkRunFields(row);
+    onRun({
+      one: fields.one,
+      cid,
+      personName: pickedName || (cid ? `№${cid}` : ""),
+      leads: fields.leads,
+      archGroups: fields.archGroups,
+      steps: fields.steps,
+      also: fields.also,
+      dateFromId: from,
+      depth,
+      templateId: draft.id,
+      meaning: row.meaning,
+      who: whoText,
+      window: windowOn ? win : "",
     });
   }
 
+  const canWork = band !== "empty" && band !== "mix" && (legalSteps.length > 0 || legalAlso.length > 0);
+
   return (
     <div className="rounded-[1.25rem] bg-white p-5 shadow-sm ring-1 ring-black/[0.04]">
-      <Dots n={4} i={step} />
-      <p className="mt-3 font-display text-[1.35rem] leading-none">{titles[step]}</p>
-      {step === 0 ? (
-        <div className="mt-3 grid gap-2">
-          {(
-            [
-              ["one", "Один человек", "Фамилия, имя или номер."],
-              ["live", "Сейчас ходят", "Какие шаги отметить — те и пойдут."],
-              ["arch", "Архив клиентов", "Те же шаги по архиву."],
-            ] as const
-          ).map(([id, title, hint]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                setWhoKind(id);
-                if (id !== "one") setAct("all");
-              }}
-              className={cn(
-                "rounded-2xl px-4 py-3.5 text-left transition",
-                whoKind === id ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]",
-              )}
-            >
-              <span className="block text-sm font-semibold">{title}</span>
-              <span className={cn("mt-0.5 block text-[0.75rem]", whoKind === id ? "text-white/75" : "text-muted")}>{hint}</span>
-            </button>
+      <p className="font-display text-[1.35rem] leading-none">{draft.id ? checkCode(draft.num) : "Проверка"}</p>
+      <p className="mt-2 text-sm text-muted">Очередь одна. В Alfa не пишем. Шаги идут по порядку, не как отметили.</p>
+      <p className="mt-4 text-[0.72rem] font-medium text-muted">Кого</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {WHO_ORDER.map((id) => (
+          <Chip key={id} on={audience.includes(id)} onClick={() => toggleWho(id)}>{CHECK_WHO_LABEL[id]}</Chip>
+        ))}
+      </div>
+      {whyLine && (band === "empty" || band === "mix") ? <p className="mt-2 text-sm text-muted">{whyLine}</p> : null}
+      {withWalkers ? <p className="mt-2 text-sm text-muted">Один человек вместе с ходящими — это проверка всех отмеченных, не одного номера.</p> : null}
+      {audience.includes("leads-in") && !audience.includes("live") && legalSteps.length ? (
+        <p className="mt-2 text-sm text-muted">Шаги 1–5 идут по всем, кто в группе, не только по лидам. Для одних лидов оставьте колонки и кассу лида.</p>
+      ) : null}
+      {audience.includes("one") ? (
+        <div className="relative mt-3">
+          <input
+            className="h-10 w-full rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
+            placeholder="фамилия или номер"
+            value={who}
+            onChange={(e) => {
+              setWho(e.target.value);
+              setPicked(null);
+              setErr("");
+            }}
+          />
+          {who.trim() && hits.length > 1 ? (
+            <ul className="absolute z-10 mt-1 max-h-52 w-full overflow-y-auto rounded-xl bg-white py-1 shadow-lg ring-1 ring-black/10">
+              {hits.map((p) => (
+                <li key={p.cid}>
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-black/[0.04]"
+                    onClick={() => {
+                      setPicked(p);
+                      setWho(p.name);
+                    }}
+                  >
+                    {p.name} <span className="text-muted">№{p.cid}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {cid && pickedName ? <p className="mt-2 text-[0.75rem] text-muted">{pickedName} · №{cid}</p> : null}
+          {who.trim() && !cid ? <p className="mt-2 text-[0.75rem] text-muted">{(people || []).length ? "Выберите строку." : "Список ещё не загружен — введите номер."}</p> : null}
+        </div>
+      ) : null}
+      <p className="mt-4 text-[0.72rem] font-medium text-muted">Какие шаги</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {[1, 2, 3, 4, 5].map((n) => {
+          const why = checkStepWhy(audience, n);
+          return (
+            <Chip key={n} on={stepsOn.includes(n)} disabled={Boolean(why)} onClick={() => toggleStep(n)}>
+              {CHECK_STEP_LABEL[n]}
+            </Chip>
+          );
+        })}
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {ALSO_ORDER.map((id) => {
+          const why = checkStepWhy(audience, id.startsWith("step7") ? 7 : 6);
+          return (
+            <Chip key={id} on={also.includes(id)} disabled={Boolean(why)} onClick={() => toggleAlso(id)}>
+              {ALSO_LABEL[id]}
+            </Chip>
+          );
+        })}
+      </div>
+      {whyLine && band !== "empty" && band !== "mix" ? <p className="mt-2 text-sm text-muted">{whyLine}</p> : null}
+      <p className="mt-4 text-[0.72rem] font-medium text-muted">Окно</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {PLAN_FROM_OPTS.map((o) => (
+          <Chip key={o.id} on={windowOn && from === o.id} disabled={!windowOn} onClick={() => windowOn && setFrom(o.id)}>{o.label}</Chip>
+        ))}
+      </div>
+      {!windowOn ? (
+        <p className="mt-2 text-sm text-muted">
+          {legalSteps.includes(5) && !legalSteps.some((n) => n === 2 || n === 3 || n === 4)
+            ? "Годы не фильтруют сверку остатка."
+            : "Окно нужно календарю, занятиям групп и кассе на диск."}
+        </p>
+      ) : null}
+      <p className="mt-4 text-[0.72rem] font-medium text-muted">Как читать</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <Chip on={depth === "recheck"} onClick={() => setDepth("recheck")}>Перепроверить</Chip>
+        <Chip on={depth === "full"} onClick={askFull}>С нуля</Chip>
+      </div>
+      <p className="mt-2 text-sm text-muted">
+        {depth === "full"
+          ? "С нуля не стирает диск. По школе читаются только пустые шаги. Уже лежащие уроки и платежи остаются. В Alfa не пишем."
+          : "Перепроверить дописывает недостающее в окне и не стирает уже лежащие строки. В Alfa не пишем."}
+      </p>
+      <label className="mt-4 block text-sm font-semibold">
+        Название
+        <input className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium ring-1 ring-black/8" value={name} placeholder="например, Один ученик за год" onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label className="mt-3 block text-sm font-semibold">
+        Когда применять
+        <textarea className="mt-1 min-h-20 w-full rounded-xl bg-white px-3 py-2 text-sm font-medium ring-1 ring-black/8" value={meaning} placeholder="Одно-три предложения: кого и зачем." onChange={(e) => setMeaning(e.target.value)} />
+      </label>
+      <p className="mt-1 text-[0.75rem] text-muted">Это текст на карточке шаблона. Без него шаблон не сохраняется.</p>
+      {err ? <p className="mt-2 text-sm text-red-800">{err}</p> : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" disabled={busy || run || !onRun || !canWork || (onlyOne && !cid)} className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50" onClick={go}>
+          Запустить сейчас
+        </button>
+        <button type="button" disabled={busy || !meaning.trim() || !canWork} className="h-9 rounded-full px-4 text-sm font-semibold ring-1 ring-black/10 disabled:opacity-50" onClick={save}>
+          Сохранить шаблон
+        </button>
+      </div>
+      {run ? <p className="mt-2 text-[0.75rem] text-amber-800">Уже идёт загрузка. Сначала Стоп на шаге.</p> : null}
+    </div>
+  );
+}
+
+function SlotWhen({
+  tpl,
+  seed,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  tpl: CheckTemplate;
+  seed?: HistorySchedule | null;
+  busy?: boolean;
+  onCancel: () => void;
+  onSave: (row: Omit<HistorySchedule, "id" | "dueAt" | "lastFiredAt" | "lastJobId" | "lastSkip">) => void;
+}) {
+  const init = draftBits(seed);
+  const [kind, setKind] = useState<HistoryWhen["kind"]>(init.kind);
+  const [days, setDays] = useState<number[]>(init.days);
+  const [every, setEvery] = useState(init.every);
+  const [unit, setUnit] = useState<PlanUnit>(init.unit);
+  const [nth, setNth] = useState(init.nth);
+  const [nthDay, setNthDay] = useState(init.nthDay);
+  const [date, setDate] = useState(init.date);
+  const [at, setAt] = useState(init.at);
+  const fields = checkRunFields(tpl);
+  function when(): HistoryWhen {
+    if (kind === "weekly") return { kind: "weekly", days };
+    if (kind === "interval") return { kind: "interval", every, unit };
+    if (kind === "nthWeekday") return { kind: "nthWeekday", n: nth, day: nthDay };
+    if (kind === "ymd") return { kind: "ymd", date };
+    return { kind: "daily" };
+  }
+  const canSave = Boolean(at) && (kind !== "weekly" || days.length > 0) && (kind !== "ymd" || Boolean(date));
+  return (
+    <div className="rounded-[1.25rem] bg-white p-5 shadow-sm ring-1 ring-black/[0.04]">
+      <p className="font-display text-[1.35rem] leading-none">{tpl.name}</p>
+      <p className="mt-2 text-sm">{tpl.meaning}</p>
+      <p className="mt-2 text-[0.78rem] text-muted">{whoLine(tpl.audience)} · {stepLine(fields.steps, fields.also)} · {PLAN_FROM_OPTS.find((o) => o.id === tpl.dateFromId)?.label}</p>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <Chip on={kind === "daily"} onClick={() => setKind("daily")}>Каждый день</Chip>
+        <Chip on={kind === "weekly"} onClick={() => setKind("weekly")}>Дни недели</Chip>
+        <Chip on={kind === "interval"} onClick={() => setKind("interval")}>Каждые N</Chip>
+        <Chip on={kind === "nthWeekday"} onClick={() => setKind("nthWeekday")}>День месяца</Chip>
+        <Chip on={kind === "ymd"} onClick={() => setKind("ymd")}>Одна дата</Chip>
+      </div>
+      {kind === "weekly" ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {DAYS.map((d) => (
+            <Chip key={d.n} on={days.includes(d.n)} onClick={() => setDays(days.includes(d.n) ? days.filter((x) => x !== d.n) : [...days, d.n].sort((a, b) => a - b))}>{d.t}</Chip>
           ))}
         </div>
       ) : null}
-      {step === 1 ? (
-        one ? (
-          <div className="mt-3 grid gap-2">
-            {pickedName ? <p className="text-sm">{pickedName} · №{cid}</p> : null}
-            <button type="button" onClick={() => setAct("audit")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "audit" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
-              <span className="block text-sm font-semibold">Шаг 5 · сверка</span>
-              <span className={cn("mt-0.5 block text-[0.75rem]", act === "audit" ? "text-white/75" : "text-muted")}>Календарь и кассу не трогает.</span>
-            </button>
-            <button type="button" onClick={() => setAct("calendar")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "calendar" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
-              <span className="block text-sm font-semibold">Календарь</span>
-              <span className={cn("mt-0.5 block text-[0.75rem]", act === "calendar" ? "text-white/75" : "text-muted")}>Синяя перепроверка только его.</span>
-            </button>
-            <button type="button" onClick={() => setAct("step6-recount")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "step6-recount" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
-              <span className="block text-sm font-semibold">Пересчет лидов</span>
-              <span className={cn("mt-0.5 block text-[0.75rem]", act === "step6-recount" ? "text-white/75" : "text-muted")}>Заново разложить лидов по колонкам.</span>
-            </button>
-            <button type="button" onClick={() => setAct("step6-columns")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "step6-columns" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
-              <span className="block text-sm font-semibold">Прочитать колонки</span>
-              <span className={cn("mt-0.5 block text-[0.75rem]", act === "step6-columns" ? "text-white/75" : "text-muted")}>Колонки воронки по всем филиалам.</span>
-            </button>
-            <button type="button" onClick={() => setAct("step6-cash")} className={cn("rounded-2xl px-4 py-3.5 text-left transition", act === "step6-cash" ? "bg-black text-white" : "bg-black/[0.03] hover:bg-black/[0.05]")}>
-              <span className="block text-sm font-semibold">Перепроверить кассу</span>
-              <span className={cn("mt-0.5 block text-[0.75rem]", act === "step6-cash" ? "text-white/75" : "text-muted")}>Только этого лида, шаги 1–5 не трогает.</span>
-            </button>
-          </div>
-        ) : (
-          <>
-            <p className="mt-3 text-sm">Отметьте шаги. Очередь одна.</p>
-            <StepPick
-              steps={stepsOn}
-              also={also}
-              onSteps={(n) => setStepsOn((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort((a, b) => a - b)))}
-              onAlso={(id) => setAlso((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))}
-            />
-          </>
-        )
+      {kind === "interval" ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-sm">каждые</span>
+          <input type="number" min={1} max={36} className="h-9 w-16 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={every} onChange={(e) => setEvery(Math.max(1, Number(e.target.value) || 1))} />
+          <select className="h-9 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={unit} onChange={(e) => setUnit(e.target.value as PlanUnit)}>
+            <option value="day">дней</option>
+            <option value="week">недель</option>
+            <option value="month">месяцев</option>
+          </select>
+        </div>
       ) : null}
-      {step === 2 ? (
-        <>
-          {one ? (
-            <div className="relative mt-3">
-              <input
-                className="h-10 w-full rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
-                placeholder="фамилия, имя, отчество или номер"
-                value={who}
-                onChange={(e) => {
-                  setWho(e.target.value);
-                  setPicked(null);
-                }}
-              />
-              {who.trim() && hits.length > 1 ? (
-                <ul className="absolute z-10 mt-1 max-h-52 w-full overflow-y-auto rounded-xl bg-white py-1 shadow-lg ring-1 ring-black/10">
-                  {hits.map((p) => (
-                    <li key={p.cid}>
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-black/[0.04]"
-                        onClick={() => {
-                          setPicked(p);
-                          setWho(p.name);
-                        }}
-                      >
-                        {p.name} <span className="text-muted">№{p.cid}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {who.trim() && !cid ? (
-                <p className="mt-2 text-[0.75rem] text-muted">
-                  {(people || []).length ? "Несколько людей. Выберите строку." : "Список шага ещё не загружен — введите номер."}
-                </p>
-              ) : cid && pickedName ? (
-                <p className="mt-2 text-[0.75rem] text-muted">{pickedName} · №{cid}</p>
-              ) : null}
-            </div>
-          ) : null}
-          {one && act === "audit" ? <p className="mt-3 text-sm text-muted">Окно лет шагу 5 не нужно.</p> : (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {PLAN_FROM_OPTS.map((o) => (
-                <Chip key={o.id} on={from === o.id} onClick={() => setFrom(o.id)}>{o.label}</Chip>
-              ))}
-            </div>
-          )}
-          {whoKind === "live" ? (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <Chip on={leads} onClick={() => setLeads((v) => !v)}>Лиды действующих групп</Chip>
-              <Chip on={archGroups} onClick={() => setArchGroups((v) => !v)}>Архив действующих групп</Chip>
-            </div>
-          ) : null}
-        </>
+      {kind === "nthWeekday" ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <select className="h-9 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={nth} onChange={(e) => setNth(Number(e.target.value))}>
+            <option value={1}>1-й</option>
+            <option value={2}>2-й</option>
+            <option value={3}>3-й</option>
+            <option value={4}>4-й</option>
+            <option value={5}>5-й</option>
+            <option value={-1}>последний</option>
+          </select>
+          <select className="h-9 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={nthDay} onChange={(e) => setNthDay(Number(e.target.value))}>
+            {DAYS.map((d) => (
+              <option key={d.n} value={d.n}>{d.t}</option>
+            ))}
+          </select>
+        </div>
       ) : null}
-      {step === 3 ? (
-        <p className="mt-3 text-sm">
-          {one
-            ? `${pickedName ? `${pickedName} · ` : ""}№${cid || "—"} · ${act === "calendar" ? "календарь" : "шаг 5"}${act === "calendar" ? ` · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}` : ""}`
-            : `${whoKind === "arch" ? "Архив" : "Сейчас ходят"} · шаги ${stepsOn.length ? stepsOn.join(", ") : "—"}${also.length ? ` · ${also.length} част.` : ""} · ${PLAN_FROM_OPTS.find((o) => o.id === from)?.label}`}
-        </p>
-      ) : null}
+      {kind === "ymd" ? <input type="date" className="mt-2 h-9 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={date} onChange={(e) => setDate(e.target.value)} /> : null}
+      <label className="mt-3 block text-sm font-semibold">
+        Время · МСК
+        <input type="time" step={900} className="mt-1 h-10 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/8" value={at} onChange={(e) => setAt(e.target.value)} />
+      </label>
+      <p className="mt-3 text-[0.75rem] text-muted">Пока общий тумблер выкл — слот лежит и ночью не стартует. Шаги 6 и 7 в номер шага не пишутся.</p>
       <div className="mt-4 flex gap-2">
-        {step > 0 ? (
-          <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10" onClick={() => setStep(step - 1)}>Назад</button>
-        ) : null}
-        {step < 3 ? (
-          <button type="button" disabled={!canNext} className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white" onClick={() => setStep(step + 1)}>Дальше</button>
-        ) : (
-          <button
-            type="button"
-            disabled={busy || run || (one ? !cid || !onRunOne : !onRunAuto || (!stepsOn.length && !also.length))}
-            className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
-            onClick={go}
-          >
-            Запустить
-          </button>
-        )}
+        <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10" onClick={onCancel}>Отмена</button>
+        <button
+          type="button"
+          disabled={busy || !canSave}
+          className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+          onClick={() => {
+            onSave({
+              on: true,
+              mode: "auto",
+              when: when(),
+              at,
+              recheckDays: planFromIdToRecheckDays(tpl.dateFromId),
+              dateFromId: tpl.dateFromId,
+              study: fields.study,
+              label: tpl.name,
+              leads: fields.leads,
+              archGroups: fields.archGroups,
+              steps: fields.steps,
+              also: fields.also,
+              templateId: tpl.id,
+              depth: tpl.depth,
+            });
+          }}
+        >
+          Сохранить слот
+        </button>
       </div>
-      {run ? <p className="mt-2 text-[0.75rem] text-amber-800">Уже идёт загрузка. Сначала Стоп на шаге.</p> : null}
     </div>
   );
 }
@@ -688,8 +928,7 @@ export function HistoryPlanPanel({
   planLog,
   historyWorker,
   onSave,
-  onRunAuto,
-  onRunOne,
+  onRunCheck,
   people,
   focus,
 }: {
@@ -701,13 +940,15 @@ export function HistoryPlanPanel({
   people?: PlanPerson[];
   focus?: PlanPerson | null;
   onSave: (next: CrmSyncPolicy) => void;
-  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean; steps?: number[]; also?: string[] }) => void;
-  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar" | "step6-cash" | "step6-columns" | "step6-recount"; dateFromId: PlanFromId }) => void;
+  onRunCheck?: (opts: CheckRun) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState("");
-  const [screen, setScreen] = useState<"home" | "now" | "plan" | "log">(focus?.cid ? "now" : "home");
+  const [screen, setScreen] = useState<"home" | "now" | "tpl" | "plan" | "log">(focus?.cid ? "now" : "home");
   const [menuId, setMenuId] = useState("");
+  const [draft, setDraft] = useState<CheckTemplate>(() => (focus?.cid ? { ...blankCheck(), audience: ["one"], cid: focus.cid } : blankCheck()));
+  const [draftKey, setDraftKey] = useState(focus?.cid ? "focus" : "new");
+  const [slotTpl, setSlotTpl] = useState("");
   const run = Boolean(job?.running) && !job?.stop;
   const head = useMemo(() => {
     if (run) return { k: "Сейчас", t: job?.cur || "Работаем", s: `${job?.n || 0} из ${job?.total || 0}` };
@@ -752,13 +993,13 @@ export function HistoryPlanPanel({
           {historyWorker?.silent ? <p className="mt-1 text-[0.75rem] text-red-800">Процесс истории молчит — ночные слоты не поедут.</p> : null}
         </div>
         {screen !== "home" ? (
-          <button type="button" className="shrink-0 text-[0.78rem] font-medium text-muted hover:text-black" onClick={() => { setScreen("home"); setAdding(false); setEditId(""); }}>
+          <button type="button" className="shrink-0 text-[0.78rem] font-medium text-muted hover:text-black" onClick={() => { setScreen("home"); setAdding(false); setEditId(""); setSlotTpl(""); }}>
             Назад
           </button>
         ) : (
           <button type="button" className="shrink-0 text-[0.78rem] font-medium text-muted hover:text-red-700" disabled={busy} onClick={() => {
-            if (!window.confirm("Сбросить настройки пульта? Синхронизация расписания выкл, расписания удалятся. Текущая загрузка не остановится.")) return;
-            patch({ planEnabled: false, plan: [] });
+            if (!window.confirm("Сбросить настройки пульта? Синхронизация расписания выкл, слоты удалятся. Шаблоны остаются. Текущая загрузка не остановится.")) return;
+            patch({ planEnabled: false, plan: [], templates: policy.templates || [] });
           }}>
             Сброс
           </button>
@@ -769,7 +1010,8 @@ export function HistoryPlanPanel({
         <div className="grid gap-2">
           {(
             [
-              ["now", "Сейчас", "Один человек или выбранные шаги."],
+              ["now", "Сейчас", "Одна проверка: кого, шаги, окно."],
+              ["tpl", "Шаблоны", (policy.templates || []).length ? `${(policy.templates || []).filter((t) => t.on).length} вкл` : "Пока нет"],
               ["plan", "Расписание", policy.plan.length ? `${policy.plan.filter((r) => r.on).length} вкл · само, без конца` : "Слотов нет"],
               ["log", "Журнал", "Последние синхронизации и сбои."],
             ] as const
@@ -785,7 +1027,91 @@ export function HistoryPlanPanel({
         </div>
       ) : null}
 
-      {screen === "now" ? <NowWizard busy={busy} run={run} people={people} seed={focus} onRunAuto={onRunAuto} onRunOne={onRunOne} /> : null}
+      {screen === "now" ? (
+        <CheckEditor
+          key={draftKey}
+          busy={busy}
+          run={run}
+          people={people}
+          seedPerson={(people || []).find((p) => p.cid === draft.cid) || (draft.audience.length === 1 && draft.audience[0] === "one" ? focus : null) || null}
+          draft={draft}
+          onRun={onRunCheck}
+          onSaveTemplate={(row) => {
+            const templates = policy.templates || [];
+            const nowIso = new Date().toISOString();
+            if (row.id) {
+              const nextTpl = { ...row, updatedAt: nowIso };
+              patch({
+                ...policy,
+                templates: templates.map((t) => (t.id === row.id ? nextTpl : t)),
+                plan: applyTemplateToSlots(policy.plan, nextTpl),
+              });
+            } else {
+              const num = nextCheckNum(templates);
+              const id = `chk_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+              patch({
+                ...policy,
+                templates: [...templates, { ...row, id, num, createdAt: nowIso, updatedAt: nowIso }],
+              });
+            }
+            setScreen("tpl");
+          }}
+        />
+      ) : null}
+
+      {screen === "tpl" ? (
+        <div className="space-y-2">
+          {(policy.templates || []).map((t) => (
+            <article key={t.id} className="rounded-[1.25rem] bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.04]">
+              <p className="text-[0.72rem] font-medium text-muted">{checkCode(t.num)}{t.on ? "" : " · выкл"}</p>
+              <p className="mt-1 font-display text-[1.2rem] leading-tight">{t.name}</p>
+              <p className="mt-2 text-sm">{t.meaning}</p>
+              <p className="mt-2 text-[0.78rem] text-muted">{whoLine(t.audience)}{t.cid ? ` · №${t.cid}` : ""}</p>
+              <p className="mt-1 text-[0.78rem] text-muted">{stepLine(t.steps, t.also) || "шагов нет"} · {PLAN_FROM_OPTS.find((o) => o.id === t.dateFromId)?.label} · {t.depth === "full" ? "только пустые" : "перепроверить"}</p>
+              <div className="mt-3 flex flex-wrap gap-2 text-[0.78rem]">
+                <button type="button" className="h-8 rounded-full bg-black px-3 font-medium text-white" onClick={() => {
+                  setDraft(t);
+                  setDraftKey(`${t.id}-${t.updatedAt}`);
+                  setScreen("now");
+                }}>Применить</button>
+                <button type="button" className="h-8 rounded-full bg-black/[0.04] px-3 font-medium" onClick={() => {
+                  const fields = checkRunFields(t);
+                  if (fields.one && !t.cid) {
+                    window.alert("В ночном слоте некого спросить. Откройте шаблон и укажите номер.");
+                    return;
+                  }
+                  setSlotTpl(t.id);
+                  setAdding(false);
+                  setEditId("");
+                  setScreen("plan");
+                }}>В расписание</button>
+                <button type="button" className="h-8 rounded-full bg-black/[0.04] px-3 font-medium" onClick={() => {
+                  setDraft(t);
+                  setDraftKey(`edit-${t.id}-${t.updatedAt}`);
+                  setScreen("now");
+                }}>Править</button>
+                <button type="button" className="h-8 rounded-full bg-black/[0.04] px-3 font-medium" disabled={busy} onClick={() => {
+                  patch({ ...policy, templates: (policy.templates || []).map((x) => (x.id === t.id ? { ...x, on: !x.on } : x)) });
+                }}>{t.on ? "Выключить" : "Включить"}</button>
+                <button type="button" className="h-8 rounded-full px-3 font-medium text-red-700" disabled={busy} onClick={() => {
+                  if (!window.confirm(`Удалить ${checkCode(t.num)}? Его слоты расписания тоже удалятся. Остальные останутся.`)) return;
+                  patch({
+                    ...policy,
+                    templates: (policy.templates || []).filter((x) => x.id !== t.id),
+                    plan: policy.plan.filter((s) => s.templateId !== t.id),
+                  });
+                }}>Удалить</button>
+              </div>
+            </article>
+          ))}
+          {!(policy.templates || []).length ? <p className="text-sm text-muted">Шаблонов нет. Соберите проверку в «Сейчас» и сохраните.</p> : null}
+          <button type="button" className="h-12 w-full rounded-full bg-black text-sm font-medium text-white" onClick={() => {
+            setDraft(blankCheck());
+            setDraftKey(`new-${Date.now()}`);
+            setScreen("now");
+          }}>Новая проверка</button>
+        </div>
+      ) : null}
 
       {screen === "log" ? (
         <div className="rounded-[1.25rem] bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.04]">
@@ -825,7 +1151,52 @@ export function HistoryPlanPanel({
 
       {screen === "plan" ? (
         <>
-          {formOpen ? (
+          {slotTpl && slotTpl !== "pick" && (policy.templates || []).find((t) => t.id === slotTpl) ? (
+            <SlotWhen
+              key={slotTpl + (editing?.id || "new")}
+              busy={busy}
+              tpl={(policy.templates || []).find((t) => t.id === slotTpl)!}
+              seed={editing}
+              onCancel={() => { setSlotTpl(""); setAdding(false); setEditId(""); }}
+              onSave={(row) => {
+                if (editing) {
+                  patch({
+                    ...policy,
+                    plan: policy.plan.map((x) =>
+                      x.id === editing.id
+                        ? { ...x, ...row, on: x.on, dueAt: x.dueAt, lastFiredAt: x.lastFiredAt, lastJobId: x.lastJobId, lastSkip: x.lastSkip }
+                        : x,
+                    ),
+                  });
+                } else {
+                  const id = `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+                  patch({ ...policy, plan: [...policy.plan, { ...row, id, dueAt: "", lastFiredAt: "", lastJobId: "", lastSkip: "" }] });
+                }
+                setSlotTpl("");
+                setAdding(false);
+                setEditId("");
+              }}
+            />
+          ) : slotTpl === "pick" ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted">Какой шаблон поставить в слот. Один шаблон можно поставить несколько раз.</p>
+              {(policy.templates || []).filter((t) => t.on).map((t) => (
+                <button key={t.id} type="button" className="block w-full rounded-[1.25rem] bg-white px-4 py-3 text-left shadow-sm ring-1 ring-black/[0.04]" onClick={() => {
+                  const fields = checkRunFields(t);
+                  if (fields.one && !t.cid) {
+                    window.alert("В ночном слоте некого спросить. Укажите номер в шаблоне.");
+                    return;
+                  }
+                  setSlotTpl(t.id);
+                }}>
+                  <span className="block text-sm font-semibold">{checkCode(t.num)} · {t.name}</span>
+                  <span className="mt-1 block text-[0.78rem] text-muted">{t.meaning}</span>
+                </button>
+              ))}
+              {!(policy.templates || []).some((t) => t.on) ? <p className="text-sm text-muted">Нет включённых шаблонов.</p> : null}
+              <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10" onClick={() => setSlotTpl("")}>Отмена</button>
+            </div>
+          ) : formOpen ? (
             <DraftForm
               key={editing?.id || "new"}
               busy={busy}
@@ -881,7 +1252,17 @@ export function HistoryPlanPanel({
                       <Switch on={r.on} disabled={busy} onClick={() => patch({ ...policy, plan: policy.plan.map((x) => (x.id === r.id ? { ...x, on: !x.on } : x)) })} />
                     </div>
                     <div className="mt-3 flex gap-4 text-[0.78rem]">
-                      <button type="button" className="font-medium underline decoration-black/20 underline-offset-4 hover:decoration-black" disabled={busy} onClick={() => { setMenuId(""); setEditId(r.id); setAdding(false); }}>
+                      <button type="button" className="font-medium underline decoration-black/20 underline-offset-4 hover:decoration-black" disabled={busy} onClick={() => {
+                        setMenuId("");
+                        setAdding(false);
+                        if (r.templateId && (policy.templates || []).some((t) => t.id === r.templateId)) {
+                          setSlotTpl(r.templateId);
+                          setEditId(r.id);
+                        } else {
+                          setSlotTpl("");
+                          setEditId(r.id);
+                        }
+                      }}>
                         Править
                       </button>
                       <button type="button" className="font-medium text-muted hover:text-black" onClick={() => setMenuId(menuId === r.id ? "" : r.id)}>
@@ -911,7 +1292,7 @@ export function HistoryPlanPanel({
                 ))}
               </ul>
               {!policy.plan.length ? <p className="text-sm text-muted">Расписаний нет. Ночью пульт молчит.</p> : null}
-              <button type="button" className="h-12 w-full rounded-full bg-black text-sm font-medium text-white" onClick={() => { setEditId(""); setAdding(true); }}>
+              <button type="button" className="h-12 w-full rounded-full bg-black text-sm font-medium text-white" onClick={() => { setEditId(""); setAdding(false); setSlotTpl("pick"); }}>
                 Добавить расписание
               </button>
             </>
@@ -929,8 +1310,7 @@ export function HistoryPlanModal({
   job,
   busy,
   onSave,
-  onRunAuto,
-  onRunOne,
+  onRunCheck,
   people,
   focus,
   planLog,
@@ -942,8 +1322,7 @@ export function HistoryPlanModal({
   job?: JobSnap | null;
   busy?: boolean;
   onSave: (next: CrmSyncPolicy) => void;
-  onRunAuto?: (opts: { study: "1" | "2"; dateFromId: PlanFromId; leads?: boolean; archGroups?: boolean; steps?: number[]; also?: string[] }) => void;
-  onRunOne?: (opts: { cid: number; kind: "audit" | "calendar" | "step6-cash" | "step6-columns" | "step6-recount"; dateFromId: PlanFromId }) => void;
+  onRunCheck?: (opts: CheckRun) => void;
   people?: PlanPerson[];
   focus?: PlanPerson | null;
   planLog?: PlanLogRow[];
@@ -980,7 +1359,7 @@ export function HistoryPlanModal({
             Закрыть
           </button>
         </div>
-        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} historyWorker={historyWorker} people={people} focus={focus} onSave={onSave} onRunAuto={onRunAuto} onRunOne={onRunOne} />
+        <HistoryPlanPanel policy={policy} job={job} busy={busy} planLog={planLog} historyWorker={historyWorker} people={people} focus={focus} onSave={onSave} onRunCheck={onRunCheck} />
       </div>
     </div>
   );

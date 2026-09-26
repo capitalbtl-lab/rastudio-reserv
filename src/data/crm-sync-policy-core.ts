@@ -36,7 +36,8 @@ export function pipeFromSelection(
   const alsoTail = STEP6_PIPE.filter((id) => also.includes(id) && !(id === "step6-recount" && (also.includes("step6-columns") || six)));
   const sixTail = six ? (["step6-columns", "step6-cash"] as const) : [];
   const tail = [...sixTail, ...alsoTail.filter((id) => !(sixTail as readonly string[]).includes(id))];
-  const sevenTail = seven ? [...STEP7_PIPE] : [];
+  const sevenAlso = (["step7-list", "step7-cash"] as const).filter((id) => also.includes(id));
+  const sevenTail = seven ? [...STEP7_PIPE] : [...sevenAlso];
   const full = want.length === 5 && !tail.length && !sevenTail.length;
   if (full) {
     const pipe = opts.study === "2" || opts.archGroups === false ? [...AUTO_PIPE] : [...AUTO_PIPE_FULL];
@@ -127,18 +128,207 @@ export type HistorySchedule = {
   archGroups: boolean;
   steps?: number[];
   also?: string[];
+  templateId?: string;
+  depth?: CheckDepth;
   dueAt: string;
   lastFiredAt: string;
   lastJobId: string;
   lastSkip: string;
 };
 
+export type CheckAudience = "one" | "live" | "leads-in" | "leads-out" | "arch-in" | "arch-out";
+export type CheckDepth = "recheck" | "full";
+
+export type CheckTemplate = {
+  id: string;
+  num: number;
+  seed: string;
+  name: string;
+  meaning: string;
+  audience: CheckAudience[];
+  steps: number[];
+  also: string[];
+  dateFromId: PlanFromId;
+  depth: CheckDepth;
+  cid: number;
+  on: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CrmSyncPolicy = {
   planEnabled: boolean;
   plan: HistorySchedule[];
+  templates: CheckTemplate[];
 };
 
-export const POLICY_FACTORY: CrmSyncPolicy = { planEnabled: false, plan: [] };
+export const POLICY_FACTORY: CrmSyncPolicy = { planEnabled: false, plan: [], templates: [] };
+
+const CHECK_AUDIENCE = new Set<CheckAudience>(["one", "live", "leads-in", "leads-out", "arch-in", "arch-out"]);
+const CHECK_ALSO = new Set<string>([...STEP6_PIPE, "step7-list", "step7-cash"]);
+
+export const CHECK_SEEDS: CheckTemplate[] = [
+  {
+    id: "chk_seed_night",
+    num: 1,
+    seed: "night",
+    name: "Ночная сверка ходящих",
+    meaning: "Ночью дописать состав, календарь и кассу тех, кто сейчас в группах, и сверить шапку. Не архив и не лиды без группы.",
+    audience: ["live"],
+    steps: [1, 2, 3, 4, 5],
+    also: [],
+    dateFromId: "1",
+    depth: "recheck",
+    cid: 0,
+    on: true,
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: "chk_seed_one_year",
+    num: 2,
+    seed: "one-year",
+    name: "Один ученик, календарь за год",
+    meaning: "Занятие не видно в карточке. Дописать недостающие уроки этого номера за год. Кассу, лидов и архив не трогает.",
+    audience: ["one"],
+    steps: [2],
+    also: [],
+    dateFromId: "1",
+    depth: "recheck",
+    cid: 0,
+    on: true,
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: "chk_seed_lead_out",
+    num: 3,
+    seed: "lead-out",
+    name: "Лид без группы",
+    meaning: "Лид и ни в одной живой группе. Прочитать колонку и сверить кассу на шаге 6. Шаги 1–5 ему не положены.",
+    audience: ["leads-out"],
+    steps: [],
+    also: ["step6-columns", "step6-cash"],
+    dateFromId: "1",
+    depth: "recheck",
+    cid: 0,
+    on: true,
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: "chk_seed_arch_out",
+    num: 4,
+    seed: "arch-out",
+    name: "Архив, уже не ходит",
+    meaning: "Карточка в архиве и в живой группе её нет. Прочитать архив и сверить кассу шага 7. Тех, кто архивный, но ещё ходит, сюда не брать.",
+    audience: ["arch-out"],
+    steps: [],
+    also: ["step7-list", "step7-cash"],
+    dateFromId: "1",
+    depth: "recheck",
+    cid: 0,
+    on: true,
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: "chk_seed_arch_in",
+    num: 5,
+    seed: "arch-in",
+    name: "Архивный, но ещё ходит",
+    meaning: "В Alfa архив, а состав живой группы его ещё держит. Состав и календарь как у ходящих. Шаг 7 не открывать.",
+    audience: ["arch-in"],
+    steps: [1, 2, 3, 4, 5],
+    also: [],
+    dateFromId: "1",
+    depth: "recheck",
+    cid: 0,
+    on: true,
+    createdAt: "",
+    updatedAt: "",
+  },
+];
+
+export function checkBand(audience: CheckAudience[]): "walk" | "lead" | "arch" | "mix" | "empty" {
+  const a = new Set(audience);
+  if (!a.size) return "empty";
+  const walk = a.has("one") || a.has("live") || a.has("leads-in") || a.has("arch-in");
+  const lead = a.has("leads-out");
+  const arch = a.has("arch-out");
+  const n = Number(walk) + Number(lead) + Number(arch);
+  if (n > 1) return "mix";
+  if (lead) return "lead";
+  if (arch) return "arch";
+  return "walk";
+}
+
+/** Серое «почему». Пустая строка — шаг можно включить. */
+export function checkStepWhy(audience: CheckAudience[], step: number): string {
+  const band = checkBand(audience);
+  if (band === "empty") return "Сначала отметьте, кого проверять.";
+  if (band === "mix") return "Это разные проверки. Снимите лишнюю галку или сделайте два шаблона.";
+  const onlyOne = audience.length === 1 && audience[0] === "one";
+  if (step === 1 || step === 3) {
+    if (band !== "walk") return step === 1 ? "Состав — для тех, кто в группе." : "Занятия групп — для тех, кто в группе.";
+    if (onlyOne) return "Состав и занятия групп не запускаются по одному человеку. Отметьте «Сейчас ходят».";
+    return "";
+  }
+  if (step === 2 || step === 4 || step === 5) {
+    if (band !== "walk") return "Это шаг ходящих, не лидов без группы и не архива вне групп.";
+    return "";
+  }
+  if (step === 6) {
+    if (band === "arch") return "Это не лиды. Для архива вне групп — шаг 7.";
+    if (band === "walk" && !audience.includes("leads-in") && !audience.includes("leads-out") && !onlyOne) return "Это не лиды.";
+    if (onlyOne) return "";
+    if (band === "lead" || audience.includes("leads-in") || audience.includes("one")) return "";
+    return "Это не лиды.";
+  }
+  if (band !== "arch") return "Шаг 7 — только архив не в группах.";
+  return "";
+}
+
+export const CHECK_STEP_LABEL: Record<number, string> = {
+  1: "Состав групп",
+  2: "Календарь человека",
+  3: "Занятия групп",
+  4: "Касса на диск",
+  5: "Сверка остатка",
+};
+
+export const CHECK_ALSO_LABEL: Record<string, string> = {
+  "step6-recount": "Пересчёт лидов",
+  "step6-columns": "Колонки лидов",
+  "step6-cash": "Касса лида",
+  "step7-list": "Прочитать архив",
+  "step7-cash": "Касса архива",
+};
+
+export const CHECK_WHO_LABEL: Record<CheckAudience, string> = {
+  one: "Один человек",
+  live: "Сейчас ходят",
+  "leads-in": "Лиды в действующих группах",
+  "leads-out": "Лиды без группы",
+  "arch-in": "Архив, но ещё в группе",
+  "arch-out": "Архив не в группах",
+};
+
+/** Красная загрузка: режим без «-recheck». Синяя труба ночи этот список не получает. */
+export function redModeOf(mode: string): string {
+  if (mode === "roster-recheck") return "roster";
+  if (mode === "people-recheck") return "people";
+  if (mode === "groups-recheck") return "groups";
+  return mode;
+}
+
+export const DEPTH_PIPE = "depth=full";
+
+const JOB_ALSO = ["step6-recount", "step6-columns", "step6-cash", "step7-list", "step7-cash"] as const;
+
+function jobAlso(ids: string[] | undefined, drop = "") {
+  return (ids || []).filter((id) => id !== drop && (JOB_ALSO as readonly string[]).includes(id));
+}
 
 export const PLAN_DUE_MS = 36 * 60 * 60 * 1000;
 export const PLAN_SLOT_MIN = 15;
@@ -271,12 +461,56 @@ export function scheduleOf(raw: unknown, fallbackId = ""): HistorySchedule {
     leads: r.leads !== false,
     archGroups: r.archGroups !== false,
     steps: Array.isArray(r.steps) ? [...new Set(r.steps.map((n) => Number(n)).filter((n) => n >= 1 && n <= 7))].sort((a, b) => a - b) : undefined,
-    also: Array.isArray(r.also) ? STEP6_PIPE.filter((id) => (r.also as unknown[]).includes(id)) : undefined,
+    also: Array.isArray(r.also) ? [...STEP6_PIPE, "step7-list", "step7-cash"].filter((id) => (r.also as unknown[]).includes(id)) : undefined,
+    templateId: String(r.templateId || "").trim(),
+    depth: r.depth === "full" ? "full" : undefined,
     dueAt: String(r.dueAt || ""),
     lastFiredAt: String(r.lastFiredAt || ""),
     lastJobId: String(r.lastJobId || ""),
     lastSkip: String(r.lastSkip || ""),
   };
+}
+
+export function templateOf(raw: unknown, fallbackNum = 0): CheckTemplate | null {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const id = String(r.id || "").trim();
+  if (!id) return null;
+  const meaning = String(r.meaning || "").trim().slice(0, 500);
+  const audience = Array.isArray(r.audience)
+    ? [...new Set(r.audience.map((x) => String(x)).filter((x): x is CheckAudience => CHECK_AUDIENCE.has(x as CheckAudience)))]
+    : [];
+  const steps = Array.isArray(r.steps) ? [...new Set(r.steps.map((n) => Number(n)).filter((n) => n >= 1 && n <= 5))].sort((a, b) => a - b) : [];
+  const also = Array.isArray(r.also) ? [...CHECK_ALSO].filter((x) => (r.also as unknown[]).includes(x)) : [];
+  const from = PLAN_FROM_OPTS.some((o) => o.id === r.dateFromId) ? (r.dateFromId as PlanFromId) : "1";
+  return {
+    id,
+    num: Math.max(0, Number(r.num) || fallbackNum),
+    seed: String(r.seed || "").trim(),
+    name: String(r.name || "").trim().slice(0, 80) || "Проверка",
+    meaning,
+    audience,
+    steps,
+    also,
+    dateFromId: from,
+    depth: r.depth === "full" ? "full" : "recheck",
+    cid: Math.max(0, Number(r.cid) || 0),
+    on: r.on !== false,
+    createdAt: String(r.createdAt || ""),
+    updatedAt: String(r.updatedAt || ""),
+  };
+}
+
+export function templatesOf(raw: unknown): CheckTemplate[] {
+  if (!Array.isArray(raw)) return CHECK_SEEDS.map((s) => ({ ...s }));
+  const out: CheckTemplate[] = [];
+  const seen = new Set<string>();
+  for (const row of raw) {
+    const t = templateOf(row, out.length + 1);
+    if (!t || seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push(t);
+  }
+  return out;
 }
 
 export function policyOf(raw: unknown): CrmSyncPolicy {
@@ -294,6 +528,7 @@ export function policyOf(raw: unknown): CrmSyncPolicy {
   return {
     planEnabled: Boolean(r.planEnabled),
     plan,
+    templates: templatesOf(r.templates),
   };
 }
 
@@ -309,6 +544,10 @@ export function canSavePolicy(p: CrmSyncPolicy): { ok: true } | { ok: false; err
     if (s.when.kind === "interval" && s.when.every < 1) {
       return { ok: false, error: "Интервал — целое число от 1." };
     }
+  }
+  for (const t of p.templates || []) {
+    if (!String(t.meaning || "").trim()) return { ok: false, error: "У шаблона нет пояснения, когда его применять." };
+    if (checkBand(t.audience) === "mix") return { ok: false, error: "В шаблоне смешаны разные проверки." };
   }
   return { ok: true };
 }
@@ -350,11 +589,121 @@ export function planFromIdToRecheckDays(id: string): number {
   return 4000;
 }
 
+export function checkCode(num: number) {
+  return `Ш-${String(Math.max(0, num)).padStart(4, "0")}`;
+}
+
+export function nextCheckNum(templates: CheckTemplate[]) {
+  return templates.reduce((m, t) => Math.max(m, Number(t.num) || 0), 0) + 1;
+}
+
+/** Поля ночного слота и ручного запуска. Шаги 6 и 7 — только в also, не номером. */
+export function checkRunFields(t: Pick<CheckTemplate, "audience" | "steps" | "also">) {
+  const onlyOne = t.audience.length === 1 && t.audience[0] === "one";
+  const steps = (t.steps || []).filter((n) => n >= 1 && n <= 5 && !checkStepWhy(t.audience, n));
+  const also = (t.also || []).filter((id) => {
+    if (id.startsWith("step7")) return !checkStepWhy(t.audience, 7);
+    if (id.startsWith("step6")) return !checkStepWhy(t.audience, 6);
+    return false;
+  });
+  return {
+    study: "1" as const,
+    leads: t.audience.includes("live") || t.audience.includes("leads-in"),
+    archGroups: t.audience.includes("arch-in"),
+    steps,
+    also,
+    one: onlyOne,
+  };
+}
+
+export function applyTemplateToSlots(plan: HistorySchedule[], t: CheckTemplate): HistorySchedule[] {
+  const f = checkRunFields(t);
+  return plan.map((s) => {
+    if (s.templateId !== t.id) return s;
+    return {
+      ...s,
+      mode: "auto",
+      study: f.study,
+      leads: f.leads,
+      archGroups: f.archGroups,
+      steps: f.steps,
+      also: f.also,
+      dateFromId: t.dateFromId,
+      depth: t.depth,
+      label: t.name.slice(0, 80),
+      recheckDays: planFromIdToRecheckDays(t.dateFromId),
+    };
+  });
+}
+
+export function packCheckName(p: {
+  person?: string;
+  leads: boolean;
+  archGroups: boolean;
+  steps: number[];
+  also: string[];
+  depth: CheckDepth;
+  templateId?: string;
+  meaning?: string;
+  who?: string;
+  window?: string;
+}) {
+  const flags = [
+    `leads=${p.leads ? 1 : 0}`,
+    `archGroups=${p.archGroups ? 1 : 0}`,
+    `steps=${p.steps.join(",")}`,
+    `also=${p.also.join(",")}`,
+    `depth=${p.depth === "full" ? "full" : "recheck"}`,
+    p.templateId ? `tpl=${encodeURIComponent(p.templateId)}` : "",
+    p.meaning ? `mean=${encodeURIComponent(p.meaning).slice(0, 700)}` : "",
+    p.who ? `who=${encodeURIComponent(p.who)}` : "",
+    p.window ? `win=${encodeURIComponent(p.window)}` : "",
+  ]
+    .filter(Boolean)
+    .join("&");
+  const person = String(p.person || "").replace(/&/g, " ").trim();
+  return person ? `${person}&${flags}` : flags;
+}
+
+export function planRunText(name: string) {
+  const raw = String(name || "");
+  if (!/(?:^|&)tpl=/.test(raw)) return "";
+  const pick = (k: string) => {
+    const m = raw.match(new RegExp(`(?:^|&)${k}=([^&]*)`));
+    if (!m) return "";
+    try {
+      return decodeURIComponent(m[1].replace(/\+/g, " ")).trim();
+    } catch {
+      return m[1].trim();
+    }
+  };
+  const depth = /(?:^|&)depth=full(?:&|$)/.test(raw) ? "только пустые" : "перепроверить";
+  return [pick("tpl"), pick("mean"), pick("who"), pick("win") ? `окно ${pick("win")}` : "", depth]
+    .filter(Boolean)
+    .join(" · ")
+    .slice(0, 180);
+}
+
 export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
+  return finishDepth(rule, planRuleBody(now, rule));
+}
+
+function finishDepth<T extends { mode: string; recheck: boolean; pipe: readonly string[] }>(rule: HistorySchedule, job: T): T {
+  if (rule.depth !== "full") return job;
+  const pipe = job.pipe.filter((id) => id !== DEPTH_PIPE);
+  return {
+    ...job,
+    mode: redModeOf(job.mode) as T["mode"],
+    recheck: false,
+    pipe: [...pipe, DEPTH_PIPE] as unknown as T["pipe"],
+  };
+}
+
+function planRuleBody(now: Date, rule: HistorySchedule) {
   const fromId = planFromIdOf(rule.study, rule.dateFromId);
   if (rule.mode === "auto") {
     const custom = Array.isArray(rule.steps);
-    const also = (rule.also || []).filter((id) => (STEP6_PIPE as readonly string[]).includes(id));
+    const also = jobAlso(rule.also);
     if (!custom && !also.length) {
       return {
         mode: "roster-recheck" as const,
@@ -400,7 +749,7 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
   }
   if (rule.mode === "step6-recount" || rule.mode === "step6-columns" || rule.mode === "step6-cash") {
     const nums = rule.steps || [];
-    const also = (rule.also || []).filter((id) => id !== rule.mode && (STEP6_PIPE as readonly string[]).includes(id));
+    const also = jobAlso(rule.also, rule.mode);
     if (!nums.length) {
       return {
         mode: rule.mode,
@@ -642,16 +991,25 @@ export function markPlanDue(policy: CrmSyncPolicy, now = new Date()): CrmSyncPol
 
 export function pickDueRule(policy: CrmSyncPolicy, now = new Date()): HistorySchedule | null {
   if (!policy.planEnabled) return null;
-  return (
-    policy.plan.find((r) => {
+  const due = policy.plan
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => {
       if (!r.on || !r.dueAt) return false;
       if (r.lastSkip === "pipe") {
         const t = Date.parse(r.lastFiredAt || r.dueAt);
         if (Number.isFinite(t) && now.getTime() - t < 20 * 60 * 1000) return false;
       }
       return true;
-    }) || null
-  );
+    })
+    .sort((a, b) => {
+      const ta = parsePlanAt(a.r.at);
+      const tb = parsePlanAt(b.r.at);
+      const da = ta.h * 60 + ta.m;
+      const db = tb.h * 60 + tb.m;
+      if (da !== db) return da - db;
+      return a.i - b.i;
+    });
+  return due[0]?.r || null;
 }
 
 export function stampPlanFired(policy: CrmSyncPolicy, id: string, jobId: string, now = new Date()): CrmSyncPolicy {
@@ -702,6 +1060,7 @@ export function mergePolicyRunStamps(disk: CrmSyncPolicy, run: HistorySchedule[]
   const byId = new Map(run.map((r) => [r.id, r]));
   return {
     planEnabled: disk.planEnabled,
+    templates: disk.templates || [],
     plan: disk.plan.map((s) => {
       const p = byId.get(s.id);
       if (!p) return s;
@@ -721,6 +1080,7 @@ export function mergePolicyKeepRun(disk: CrmSyncPolicy, incoming: CrmSyncPolicy)
   const byId = new Map(disk.plan.map((r) => [r.id, r]));
   return {
     planEnabled: incoming.planEnabled,
+    templates: incoming.templates || disk.templates || [],
     plan: incoming.plan.map((s) => {
       const prev = byId.get(s.id);
       if (!prev) return s;
@@ -732,6 +1092,10 @@ export function mergePolicyKeepRun(disk: CrmSyncPolicy, incoming: CrmSyncPolicy)
         prev.recheckDays === s.recheckDays &&
         prev.leads === s.leads &&
         prev.archGroups === s.archGroups &&
+        prev.depth === s.depth &&
+        prev.templateId === s.templateId &&
+        JSON.stringify(prev.steps || []) === JSON.stringify(s.steps || []) &&
+        JSON.stringify(prev.also || []) === JSON.stringify(s.also || []) &&
         JSON.stringify(prev.when) === JSON.stringify(s.when);
       if (!same) {
         return {

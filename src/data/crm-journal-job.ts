@@ -7,7 +7,7 @@ import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd, groupJournalGreen }
 import { loadSyncPolicy, saveSyncPolicyRun } from "./crm-sync-policy.ts";
 import { appendPlanLog, loadPlanLog } from "./crm-sync-plan-log.ts";
 import { observeJobClose, observeJobStart } from "./crm-step-run-log.ts";
-import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, scheduleOf, stampPlanFired, stampPlanSkip, stampPlanRun, stampPlanHandsExcept } from "./crm-sync-policy-core.ts";
+import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, planRunText, packCheckName, scheduleOf, stampPlanFired, stampPlanSkip, stampPlanRun, stampPlanHandsExcept } from "./crm-sync-policy-core.ts";
 import {
   emptyJournalJob,
   jobGapOf,
@@ -497,7 +497,10 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   const skipLeads = Boolean(opts.skipLeads) || /(?:^|&)leads=0(?:&|$)/.test(String(opts.name || ""));
   const personOnly = Boolean(String(opts.oneName || "").trim()) && (mode === "roster-recheck" || mode === "groups-recheck");
   const pinnedGroups = personOnly || (opts.items || []).some((r) => Number(r.groupId));
-  let recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
+  let recheck =
+    opts.recheck === false
+      ? false
+      : Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
   const span = Boolean(String(opts.dateFrom || "").trim() && String(opts.dateTo || "").trim());
   const freezeIce = Boolean(recheck) || span;
   let items = buildItems({ ...opts, kind, recheck, skipLeads });
@@ -637,9 +640,10 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     /* лог */
   }
   if (!opts.fromPipe) {
+    const stamp = planRunText(String(opts.name || ""));
     notePlan({
       kind: "start",
-      text: `${modeRu(mode, kind)} · ${study === "2" ? "архив" : "ходят"} · ${first?.name || "очередь"}${job.total ? ` · ${job.total}` : ""}${job.pipe.length ? ` · дальше ${job.pipe.length}` : ""}`,
+      text: `${stamp ? `${stamp}. ` : ""}${modeRu(mode, kind)} · ${study === "2" ? "архив" : "ходят"} · ${first?.name || "очередь"}${job.total ? ` · ${job.total}` : ""}${job.pipe.length ? ` · дальше ${job.pipe.length}` : ""}`.slice(0, 270),
       who: first?.name || "",
       cid: Number(first?.cid) || 0,
       mode,
@@ -695,6 +699,7 @@ export function startOnePersonStep(p: {
   study?: "1" | "2";
   dateFrom?: string;
   recheckDays?: number;
+  recheck?: boolean;
   id?: string;
   fromPipe?: boolean;
 }) {
@@ -715,7 +720,7 @@ export function startOnePersonStep(p: {
     oneName: name,
     dateFrom: p.dateFrom || "",
     recheckDays: p.recheckDays,
-    recheck: true,
+    recheck: p.recheck !== false,
     pipe: p.pipe || [],
     src: "hands" as const,
     fromPipe: p.fromPipe,
@@ -734,7 +739,9 @@ export function startOnePersonStep(p: {
 }
 
 function continueAutoPipe(job: JournalJob) {
-  const rest = (job.pipe || []).map(String).filter(Boolean);
+  const rawRest = (job.pipe || []).map(String).filter(Boolean);
+  const full = rawRest.includes("depth=full");
+  const rest = rawRest.filter((x) => x !== "depth=full");
   if (!rest.length) {
     closePlanSlot(job, true);
     return;
@@ -752,17 +759,19 @@ function continueAutoPipe(job: JournalJob) {
     closePlanSlot(job, true);
     return;
   }
+  const carry = full && rest.length > 1 ? ["depth=full"] : [];
   if (String(next).startsWith("one:")) {
     const step = Number(String(next).slice(4));
     startOnePersonStep({
       step,
-      pipe: rest.slice(1),
+      pipe: [...rest.slice(1), ...carry],
       customerId: job.customerId,
       branchId: job.branchId,
       oneName: job.oneName || job.cur,
       study: job.study,
       dateFrom: job.dateFrom,
       recheckDays: job.recheckDays,
+      recheck: full ? false : true,
       id: job.id,
       fromPipe: true,
     });
@@ -783,7 +792,7 @@ function continueAutoPipe(job: JournalJob) {
     dateFrom: job.dateFrom,
     dateTo: job.dateTo,
     recheckDays: days,
-    pipe: rest.slice(1),
+    pipe: [...rest.slice(1), ...carry],
     src: "plan" as const,
     fromPipe: true,
     skipLeads: job.skipLeads,
@@ -801,23 +810,35 @@ function continueAutoPipe(job: JournalJob) {
   if (next === "groups-archived") {
     startJournalJob({
       ...base,
-      mode: "groups-recheck",
+      mode: full ? "groups" : "groups-recheck",
       kind: "group",
-      recheck: true,
+      recheck: !full,
       archived: true,
     });
     return;
   }
-  if (next === "people" || next === "people-recheck") {
+  if (!full && (next === "people" || next === "people-recheck")) {
     startJournalJob({ ...base, mode: "people-recheck", kind: "students", recheck: true, archived: job.archived });
     return;
   }
-  if (next === "groups" || next === "groups-recheck") {
+  if (next === "people" || next === "people-recheck") {
+    startJournalJob({ ...base, mode: "people", kind: "students", recheck: false, archived: job.archived });
+    return;
+  }
+  if (!full && (next === "groups" || next === "groups-recheck")) {
     startJournalJob({ ...base, mode: "groups-recheck", kind: "group", recheck: true, archived: job.archived });
     return;
   }
-  if (next === "balance") {
+  if (next === "groups" || next === "groups-recheck") {
+    startJournalJob({ ...base, mode: "groups", kind: "group", recheck: false, archived: job.archived });
+    return;
+  }
+  if (!full && next === "balance") {
     startJournalJob({ ...base, mode: "people-recheck", kind: "balance", recheck: true, archived: job.archived });
+    return;
+  }
+  if (next === "balance") {
+    startJournalJob({ ...base, mode: "people", kind: "balance", recheck: false, archived: job.archived });
     return;
   }
   if (next === "audit") {
@@ -847,11 +868,11 @@ function continueAutoPipe(job: JournalJob) {
     mode: opts.mode as JournalJobMode,
     kind: opts.kind,
     study: job.study,
-    recheck: true,
+    recheck: full ? false : true,
     recheckDays: days,
     dateFrom: job.dateFrom || opts.dateFrom,
     archived: opts.archived,
-    pipe: rest.slice(1),
+    pipe: [...rest.slice(1), ...carry],
     src: "plan",
     fromPipe: true,
     skipLeads: job.skipLeads,
@@ -934,6 +955,7 @@ export function tickHistoryPlan(now = new Date()) {
   const rule = pickDueRule(pol);
   if (!rule) return;
   const opts = planRuleToJob(rule, now);
+  const tpl = (pol.templates || []).find((t) => t.id === rule.templateId);
   const before = job;
   const started = startJournalJob({
     mode: opts.mode as JournalJobMode,
@@ -946,6 +968,17 @@ export function tickHistoryPlan(now = new Date()) {
     pipe: opts.pipe,
     src: "plan",
     skipLeads: Boolean((opts as { skipLeads?: boolean }).skipLeads),
+    name: packCheckName({
+      leads: !Boolean((opts as { skipLeads?: boolean }).skipLeads),
+      archGroups: rule.archGroups !== false,
+      steps: rule.steps || [],
+      also: rule.also || [],
+      depth: rule.depth === "full" ? "full" : "recheck",
+      templateId: rule.templateId,
+      meaning: tpl?.meaning || "",
+      who: tpl?.name || rule.label,
+      window: rule.dateFromId,
+    }),
   });
   const dec = planFireDecision(before, started);
   const live = loadSyncPolicy();

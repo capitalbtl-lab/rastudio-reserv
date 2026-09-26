@@ -624,14 +624,14 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /kind: "jobStart"/);
     assert.match(ui, /kind: "jobStatus"/);
     assert.match(ui, /jobMode: "auto"/);
-    assert.match(plan, /Перепроверить шаги 1–5 сейчас/);
+    assert.match(plan, /Перепроверить: дописать недостающее/);
     assert.match(plan, /Архив действующих групп/);
     assert.match(plan, /Сейчас ходят/);
     assert.match(plan, /Лиды действующих групп/);
     assert.match(plan, /Какие шаги/);
-    assert.match(plan, /6 пересчет лидов/);
-    assert.match(plan, /6 колонки/);
-    assert.match(plan, /6 касса/);
+    assert.match(plan, /Колонки лидов/);
+    assert.match(plan, /Касса лида/);
+    assert.match(plan, /Прочитать архив/);
     assert.match(plan, /step6-cash/);
     assert.match(plan, /mode === "auto"/);
     assert.match(plan, /planFromIdToRecheckDays/);

@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import {
   POLICY_FACTORY,
   canSavePolicy,
+  checkBand,
+  checkStepWhy,
   fromMsk,
   markPlanDue,
   mergePolicyKeepRun,
@@ -544,6 +546,50 @@ describe("пульт Истории", () => {
     assert.deepEqual(built.pipe, ["step7-cash"]);
     assert.deepEqual(journalStartOf("step7-list"), { mode: "step7-list", kind: "students", recheck: false });
     assert.deepEqual(journalStartOf("step7-cash"), { mode: "step7-cash", kind: "students", recheck: false });
+  });
+
+  it("шаблоны: нет ключа — пять семян, пустой массив — не засевать", () => {
+    assert.equal(policyOf({}).templates.length, 5);
+    assert.equal(policyOf({ templates: [] }).templates.length, 0);
+    assert.equal(policyOf({ templates: [] }).planEnabled, false);
+  });
+
+  it("ночь архива вне групп не теряет шаг 7", () => {
+    const job = planRuleToJob(scheduleOf({
+      id: "a",
+      mode: "auto",
+      steps: [],
+      also: ["step7-list", "step7-cash"],
+      when: { kind: "daily" },
+      at: "04:00",
+    }));
+    assert.equal(job.mode, "step7-list");
+    assert.deepEqual(job.pipe, ["step7-cash"]);
+  });
+
+  it("с нуля не включает синюю перепроверку", () => {
+    const job = planRuleToJob(scheduleOf({
+      id: "f",
+      mode: "auto",
+      steps: [1, 2],
+      depth: "full",
+      when: { kind: "daily" },
+      at: "04:00",
+      dateFromId: "1",
+    }));
+    assert.equal(job.mode, "roster");
+    assert.equal(job.recheck, false);
+    assert.ok(job.pipe.includes("people"));
+    assert.ok(job.pipe.includes("depth=full"));
+    assert.equal(job.pipe.filter((id) => id === "people-recheck").length, 0);
+  });
+
+  it("один человек и лиды без группы — разные проверки", () => {
+    assert.equal(checkBand(["one", "leads-out"]), "mix");
+    assert.equal(checkBand(["one"]), "walk");
+    assert.equal(checkStepWhy(["leads-out"], 2).length > 0, true);
+    assert.equal(checkStepWhy(["arch-out"], 7), "");
+    assert.equal(checkStepWhy(["live"], 6).length > 0, true);
   });
 
 });

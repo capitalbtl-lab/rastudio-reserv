@@ -15,7 +15,7 @@ import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-period
 import { keepAlfa, peopleLessonsLine, peopleStudentAction, peopleStudentBadge, peopleStudentHint, PEOPLE_PACK } from "@/data/crm-people-line";
 import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 import { RECHECK_DAY_OPTS, clampRecheckDays, groupJournalGreen, type RecheckDays } from "@/data/crm-inbound-core";
-import { POLICY_FACTORY, planDateFrom, planFromIdOf, planFromIdToRecheckDays, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
+import { POLICY_FACTORY, packCheckName, planDateFrom, planFromIdOf, planFromIdToRecheckDays, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
 import { HistoryPlanModal } from "@/components/admin-history-plan";
 import { StepRunLogModal } from "@/components/admin-step-run-log";
 import { step5Close, step5FitRemainder, step5ReviveEmptySkip, step6DiskAgrees } from "@/data/crm-step5-canon";
@@ -4889,55 +4889,45 @@ export function AdminCrmSettings() {
                 people={[...(journal?.progress?.live?.people || []), ...(journal?.progress?.archive?.people || [])].map((p) => ({ cid: p.cid, name: p.name }))}
                 focus={planFocus}
                 onSave={(next) => void saveSyncPolicy(next)}
-                onRunAuto={(opts) =>
-                  void startHistJob({
-                    jobMode: "auto",
-                    study: opts.study,
-                    dateFrom: planDateFrom(planFromIdOf(opts.study, opts.dateFromId)),
-                    recheckDays: planFromIdToRecheckDays(planFromIdOf(opts.study, opts.dateFromId)),
-                    archived: opts.study === "2",
-                    name: `leads=${opts.leads ? 1 : 0}&archGroups=${opts.archGroups ? 1 : 0}&steps=${(opts.steps || []).join(",")}&also=${(opts.also || []).join(",")}`,
-                  })
-                }
-                onRunOne={(opts) => {
+                onRunCheck={(opts) => {
+                  const from = planFromIdOf("1", opts.dateFromId);
                   const people = [
                     ...(journal?.progress?.live?.people || []),
                     ...(journal?.progress?.archive?.people || []),
                   ];
                   const hit = people.find((p) => p.cid === opts.cid);
-                  const from = planFromIdOf("1", opts.dateFromId);
-                  const name = hit?.name || `№${opts.cid}`;
-                  const branchId = Number(hit?.branchId) || undefined;
-                  if (opts.kind === "step6-cash" || opts.kind === "step6-columns" || opts.kind === "step6-recount") {
+                  const name = packCheckName({
+                    person: opts.one ? hit?.name || opts.personName : "",
+                    leads: opts.leads,
+                    archGroups: opts.archGroups,
+                    steps: opts.steps,
+                    also: opts.also,
+                    depth: opts.depth,
+                    templateId: opts.templateId,
+                    meaning: opts.meaning,
+                    who: opts.who,
+                    window: opts.window,
+                  });
+                  if (opts.one) {
                     void startHistJob({
-                      jobMode: opts.kind,
+                      jobMode: "person-steps",
                       study: "1",
                       customerId: opts.cid,
-                      branchId,
+                      branchId: Number(hit?.branchId) || undefined,
                       name,
-                    });
-                    return;
-                  }
-                  if (opts.kind === "audit") {
-                    void startHistJob({
-                      jobMode: "audit",
-                      study: "1",
-                      customerId: opts.cid,
-                      branchId,
-                      name,
+                      recheck: opts.depth !== "full",
+                      dateFrom: planDateFrom(from),
+                      recheckDays: planFromIdToRecheckDays(from),
+                      steps: opts.steps.filter((n) => n === 2 || n === 4 || n === 5).join(","),
                     });
                     return;
                   }
                   void startHistJob({
-                    jobMode: "person",
-                    peopleKind: "students",
+                    jobMode: "auto",
                     study: "1",
-                    recheck: true,
-                    customerId: opts.cid,
-                    branchId,
-                    name,
                     dateFrom: planDateFrom(from),
                     recheckDays: planFromIdToRecheckDays(from),
+                    name,
                   });
                 }}
               />

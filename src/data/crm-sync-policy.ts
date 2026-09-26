@@ -35,7 +35,7 @@ function fileOf() {
 
 export function loadSyncPolicy(): CrmSyncPolicy {
   try {
-    if (!existsSync(fileOf())) return { ...POLICY_FACTORY, plan: [] };
+    if (!existsSync(fileOf())) return policyOf({});
     return policyOf(JSON.parse(readFileSync(fileOf(), "utf8")));
   } catch {
     return { ...POLICY_FACTORY, plan: [] };
@@ -50,6 +50,7 @@ export function saveSyncPolicy(
   let next = policyOf({
     planEnabled: patch.planEnabled ?? cur.planEnabled,
     plan: Array.isArray(patch.plan) ? patch.plan : cur.plan,
+    templates: Array.isArray(patch.templates) ? patch.templates : cur.templates,
   });
   if (opts?.keepRun) next = mergePolicyKeepRun(cur, next);
   const gate = canSavePolicy(next);
