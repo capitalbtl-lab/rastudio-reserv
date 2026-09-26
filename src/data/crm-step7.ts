@@ -124,24 +124,24 @@ export async function syncStep7List() {
   const notes: string[] = [];
   const failed = new Set<number>();
   let dropped = 0;
-  let clients = 0;
-  let leads = 0;
   for (const branch of BRANCHES) {
     try {
+      const branchCards = new Map<number, LeadCard>();
       let n = 0;
+      let branchDropped = 0;
       for (const studyFilter of [1, 0] as const) {
         const rows = await readPages(`/v2api/${branch}/customer/index`, { is_study: studyFilter, removed: 2 }, tok);
         for (const row of rows) {
           if (!step7KeepAny({ ...row, is_study: step7ListStudy(row, studyFilter) }, live)) {
-            if (live.has(Number(row.id))) dropped += 1;
+            if (live.has(Number(row.id))) branchDropped += 1;
             continue;
           }
           const id = Number(row.id);
-          if (byId.has(id)) continue;
+          if (byId.has(id) || branchCards.has(id)) continue;
           const study = step7ListStudy(row, studyFilter);
           const rejectId = step7RejectId(row, study);
           const names = study === 0 ? leadReasons : clientReasons;
-          byId.set(id, {
+          branchCards.set(id, {
             id,
             customerId: id,
             branchId: branch,
@@ -164,10 +164,10 @@ export async function syncStep7List() {
             archivedAt: step7ArchiveDay(row),
           });
           n += 1;
-          if (study === 0) leads += 1;
-          else clients += 1;
         }
       }
+      for (const [id, card] of branchCards) if (!byId.has(id)) byId.set(id, card);
+      dropped += branchDropped;
       notes.push(`${branch}: ${n}`);
     } catch (e) {
       failed.add(branch);
@@ -176,5 +176,11 @@ export async function syncStep7List() {
   }
   const kept = step7KeepFailedBranch([...byId.values()], peekStep7Board()?.items || [], failed);
   const board = replaceStep7List(kept);
+  let clients = 0;
+  let leads = 0;
+  for (const card of board.items) {
+    if (card.study === 0) leads += 1;
+    else if (card.study === 1) clients += 1;
+  }
   return { ok: true as const, note: `Шаг 7 · архив ${board.items.length} · клиенты ${clients} · лиды ${leads} · в живых группах снято ${dropped} · ${notes.join(" · ")}` };
 }
