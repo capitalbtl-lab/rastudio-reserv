@@ -84,4 +84,20 @@ jobs:
             tail -n 80 /root/.pm2/logs/rastudio-error-8.log 2>/dev/null
             echo "=== port ==="
             ss -ltnp | grep 3000 || echo no-3000
+            echo "=== step7 groups ==="
+            node --input-type=module <<'NODE'
+            import { readFileSync } from "fs";
+            const raw = JSON.parse(readFileSync("/var/www/rastudio/storage/crm-leads-board.json", "utf8"));
+            const items = raw.keys?.["7"]?.items || [];
+            let had = 0, no = 0, undef = 0, leads = 0, clients = 0, norole = 0;
+            for (const x of items) {
+              if (x.hadGroups === true) had += 1;
+              else if (x.hadGroups === false) no += 1;
+              else undef += 1;
+              if (x.study === 0) leads += 1;
+              else if (x.study === 1) clients += 1;
+              else norole += 1;
+            }
+            console.log(JSON.stringify({ total: items.length, had, no, undef, leads, clients, norole, note: String(raw.keys?.["7"]?.note || "").slice(0, 240) }));
+            NODE
             exit 0
