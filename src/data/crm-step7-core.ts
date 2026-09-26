@@ -50,6 +50,19 @@ export function step7KeepAny(row: { id?: unknown; is_study?: unknown; removed?: 
   return step7Study(row) != null;
 }
 
+/** Успешный филиал заменяется. Филиал, который оборвался, остаётся как был. */
+export function step7KeepFailedBranch<T extends { id: number; branchId: number }>(next: T[], prev: T[], failed: Iterable<number>) {
+  const bad = new Set(failed);
+  if (!bad.size) return next;
+  const byId = new Map(next.map((card) => [card.id, card]));
+  for (const card of prev) {
+    if (!bad.has(card.branchId)) continue;
+    if (byId.has(card.id)) continue;
+    byId.set(card.id, card);
+  }
+  return [...byId.values()];
+}
+
 export function step7HadGroups(row: { group_ids?: unknown; groups?: unknown }) {
   return idList(row.group_ids).length > 0 || idList(row.groups).length > 0;
 }

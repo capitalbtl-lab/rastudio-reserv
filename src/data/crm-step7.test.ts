@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { step7ArchiveDay, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7ListStudy, step7RejectId, step7Shows } from "./crm-step7-core.ts";
+import { step7ArchiveDay, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId, step7Shows } from "./crm-step7-core.ts";
 
 describe("шаг 7", () => {
   const live = new Set([10]);
@@ -53,6 +53,17 @@ describe("шаг 7", () => {
     assert.equal(step7KeepAny({ id: 3, is_study: 0, removed: 2 }, live), true);
     assert.equal(step7KeepAny({ id: 4, is_study: 0, removed: 0 }, live), false);
     assert.equal(step7KeepAny({ id: 10, is_study: 0, removed: 2 }, live), false);
+  });
+
+  it("оборвавшийся филиал остаётся, успешный заменяется", () => {
+    const prev = [
+      { id: 1, branchId: 2 },
+      { id: 2, branchId: 1 },
+    ];
+    const next = [{ id: 3, branchId: 1 }];
+    const kept = step7KeepFailedBranch(next, prev, [2]);
+    assert.deepEqual(kept.map((x) => x.id).sort(), [1, 3]);
+    assert.deepEqual(step7KeepFailedBranch(next, prev, []), next);
   });
 
   it("фио, группы и дата архива", () => {

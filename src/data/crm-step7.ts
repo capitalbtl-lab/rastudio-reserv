@@ -2,11 +2,11 @@
 
 import { request, token as alfaToken, dropAlfaIndex } from "./alfacrm";
 import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
-import { replaceStep7List } from "./crm-leads";
+import { replaceStep7List, peekStep7Board } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup } from "./dossiers";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-import { step7ArchiveDay, step7Dob, step7HadGroups, step7KeepAny, step7ListStudy, step7RejectId } from "./crm-step7-core";
+import { step7ArchiveDay, step7Dob, step7HadGroups, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId } from "./crm-step7-core";
 import { recheckStep7Cash } from "./crm-step6";
 import type { LeadCard } from "./crm-leads-stages";
 
@@ -122,6 +122,7 @@ export async function syncStep7List() {
   const leadReasons = await rejectNames(tok, "lead-reject");
   const byId = new Map<number, LeadCard>();
   const notes: string[] = [];
+  const failed = new Set<number>();
   let dropped = 0;
   let clients = 0;
   let leads = 0;
@@ -169,9 +170,11 @@ export async function syncStep7List() {
       }
       notes.push(`${branch}: ${n}`);
     } catch (e) {
-      notes.push(`${branch}: ${e instanceof Error ? e.message : "обрыв"}`);
+      failed.add(branch);
+      notes.push(`${branch}: оставлено · ${e instanceof Error ? e.message : "обрыв"}`);
     }
   }
-  const board = replaceStep7List([...byId.values()]);
+  const kept = step7KeepFailedBranch([...byId.values()], peekStep7Board()?.items || [], failed);
+  const board = replaceStep7List(kept);
   return { ok: true as const, note: `Шаг 7 · архив ${board.items.length} · клиенты ${clients} · лиды ${leads} · в живых группах снято ${dropped} · ${notes.join(" · ")}` };
 }
