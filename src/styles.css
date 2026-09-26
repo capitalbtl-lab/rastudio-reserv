@@ -980,6 +980,20 @@
   animation: ra-progress-sheen 1.15s linear infinite;
 }
 
+@keyframes ra-btn-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.ra-btn-blink {
+  animation: ra-btn-blink 1s ease-in-out infinite;
+}
+
 @keyframes ra-mismatch {
   0%,
   100% {

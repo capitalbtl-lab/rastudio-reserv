@@ -2376,6 +2376,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [oneId, setOneId] = useState(0);
+  const [runMode, setRunMode] = useState("");
   const pollJob = useRef<ReturnType<typeof setInterval> | null>(null);
   const [items, setItems] = useState<Step6Item[]>([]);
   const [stages, setStages] = useState<LeadStage[]>(archive ? [{ id: 0, name: "Архив", color: "#6a6a6a", weight: 0, pipelineId: 0 }] : LEAD_STAGES);
@@ -2426,11 +2427,13 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       if (dead) return;
       try {
         const res = (await adminSchedule({ data: { token: token(), action: "journalPull", kind: "jobStatus" } as never })) as {
-          job?: { running?: boolean; stop?: boolean; mode?: string; msg?: string };
+          job?: { running?: boolean; stop?: boolean; mode?: string; msg?: string; customerId?: number };
         };
         const job = res.job;
         if (dead || !job?.running || job.stop || !modes.includes(String(job.mode || ""))) return;
         setBusy(true);
+        setRunMode(String(job.mode || ""));
+        setOneId(Number(job.customerId) || 0);
         setNote(job.msg || "Идёт на сервере…");
         watchServer();
       } catch {
@@ -2451,16 +2454,20 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
 
   async function paintServer() {
     const res = (await adminSchedule({ data: { token: token(), action: "journalPull", kind: "jobStatus" } as never })) as {
-      job?: { running?: boolean; msg?: string };
+      job?: { running?: boolean; stop?: boolean; mode?: string; msg?: string; customerId?: number };
     };
     const job = res.job;
     if (job?.msg) setNote(job.msg);
     await loadList();
-    if (!job?.running) {
+    if (!job?.running || job.stop) {
       stopPoll();
       setBusy(false);
       setOneId(0);
+      setRunMode("");
+      return;
     }
+    setRunMode(String(job.mode || ""));
+    setOneId(Number(job.customerId) || 0);
   }
 
   function watchServer() {
@@ -2479,6 +2486,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   function startServer(mode: string, customerId = 0) {
     setBusy(true);
     setOneId(customerId);
+    setRunMode(mode);
     setNote("Запускаю на сервере…");
     const filter = archive && mode === "step7-cash" ? JSON.stringify(archPick) : "";
     void adminSchedule({
@@ -2489,6 +2497,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         setNote(e instanceof Error ? e.message : "Сервер не запустил проверку.");
         setBusy(false);
         setOneId(0);
+        setRunMode("");
       });
   }
 
@@ -2587,7 +2596,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         </p>
         {ok ? null : (
           <div className="mt-2">
-            <button type="button" disabled={busy} className={cn(BTN_LOAD_SM, "w-fit px-4", oneId === x.id && "ra-progress-run", busy && oneId !== x.id && "opacity-50")} onClick={() => startServer(archive ? "step7-cash" : "step6-cash", x.id)}>
+            <button type="button" disabled={busy} className={cn(BTN_LOAD_SM, "w-fit px-4", runMode.endsWith("-cash") && oneId === x.id && "ra-btn-blink", busy && oneId !== x.id && "opacity-50")} onClick={() => startServer(archive ? "step7-cash" : "step6-cash", x.id)}>
               Перепроверить этого
             </button>
           </div>
@@ -2737,8 +2746,8 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         {note ? ` · ${note}` : ""}
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
-        <button type="button" className={cn(BTN_RED, busy && "ra-progress-run")} disabled={busy} onClick={() => startServer(archive ? "step7-list" : "step6-columns")}>{archive ? "Прочитать архив" : "Прочитать колонки"}</button>
-        <button type="button" className={BTN_GHOST} disabled={busy || !items.length} onClick={() => startServer(archive ? "step7-cash" : "step6-cash")}>Перепроверить кассу</button>
+        <button type="button" className={cn(BTN_RED, (runMode === "step6-columns" || runMode === "step7-list") && "ra-btn-blink")} disabled={busy} onClick={() => startServer(archive ? "step7-list" : "step6-columns")}>{archive ? "Прочитать архив" : "Прочитать колонки"}</button>
+        <button type="button" className={cn(BTN_GHOST, runMode.endsWith("-cash") && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(archive ? "step7-cash" : "step6-cash")}>Перепроверить кассу</button>
         <button type="button" className={BTN_GHOST} disabled={!busy} onClick={stopServer}>Стоп</button>
       </div>
       <input className="mt-3 h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10" placeholder={archive ? "Найти клиента…" : "Найти лида…"} value={query} onChange={(e) => { setQuery(e.target.value); setPageLeft(0); setPageRight(0); }} />

@@ -467,6 +467,7 @@ export function journalJobSnapshot() {
     waits: j.waits,
     itemsN: j.items.length,
     next: stop ? "" : nextName,
+    customerId: Number(j.customerId) || 0,
     workerSilent: stop ? false : historyWorkerSilent(j) && !historyWorkerProcessAlive(),
     recheckDays: j.recheckDays,
     dateFrom: j.dateFrom,
