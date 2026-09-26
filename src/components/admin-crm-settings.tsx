@@ -2377,6 +2377,10 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [busy, setBusy] = useState(false);
   const [oneId, setOneId] = useState(0);
   const [runMode, setRunMode] = useState("");
+  const [prog, setProg] = useState<{ n: number; cur: string } | null>(null);
+  const [justRight, setJustRight] = useState<number[]>([]);
+  const seenBoard = useRef(false);
+  const prevClosed = useRef<Set<number>>(new Set());
   const ownModes = archive ? ["step7-list", "step7-cash"] : ["step6-recount", "step6-columns", "step6-cash"];
   const listMode = archive ? "step7-list" : "step6-columns";
   const cashMode = archive ? "step7-cash" : "step6-cash";
@@ -2414,7 +2418,15 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       setNote(res.error || "Список не прочитался.");
       return;
     }
-    setItems((res.items || []).filter((x) => x.cashState));
+    const next = (res.items || []).filter((x) => x.cashState);
+    setItems(next);
+    const now = new Set(next.filter((x) => x.cashState === "ok" && step6DiskAgrees(x)).map((x) => x.id));
+    if (seenBoard.current) {
+      const fresh = [...now].filter((id) => !prevClosed.current.has(id));
+      if (fresh.length) setJustRight((cur) => [...fresh, ...cur.filter((id) => !fresh.includes(id))].slice(0, 12));
+    }
+    prevClosed.current = now;
+    seenBoard.current = true;
     if (res.stages?.length) setStages(res.stages);
   }
 
@@ -2430,13 +2442,14 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       if (dead) return;
       try {
         const res = (await adminSchedule({ data: { token: token(), action: "journalPull", kind: "jobStatus" } as never })) as {
-          job?: { running?: boolean; stop?: boolean; mode?: string; msg?: string; customerId?: number };
+          job?: { running?: boolean; stop?: boolean; mode?: string; msg?: string; customerId?: number; n?: number; cur?: string };
         };
         const job = res.job;
         if (dead || !job?.running || job.stop || !modes.includes(String(job.mode || ""))) return;
         setBusy(true);
         setRunMode(String(job.mode || ""));
         setOneId(Number(job.customerId) || 0);
+        setProg({ n: Number(job.n) || 0, cur: String(job.cur || job.msg || "") });
         setNote(job.msg || "Идёт на сервере…");
         watchServer();
       } catch {
@@ -2457,7 +2470,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
 
   async function paintServer() {
     const res = (await adminSchedule({ data: { token: token(), action: "journalPull", kind: "jobStatus" } as never })) as {
-      job?: { running?: boolean; stop?: boolean; mode?: string; msg?: string; customerId?: number };
+      job?: { running?: boolean; stop?: boolean; mode?: string; msg?: string; customerId?: number; n?: number; cur?: string };
     };
     const job = res.job;
     const mode = String(job?.mode || "");
@@ -2469,11 +2482,13 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       setBusy(false);
       setOneId(0);
       setRunMode("");
+      setProg(null);
       return;
     }
     setBusy(true);
     setRunMode(mode);
     setOneId(Number(job.customerId) || 0);
+    setProg({ n: Number(job.n) || 0, cur: String(job.cur || job.msg || "") });
   }
 
   function watchServer() {
@@ -2493,6 +2508,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     setBusy(true);
     setOneId(customerId);
     setRunMode(mode);
+    setProg({ n: 0, cur: "Запускаю на сервере…" });
     setNote("Запускаю на сервере…");
     const filter = archive && mode === "step7-cash" ? JSON.stringify(archPick) : "";
     void adminSchedule({
@@ -2504,6 +2520,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         setBusy(false);
         setOneId(0);
         setRunMode("");
+        setProg(null);
       });
   }
 
@@ -2558,7 +2575,8 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     return out;
   };
   const left = onePerson(filtered.filter((x) => !closed(x)).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id));
-  const right = onePerson(filtered.filter(closed).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id));
+  const rightOrder = new Map(justRight.map((id, i) => [id, i]));
+  const right = onePerson(filtered.filter(closed).sort((a, b) => (rightOrder.get(a.id) ?? 1000) - (rightOrder.get(b.id) ?? 1000) || a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id));
   const pagesL = Math.max(1, Math.ceil(left.length / pageSize) || 1);
   const pagesR = Math.max(1, Math.ceil(right.length / pageSize) || 1);
   const safeL = Math.min(pageLeft, pagesL - 1);
@@ -2581,16 +2599,17 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     const key = `${x.branchId}:${x.id}`;
     const shown = open === key;
     const ok = closed(x);
+    const moved = ok && justRight.includes(x.id);
     const aside = x.statusId < 0;
     const word = aside ? "не в колонке" : ok ? "совпало" : x.cashState === "no-balance" ? "нет balance" : !x.cashState || x.cashState === "wait" ? "касса не снята" : "не сошлось";
     return (
-      <li key={key} className={cn("rounded-2xl bg-white px-4 py-3 ring-1", ok ? "ring-emerald-200" : aside || (x.cashState && x.cashState !== "wait") ? "ring-amber-200" : "ring-black/8")}>
+      <li key={key} className={cn("rounded-2xl bg-white px-4 py-3 ring-1", moved ? "ring-2 ring-emerald-500" : ok ? "ring-emerald-200" : aside || (x.cashState && x.cashState !== "wait") ? "ring-amber-200" : "ring-black/8")}>
         <div className="flex items-center gap-3">
           <button type="button" className="min-w-0 flex-1 truncate text-left font-medium leading-tight" onClick={() => setOpen(shown ? "" : key)}>
             {x.name || (archive ? (x.study === 0 ? `лид ${x.id}` : x.study === 1 ? `клиент ${x.id}` : `без роли ${x.id}`) : `лид ${x.id}`)}
           </button>
           <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[0.72rem] font-semibold", ok ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950")}>
-            {word}
+            {moved ? "вправо" : word}
           </span>
           <button type="button" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-semibold leading-none text-muted ring-1 ring-black/10" onClick={() => setOpen(shown ? "" : key)} aria-label={shown ? "свернуть" : "развернуть"}>
             {shown ? "−" : "+"}
@@ -2756,6 +2775,11 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>
         <button type="button" className={BTN_GHOST} disabled={!busy} onClick={stopServer}>Стоп</button>
       </div>
+      {busy ? (
+        <p className="mt-2 text-sm font-semibold">
+          Идёт на сервере{prog ? ` · сделано ${prog.n}` : ""}{prog?.cur ? ` · ${prog.cur}` : ""}
+        </p>
+      ) : null}
       <input className="mt-3 h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10" placeholder={archive ? "Найти клиента…" : "Найти лида…"} value={query} onChange={(e) => { setQuery(e.target.value); setPageLeft(0); setPageRight(0); }} />
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {[{ id: 0, label: "Все филиалы" }, ...[1, 2, 3, 4].map((id) => ({ id, label: step6Branch(id) }))].map((b) => (
@@ -2812,7 +2836,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
             <h4 className="font-display text-[1.05rem] text-emerald-900">Совпало · {right.length}</h4>
             {pager(safeR, pagesR, setPageRight)}
           </div>
-          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">Шапка и формула сошлись. Колонка и филиал остаются на карточке.</p>
+          <p className="mt-1 shrink-0 text-[0.72rem] text-muted">{justRight.length ? `Только что ушли вправо: ${justRight.length}. Они сверху.` : "Шапка и формула сошлись. Колонка и филиал остаются на карточке."}</p>
           <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto p-0.5">{sliceR.map(card)}</ul>
         </section>
       </div>

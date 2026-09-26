@@ -1,5 +1,5 @@
 import { request, token as alfaToken, pagedIndex } from "./alfacrm";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CRM_BRANCH } from "./ids";
 import {
@@ -73,20 +73,42 @@ function withoutStudents(items: LeadCard[]) {
 }
 
 const g = globalThis as { __raLeads?: Map<string, Bag> };
+let boardMtime = -1;
 
 function fileOf() {
   return join(process.cwd(), "storage", "crm-leads-board.json");
 }
 
+function readBoardFile() {
+  if (!existsSync(fileOf())) return;
+  const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as { keys?: Record<string, Bag> };
+  const next = new Map<string, Bag>();
+  for (const [k, v] of Object.entries(raw.keys || {})) {
+    if (v && Array.isArray(v.items)) next.set(k, v);
+  }
+  g.__raLeads = next;
+}
+
 function hydrateLeads() {
   try {
-    if (!existsSync(fileOf())) return;
-    const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as { keys?: Record<string, Bag> };
-    for (const [k, v] of Object.entries(raw.keys || {})) {
-      if (Array.isArray(v?.items) && v.items.length) g.__raLeads!.set(k, v);
-    }
+    readBoardFile();
+    boardMtime = statSync(fileOf()).mtimeMs;
   } catch {
     /* диск */
+  }
+}
+
+/** Экран и воркер — разные процессы. Перед показом берём диск, если воркер уже дописал кассу. */
+function reloadLeadsIfNewer() {
+  try {
+    const file = fileOf();
+    if (!existsSync(file)) return;
+    const m = statSync(file).mtimeMs;
+    if (m === boardMtime && g.__raLeads) return;
+    readBoardFile();
+    boardMtime = m;
+  } catch {
+    /* оставляем память этого процесса */
   }
 }
 
@@ -95,9 +117,11 @@ function persistLeads() {
     mkdirSync(dirname(fileOf()), { recursive: true });
     const keys: Record<string, Bag> = {};
     for (const [k, v] of bag()) keys[k] = v;
-    writeFileSync(fileOf(), JSON.stringify({ keys }), "utf8");
+    const file = fileOf();
+    writeFileSync(file, JSON.stringify({ keys }), "utf8");
+    boardMtime = statSync(file).mtimeMs;
   } catch {
-    /* диск */
+    boardMtime = -1;
   }
 }
 
@@ -116,6 +140,7 @@ function localStageId() {
 }
 
 export function peekLeadBoard() {
+  reloadLeadsIfNewer();
   return bag().get("0") || null;
 }
 
@@ -144,6 +169,7 @@ export function stampStep6Cash(id: number, patch: Partial<LeadCard>) {
 const ARCH_STAGE: LeadStage = { id: 0, name: "Архив", color: "#6a6a6a", weight: 0, pipelineId: 0 };
 
 export function peekStep7Board() {
+  reloadLeadsIfNewer();
   return bag().get("7") || null;
 }
 
@@ -809,6 +835,7 @@ export async function boardFromDisk(branchId = 0): Promise<Bag> {
 }
 
 export async function loadLeadsBoard(branchId = 0, force = false, delta = false, light = false): Promise<Bag> {
+  reloadLeadsIfNewer();
   const step6 = bag().get("0");
   if (step6?.step6 && !force) {
     const bid = Number(branchId) || 0;
