@@ -2377,6 +2377,9 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [busy, setBusy] = useState(false);
   const [oneId, setOneId] = useState(0);
   const [runMode, setRunMode] = useState("");
+  const ownModes = archive ? ["step7-list", "step7-cash"] : ["step6-recount", "step6-columns", "step6-cash"];
+  const listMode = archive ? "step7-list" : "step6-columns";
+  const cashMode = archive ? "step7-cash" : "step6-cash";
   const pollJob = useRef<ReturnType<typeof setInterval> | null>(null);
   const [items, setItems] = useState<Step6Item[]>([]);
   const [stages, setStages] = useState<LeadStage[]>(archive ? [{ id: 0, name: "Архив", color: "#6a6a6a", weight: 0, pipelineId: 0 }] : LEAD_STAGES);
@@ -2417,7 +2420,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
 
   useEffect(() => {
     let dead = false;
-    const modes = archive ? ["step7-list", "step7-cash"] : ["step6-recount", "step6-columns", "step6-cash"];
+    const modes = ownModes;
     void (async () => {
       try {
         await loadList();
@@ -2457,16 +2460,19 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       job?: { running?: boolean; stop?: boolean; mode?: string; msg?: string; customerId?: number };
     };
     const job = res.job;
-    if (job?.msg) setNote(job.msg);
+    const mode = String(job?.mode || "");
+    const mine = ownModes.includes(mode);
+    if (mine && job?.msg) setNote(job.msg);
     await loadList();
-    if (!job?.running || job.stop) {
+    if (!job?.running || job.stop || !mine) {
       stopPoll();
       setBusy(false);
       setOneId(0);
       setRunMode("");
       return;
     }
-    setRunMode(String(job.mode || ""));
+    setBusy(true);
+    setRunMode(mode);
     setOneId(Number(job.customerId) || 0);
   }
 
@@ -2596,7 +2602,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         </p>
         {ok ? null : (
           <div className="mt-2">
-            <button type="button" disabled={busy} className={cn(BTN_LOAD_SM, "w-fit px-4", runMode.endsWith("-cash") && oneId === x.id && "ra-btn-blink", busy && oneId !== x.id && "opacity-50")} onClick={() => startServer(archive ? "step7-cash" : "step6-cash", x.id)}>
+            <button type="button" disabled={busy} className={cn(BTN_LOAD_SM, "w-fit px-4", runMode === cashMode && oneId === x.id && "ra-btn-blink", busy && oneId !== x.id && "opacity-50")} onClick={() => startServer(cashMode, x.id)}>
               Перепроверить этого
             </button>
           </div>
@@ -2746,8 +2752,8 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         {note ? ` · ${note}` : ""}
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
-        <button type="button" className={cn(BTN_RED, (runMode === "step6-columns" || runMode === "step7-list") && "ra-btn-blink")} disabled={busy} onClick={() => startServer(archive ? "step7-list" : "step6-columns")}>{archive ? "Прочитать архив" : "Прочитать колонки"}</button>
-        <button type="button" className={cn(BTN_GHOST, runMode.endsWith("-cash") && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(archive ? "step7-cash" : "step6-cash")}>Перепроверить кассу</button>
+        <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>{archive ? "Прочитать архив" : "Прочитать колонки"}</button>
+        <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>
         <button type="button" className={BTN_GHOST} disabled={!busy} onClick={stopServer}>Стоп</button>
       </div>
       <input className="mt-3 h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10" placeholder={archive ? "Найти клиента…" : "Найти лида…"} value={query} onChange={(e) => { setQuery(e.target.value); setPageLeft(0); setPageRight(0); }} />
