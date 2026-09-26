@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk } from "./crm-step6-core.ts";
+import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk, mergeMissingLessons } from "./crm-step6-core.ts";
 
 describe("шаг 6", () => {
   it("лид по is_study, клиент не лид", () => {
@@ -55,5 +55,25 @@ describe("шаг 6", () => {
     assert.equal(absent?.cttId, 4);
     assert.equal(step6LessonDisk({ id: 12, date: "" }, 7333, 0, 1), null);
     assert.equal(step6LessonDisk({ id: 13, date: "не дата" }, 7333, 0, 1), null);
+  });
+
+  it("тот же номер не со статусом 3 открывается, статус 3 не переписывается, потолка нет", () => {
+    const prev = [
+      { lessonId: 1, status: 1, amount: 100, date: "a", pupils: [{ customerId: 7, amount: 100 }] },
+      { lessonId: 2, status: 3, amount: 50, date: "b" },
+    ];
+    const merged = mergeMissingLessons(prev, [
+      { lessonId: 1, status: 3, amount: 0 },
+      { lessonId: 2, status: 3, amount: 999 },
+      { lessonId: 3, status: 3, amount: 0 },
+    ], 7);
+    assert.equal(merged.opened, 1);
+    assert.equal(merged.wrote, 1);
+    assert.equal(merged.list.length, 3);
+    assert.equal(merged.list[0].status, 3);
+    assert.equal(merged.list[0].amount, 0);
+    assert.equal(merged.list[0].pupils?.[0].amount, 0);
+    assert.equal(merged.list[1].amount, 50);
+    assert.equal(merged.list[2].lessonId, 3);
   });
 });

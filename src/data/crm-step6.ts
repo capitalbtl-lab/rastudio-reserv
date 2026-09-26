@@ -437,9 +437,9 @@ export async function recheckCashPass(opts: CashPass) {
       }
       const { appendMissingCustomerLessons } = await import("./group-cards");
       const saved = appendMissingCustomerLessons(id, packed);
-      wroteLessons = saved.wrote;
-      if (noDate) lessonNote = `без даты ${noDate}`;
-      if (saved.capped) lessonNote = lessonNote ? `${lessonNote} · потолок 2500` : "потолок 2500";
+      wroteLessons = saved.wrote + saved.opened;
+      if (saved.opened) lessonNote = `статус 3: ${saved.opened}`;
+      if (noDate) lessonNote = lessonNote ? `${lessonNote} · без даты ${noDate}` : `без даты ${noDate}`;
     } catch {
       wroteLessons = -1;
       lessonNote = "занятия не легли";

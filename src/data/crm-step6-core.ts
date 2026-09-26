@@ -102,3 +102,33 @@ export function step6LessonDisk(row: Record<string, unknown>, customerId: number
   }
   return lesson;
 }
+
+/** Нет номера — дописать. Номер есть, но статус не 3 — открыть как проведённый и поставить уже посчитанную сумму. Статус 3 не переписывать. */
+export function mergeMissingLessons<T extends { lessonId?: number; status?: number; amount?: number; pupils?: { customerId?: number; amount?: number }[] }>(prev: T[], rows: T[], customerId = 0) {
+  const next = prev.slice();
+  const at = new Map<number, number>();
+  for (let i = 0; i < next.length; i += 1) {
+    const lid = Number(next[i].lessonId) || 0;
+    if (lid > 0 && !at.has(lid)) at.set(lid, i);
+  }
+  let wrote = 0;
+  let opened = 0;
+  const cid = Number(customerId) || 0;
+  for (const row of rows) {
+    const lid = Number(row.lessonId) || 0;
+    if (!lid) continue;
+    const i = at.get(lid);
+    if (i == null) {
+      at.set(lid, next.length);
+      next.push(row);
+      wrote += 1;
+      continue;
+    }
+    const old = next[i];
+    if (Number(old.status) === 3) continue;
+    const pupils = old.pupils?.map((p) => (cid && Number(p.customerId) === cid ? { ...p, amount: row.amount } : p));
+    next[i] = { ...old, status: 3, amount: row.amount, pupils };
+    opened += 1;
+  }
+  return { list: next, wrote, opened };
+}

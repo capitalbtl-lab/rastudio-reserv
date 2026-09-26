@@ -7,6 +7,7 @@ import { nextLocalId } from "./crm-local-id";
 import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar, countAlfaLessonUniq, foldLessonAmount } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm-journal-core";
 import { chargeFromPupils, amountGiven, chargeAmountGiven } from "./crm-ledger-core";
+import { mergeMissingLessons } from "./crm-step6-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
 import { tryLockStudentAlfa, unlockStudentAlfa, ownsStudentAlfa, noteAlfaLessonsLanded } from "./crm-customer-sync";
@@ -286,7 +287,7 @@ export function loadCustomerCalendar(customerId: number): GroupCalLesson[] {
 function saveCustomerCalendarList(id: number, list: GroupCalLesson[]) {
   mkdirSync(calsDir(), { recursive: true });
   const p = oneCal(id);
-  const collapsed = collapseLessonRows(list || []).slice(0, 2500);
+  const collapsed = collapseLessonRows(list || []);
   writeFileSync(p, JSON.stringify(collapsed), "utf8");
   let mtime = Date.now();
   try {
@@ -319,34 +320,21 @@ export function upsertCustomerCalendar(customerId: number, lesson: GroupCalLesso
 export function replaceCustomerCalendar(customerId: number, lessons: GroupCalLesson[]) {
   const id = Number(customerId) || 0;
   if (!id) return [];
-  const list = collapseLessonRows(lessons || []).slice(0, 2500);
+  const list = collapseLessonRows(lessons || []);
   saveCustomerCalendarList(id, list);
   rememberLessons(list);
   return list;
 }
 
-/** Шаги 6 и 7: дописать недостающие уроки. Уже лежащие строки не трогает. Потолок 2500 не поднимает. */
+/** Шаги 6 и 7: дописать недостающий урок или открыть тот же номер, если он лежал не как проведённый. Статус 3 не переписывает. */
 export function appendMissingCustomerLessons(customerId: number, rows: GroupCalLesson[]) {
   const id = Number(customerId) || 0;
-  if (!id) return { wrote: 0, capped: false };
+  if (!id) return { wrote: 0, opened: 0, capped: false };
   const prev = loadCustomerCalendar(id);
-  const room = 2500 - prev.length;
-  if (room <= 0) return { wrote: 0, capped: rows.length > 0 };
-  const have = new Set(prev.map((x) => Number(x.lessonId) || 0).filter((n) => n > 0));
-  const take: GroupCalLesson[] = [];
-  for (const row of rows) {
-    const lid = Number(row.lessonId) || 0;
-    if (!lid || have.has(lid)) continue;
-    if (take.length >= room) break;
-    have.add(lid);
-    take.push(row);
-  }
-  if (!take.length) return { wrote: 0, capped: false };
-  saveCustomerCalendarList(id, prev.concat(take));
-  return { wrote: take.length, capped: rows.some((row) => {
-    const lid = Number(row.lessonId) || 0;
-    return lid > 0 && !prev.some((x) => Number(x.lessonId) === lid) && !take.some((x) => Number(x.lessonId) === lid);
-  }) };
+  const merged = mergeMissingLessons(prev, rows, id);
+  if (!merged.wrote && !merged.opened) return { wrote: 0, opened: 0, capped: false };
+  saveCustomerCalendarList(id, merged.list);
+  return { wrote: merged.wrote, opened: merged.opened, capped: false };
 }
 
 function fioOf(cid: number) {
