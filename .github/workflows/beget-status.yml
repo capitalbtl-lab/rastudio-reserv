@@ -84,4 +84,61 @@ jobs:
             tail -n 80 /root/.pm2/logs/rastudio-error-8.log 2>/dev/null
             echo "=== port ==="
             ss -ltnp | grep 3000 || echo no-3000
+            echo "=== step6 open ==="
+            node <<'NODE'
+            const fs = require("fs");
+            const path = require("path");
+            const root = "/var/www/rastudio/storage";
+            const board = JSON.parse(fs.readFileSync(path.join(root, "crm-leads-board.json"), "utf8"));
+            const items = (board.keys && board.keys["0"] && board.keys["0"].items) || [];
+            function agrees(x) {
+              if (x.cashPayHole == null && x.cashDiskKnown == null) return true;
+              const gaps = (x.cashPayHole || 0) + (x.cashPayExtra || 0) + (x.cashLesHole || 0) + (x.cashLesExtra || 0) + (x.cashNoId || 0) + (x.cashNoCommission || 0);
+              if (gaps > 0) return false;
+              if (x.cashDiskKnown === false && ((x.cashPayN || 0) > 0 || (x.cashLesN || 0) > 0)) return false;
+              return true;
+            }
+            const seen = new Set();
+            const open = [];
+            for (const x of items) {
+              if (seen.has(x.id)) continue;
+              seen.add(x.id);
+              if (x.cashState === "ok" && agrees(x)) continue;
+              open.push(x);
+            }
+            console.log("cards", items.length, "people", seen.size, "open", open.length);
+            for (const x of open) {
+              console.log([
+                x.id,
+                x.name,
+                x.cashState || "wait",
+                "head=" + x.cashBalance,
+                "formula=" + x.cashFormula,
+                "payHole=" + (x.cashPayHole ?? ""),
+                "payExtra=" + (x.cashPayExtra ?? ""),
+                "lesHole=" + (x.cashLesHole ?? ""),
+                "lesExtra=" + (x.cashLesExtra ?? ""),
+                "noId=" + (x.cashNoId ?? ""),
+                "noComm=" + (x.cashNoCommission ?? ""),
+                "diskKnown=" + x.cashDiskKnown,
+                "fail=" + (x.cashFail || ""),
+                "giveUp=" + !!x.cashGiveUp,
+                "tries=" + (x.cashTries ?? ""),
+              ].join(" | "));
+              console.log("  branches", String(x.cashBranches || "").slice(0, 400));
+            }
+            const idxPath = path.join(root, "crm-step-logs/index.json");
+            const idx = fs.existsSync(idxPath) ? JSON.parse(fs.readFileSync(idxPath, "utf8")) : [];
+            const runs = (Array.isArray(idx) ? idx : []).filter((r) => r && r.step === 6).slice(0, 3);
+            console.log("step6 runs", runs.map((r) => r.id + " " + r.at + " left=" + (r.summary && r.summary.left)).join(" ;; "));
+            const ids = new Set(open.map((x) => x.id));
+            for (const r of runs.slice(0, 1)) {
+              const file = path.join(root, "crm-step-logs", String(r.id).replace(/[^a-zA-Z0-9:_-]/g, "") + ".json");
+              if (!fs.existsSync(file)) { console.log("no run file", file); continue; }
+              const run = JSON.parse(fs.readFileSync(file, "utf8"));
+              const rows = (run.rows || []).filter((row) => ids.has(row.cid));
+              console.log("log rows for open", rows.length, "of", (run.rows || []).length);
+              for (const row of rows) console.log("LOG", row.cid, row.name, row.result, row.note);
+            }
+            NODE
             exit 0
