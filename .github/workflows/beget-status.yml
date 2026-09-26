@@ -84,49 +84,48 @@ jobs:
             tail -n 80 /root/.pm2/logs/rastudio-error-8.log 2>/dev/null
             echo "=== port ==="
             ss -ltnp | grep 3000 || echo no-3000
-            echo "=== step7 groups api ==="
+            echo "=== step7 cgi vs board ==="
             cat > /tmp/ra-groups.mjs <<'NODE'
+            import { readFileSync } from "fs";
             import { request, token } from "/var/www/rastudio/src/data/alfacrm.ts";
             const tok = await token();
-            const branch = 1;
-            async function page(path, body) {
-              const json = await request(path, { ...body, page: 0, pageSize: 5 }, tok);
-              const o = json && typeof json === "object" ? json : {};
-              const items = Array.isArray(o.items) ? o.items : [];
-              return { total: o.total ?? o.count ?? items.length, n: items.length, first: items[0] || null, keys: items[0] ? Object.keys(items[0]) : [] };
+            const board = JSON.parse(readFileSync("/var/www/rastudio/storage/crm-leads-board.json", "utf8"));
+            const items = new Map((board.keys?.["7"]?.items || []).map((x) => [Number(x.id), x.hadGroups === true]));
+            const groups = await request("/v2api/1/group/index", { removed: 2, page: 0, pageSize: 100 }, tok);
+            const gItems = Array.isArray(groups.items) ? groups.items : [];
+            const sample = gItems.slice(0, 8).map((g) => Number(g.id)).filter((n) => n > 0);
+            let cgiCustomers = 0;
+            let onBoard = 0;
+            let onBoardHad = 0;
+            let past = 0;
+            const errors = [];
+            for (const gid of sample) {
+              try {
+                const json = await request(`/v2api/1/cgi/index?group_id=${gid}`, { group_id: gid, page: 0, pageSize: 100 }, tok);
+                const rows = Array.isArray(json.items) ? json.items : [];
+                for (const row of rows) {
+                  const cid = Number(row.customer_id) || 0;
+                  if (!cid) continue;
+                  cgiCustomers += 1;
+                  const end = String(row.e_date || "");
+                  if (end && end < "2026-09-26" && !end.startsWith("0000")) past += 1;
+                  if (items.has(cid)) {
+                    onBoard += 1;
+                    if (items.get(cid)) onBoardHad += 1;
+                  }
+                }
+              } catch (e) {
+                errors.push(e instanceof Error ? e.message.slice(0, 80) : "ошибка");
+              }
             }
-            const active = await page(`/v2api/${branch}/group/index`, { removed: 0 });
-            const archived = await page(`/v2api/${branch}/group/index`, { removed: 2 });
-            const gid = Number(archived.first?.id || active.first?.id || 0);
-            let cgi = null;
-            if (gid) {
-              const pack = await page(`/v2api/${branch}/cgi/index?group_id=${gid}`, { group_id: gid });
-              const row = pack.first || {};
-              cgi = {
-                gid,
-                total: pack.total,
-                n: pack.n,
-                keys: pack.keys,
-                hasCustomerId: Object.prototype.hasOwnProperty.call(row, "customer_id"),
-                customerIdType: row.customer_id == null ? "empty" : typeof row.customer_id,
-                hasGroupId: Object.prototype.hasOwnProperty.call(row, "group_id"),
-                hasB: Object.prototype.hasOwnProperty.call(row, "b_date"),
-                hasE: Object.prototype.hasOwnProperty.call(row, "e_date"),
-              };
-            }
-            const cust = await page(`/v2api/${branch}/customer/index`, { is_study: 1, removed: 2 });
-            const c = cust.first || {};
-            const gids = c.group_ids;
             console.log(JSON.stringify({
-              activeGroups: active.total,
-              archivedGroups: archived.total,
-              cgi,
-              customerKeysHas: {
-                group_ids: Object.prototype.hasOwnProperty.call(c, "group_ids"),
-                groups: Object.prototype.hasOwnProperty.call(c, "groups"),
-                group_id: Object.prototype.hasOwnProperty.call(c, "group_id"),
-              },
-              groupIdsType: gids == null ? "empty" : Array.isArray(gids) ? `array:${gids.length}` : typeof gids,
+              archivedGroupsTotal: groups.total ?? gItems.length,
+              groupsSampled: sample.length,
+              cgiCustomers,
+              past,
+              onBoard,
+              onBoardHad,
+              errors,
             }));
             NODE
             node --experimental-strip-types --import ./scripts/ts-ext-register.mjs /tmp/ra-groups.mjs
