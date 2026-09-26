@@ -587,7 +587,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     dateTo: ice.to,
     recheckDays: days,
     grain: opts.grain === "half" || opts.grain === "year" ? opts.grain : "quarter",
-    school: String(opts.school || opts.filter || ""),
+    school: String(opts.school || (String(opts.filter || "").startsWith("{") ? "" : opts.filter) || ""),
     groupId: Number(opts.groupId) || Number(first?.groupId) || 0,
     branchId: Number(opts.branchId) || Number(first?.branchId) || 0,
     customerId: Number(opts.customerId) || Number(first?.cid) || 0,
@@ -877,6 +877,16 @@ function continueAutoPipe(job: JournalJob) {
     fromPipe: true,
     skipLeads: job.skipLeads,
   });
+}
+
+function jobPick(raw: string) {
+  const text = String(raw || "").trim();
+  if (!text.startsWith("{")) return undefined;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 export function stopJournalJob() {
@@ -1366,8 +1376,9 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     if (mode === "step6-cash" || mode === "step7-cash") {
       const only = Number(job.customerId) || 0;
       const restart = !only && (Number(job.n) || 0) === 0;
+      const pick = mode === "step7-cash" ? (await import("./crm-step7-core")).step7PickOf(jobPick(job.filter)) : undefined;
       const got = await awaitWhileJob(id, mode === "step7-cash"
-        ? (await import("./crm-step6")).recheckStep7Cash(only, undefined, restart)
+        ? (await import("./crm-step6")).recheckStep7Cash(only, pick, restart)
         : (await import("./crm-step6")).recheckStep6Cash(only, restart));
       if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
       const res = got.value;

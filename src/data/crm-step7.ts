@@ -6,7 +6,7 @@ import { replaceStep7List } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup } from "./dossiers";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-import { step7ArchiveDay, step7Dob, step7HadGroups, step7KeepAny, step7RejectId, step7Study } from "./crm-step7-core";
+import { step7ArchiveDay, step7Dob, step7HadGroups, step7KeepAny, step7ListStudy, step7RejectId } from "./crm-step7-core";
 import { recheckStep7Cash } from "./crm-step6";
 import type { LeadCard } from "./crm-leads-stages";
 
@@ -131,13 +131,13 @@ export async function syncStep7List() {
       for (const studyFilter of [1, 0] as const) {
         const rows = await readPages(`/v2api/${branch}/customer/index`, { is_study: studyFilter, removed: 2 }, tok);
         for (const row of rows) {
-          if (!step7KeepAny(row, live)) {
+          if (!step7KeepAny({ ...row, is_study: step7ListStudy(row, studyFilter) }, live)) {
             if (live.has(Number(row.id))) dropped += 1;
             continue;
           }
           const id = Number(row.id);
           if (byId.has(id)) continue;
-          const study = step7Study(row) === 0 ? 0 : 1;
+          const study = step7ListStudy(row, studyFilter);
           const rejectId = step7RejectId(row, study);
           const names = study === 0 ? leadReasons : clientReasons;
           byId.set(id, {

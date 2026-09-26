@@ -2375,9 +2375,8 @@ function step6Why(x: Step6Item) {
 function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [cashing, setCashing] = useState(false);
   const [oneId, setOneId] = useState(0);
-  const stopCash = useRef(false);
+  const pollJob = useRef<ReturnType<typeof setInterval> | null>(null);
   const [items, setItems] = useState<Step6Item[]>([]);
   const [stages, setStages] = useState<LeadStage[]>(archive ? [{ id: 0, name: "Архив", color: "#6a6a6a", weight: 0, pipelineId: 0 }] : LEAD_STAGES);
   const [query, setQuery] = useState("");
@@ -2417,103 +2416,65 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
 
   useEffect(() => {
     void loadList().catch(() => setNote("Список не прочитался."));
+    return () => {
+      if (pollJob.current) clearInterval(pollJob.current);
+    };
   }, []);
+
+  function stopPoll() {
+    if (!pollJob.current) return;
+    clearInterval(pollJob.current);
+    pollJob.current = null;
+  }
+
+  async function paintServer() {
+    const res = (await adminSchedule({ data: { token: token(), action: "journalPull", kind: "jobStatus" } as never })) as {
+      job?: { running?: boolean; msg?: string };
+    };
+    const job = res.job;
+    if (job?.msg) setNote(job.msg);
+    await loadList();
+    if (!job?.running) {
+      stopPoll();
+      setBusy(false);
+      setOneId(0);
+    }
+  }
+
+  function watchServer() {
+    stopPoll();
+    void paintServer().catch(() => setNote("Сервер не ответил."));
+    pollJob.current = setInterval(() => {
+      void paintServer().catch(() => setNote("Сервер не ответил."));
+    }, 2000);
+  }
 
   function stageName(id: number) {
     if (id < 0) return "не в колонке";
     return stages.find((s) => s.id === id)?.name || `этап ${id}`;
   }
 
-  function readColumns() {
+  function startServer(mode: string, customerId = 0) {
     setBusy(true);
-    setNote("Читаю колонки…");
-    void adminSchedule({ data: { token: token(), action: archive ? "step7List" : "step6Columns" } as never })
-      .then(async (res) => {
-        const r = res as { ok?: boolean; error?: string; note?: string };
-        setNote(r.ok ? r.note || "Колонки записаны." : r.error || "Не прочиталось.");
-        if (r.ok) await loadList();
-      })
-      .catch((e) => setNote(e instanceof Error ? e.message : "Не прочиталось."))
-      .finally(() => setBusy(false));
-  }
-
-  function readCash() {
-    stopCash.current = false;
-    setBusy(true);
-    setCashing(true);
-    setNote("Снимаю кассу…");
-    const run = async () => {
-      let first = true;
-      for (;;) {
-        const res = (await adminSchedule({
-          data: {
-            token: token(),
-            action: archive ? "step7Cash" : "step6Cash",
-            cashRestart: first,
-            ...(archive ? { step7Pick: archPick } : {}),
-          } as never,
-        })) as {
-          ok?: boolean;
-          error?: string;
-          note?: string;
-          more?: boolean;
-          pauseMs?: number;
-        };
-        first = false;
-        const pause = async (ms: number) => {
-          const end = Date.now() + Math.max(0, ms);
-          while (Date.now() < end) {
-            if (stopCash.current) return;
-            await new Promise((r) => setTimeout(r, Math.min(250, end - Date.now())));
-          }
-        };
-        if (!res.ok) {
-          setNote(res.error || "Касса не снялась.");
-          await pause(5000);
-          if (stopCash.current) {
-            setNote((prev) => `${prev || "Касса"} · стоп`);
-            return;
-          }
-          continue;
-        }
-        setNote(res.note || "");
-        await loadList();
-        if (stopCash.current) {
-          setNote((prev) => `${prev || "Касса"} · стоп`);
-          return;
-        }
-        if (res.pauseMs) await pause(res.pauseMs);
-        if (stopCash.current) {
-          setNote((prev) => `${prev || "Касса"} · стоп`);
-          return;
-        }
-        if (!res.more) return;
-      }
-    };
-    void run()
-      .catch((e) => setNote(e instanceof Error ? e.message : "Касса не снялась."))
-      .finally(() => {
-        setBusy(false);
-        setCashing(false);
-        stopCash.current = false;
-      });
-  }
-
-  function readOne(id: number) {
-    setBusy(true);
-    setOneId(id);
-    setNote("Снимаю кассу…");
-    void adminSchedule({ data: { token: token(), action: archive ? "step7Cash" : "step6Cash", customerId: id } as never })
-      .then(async (res) => {
-        const r = res as { ok?: boolean; error?: string; note?: string };
-        setNote(r.ok ? r.note || "Касса снята." : r.error || "Касса не снялась.");
-        if (r.ok) await loadList();
-      })
-      .catch((e) => setNote(e instanceof Error ? e.message : "Касса не снялась."))
-      .finally(() => {
+    setOneId(customerId);
+    setNote("Запускаю на сервере…");
+    const filter = archive && mode === "step7-cash" ? JSON.stringify(archPick) : "";
+    void adminSchedule({
+      data: { token: token(), action: "journalPull", kind: "jobStart", jobMode: mode, customerId, filter } as never,
+    })
+      .then(() => watchServer())
+      .catch((e) => {
+        setNote(e instanceof Error ? e.message : "Сервер не запустил проверку.");
         setBusy(false);
         setOneId(0);
       });
+  }
+
+  function stopServer() {
+    setNote("Стоп на сервере.");
+    void adminSchedule({ data: { token: token(), action: "journalPull", kind: "jobStop" } as never })
+      .then(() => paintServer())
+      .catch((e) => setNote(e instanceof Error ? e.message : "Стоп не дошёл."));
   }
 
   const q = query.trim().toLowerCase();
@@ -2589,7 +2550,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       <li key={key} className={cn("rounded-2xl bg-white px-4 py-3 ring-1", ok ? "ring-emerald-200" : aside || (x.cashState && x.cashState !== "wait") ? "ring-amber-200" : "ring-black/8")}>
         <div className="flex items-center gap-3">
           <button type="button" className="min-w-0 flex-1 truncate text-left font-medium leading-tight" onClick={() => setOpen(shown ? "" : key)}>
-            {x.name || (archive ? `клиент ${x.id}` : `лид ${x.id}`)}
+            {x.name || (archive ? (x.study === 0 ? `лид ${x.id}` : x.study === 1 ? `клиент ${x.id}` : `без роли ${x.id}`) : `лид ${x.id}`)}
           </button>
           <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[0.72rem] font-semibold", ok ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950")}>
             {word}
@@ -2599,12 +2560,12 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           </button>
         </div>
         <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
-          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? (x.study === 0 ? "лид" : "клиент") : stageName(x.statusId)} · {archive ? word : step6SortWord(x.cashSort)}
+          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? (x.study === 0 ? "лид" : x.study === 1 ? "клиент" : "без роли") : stageName(x.statusId)} · {archive ? word : step6SortWord(x.cashSort)}
           {x.cashState && x.cashState !== "wait" ? ` · шапка ${rubAudit(x.cashBalance)} · формула ${rubAudit(x.cashFormula)}` : ""}
         </p>
         {ok ? null : (
           <div className="mt-2">
-            <button type="button" disabled={busy} className={cn(BTN_LOAD_SM, "w-fit px-4", oneId === x.id && "ra-progress-run", busy && oneId !== x.id && "opacity-50")} onClick={() => readOne(x.id)}>
+            <button type="button" disabled={busy} className={cn(BTN_LOAD_SM, "w-fit px-4", oneId === x.id && "ra-progress-run", busy && oneId !== x.id && "opacity-50")} onClick={() => startServer(archive ? "step7-cash" : "step6-cash", x.id)}>
               Перепроверить этого
             </button>
           </div>
@@ -2677,7 +2638,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
               </tbody>
             </table>
             <p className="mt-1">{step6Why(x)}</p>
-            <p className="mt-1 text-muted">Филиалы 1–4. Платежи: общий pay/index и отдельно типы возврата и корректировки — общий индекс их не отдаёт. Занятия: status 3, дата 2015-01-01. Списание — details.commission этого customer_id, иначе cost. Бонус и price в остаток не входят. Шапка — Customer.balance.</p>
+            <p className="mt-1 text-muted">Филиалы 1–4. Платежи: общий pay/index и отдельно типы возврата и корректировки. Занятия: status 3, дата 2015-01-01. Списание — details.commission этого customer_id, иначе cost. Бонус и price в остаток не входят. Шапка — Customer.balance.</p>
           </div>
         ) : null}
       </li>
@@ -2723,7 +2684,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
               Все архивные · {inBranch.length}
             </button>
             <button type="button" className={cn(chips, archClients ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchClients((v) => !v); setPageLeft(0); setPageRight(0); }}>
-              Архивные клиенты · {inBranch.filter((x) => x.study !== 0).length}
+              Архивные клиенты · {inBranch.filter((x) => x.study === 1).length}
             </button>
             <button type="button" className={cn(chips, archLeads ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchLeads((v) => !v); setPageLeft(0); setPageRight(0); }}>
               Архивные лиды · {inBranch.filter((x) => x.study === 0).length}
@@ -2754,9 +2715,9 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         {note ? ` · ${note}` : ""}
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
-        <button type="button" className={cn(BTN_RED, busy && "ra-progress-run")} disabled={busy} onClick={readColumns}>{archive ? "Прочитать архив" : "Прочитать колонки"}</button>
-        <button type="button" className={BTN_GHOST} disabled={busy || !items.length} onClick={readCash}>Перепроверить кассу</button>
-        <button type="button" className={BTN_GHOST} disabled={!cashing} onClick={() => { stopCash.current = true; setNote(archive ? "Стоп после этого клиента." : "Стоп после этого лида."); }}>Стоп</button>
+        <button type="button" className={cn(BTN_RED, busy && "ra-progress-run")} disabled={busy} onClick={() => startServer(archive ? "step7-list" : "step6-columns")}>{archive ? "Прочитать архив" : "Прочитать колонки"}</button>
+        <button type="button" className={BTN_GHOST} disabled={busy || !items.length} onClick={() => startServer(archive ? "step7-cash" : "step6-cash")}>Перепроверить кассу</button>
+        <button type="button" className={BTN_GHOST} disabled={!busy} onClick={stopServer}>Стоп</button>
       </div>
       <input className="mt-3 h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10" placeholder={archive ? "Найти клиента…" : "Найти лида…"} value={query} onChange={(e) => { setQuery(e.target.value); setPageLeft(0); setPageRight(0); }} />
       <div className="mt-2 flex flex-wrap items-center gap-1.5">

@@ -1,7 +1,9 @@
 /** Шапка архива. Фильтры customer/index складываются через И.
- * Лид — is_study 0, клиент — 1. removed 2 — только архив. Чужой is_study лида не находит. */
+ * Лид — is_study 0, клиент — 1. Роли нет — фильтр 2 (и лиды, и клиенты).
+ * 2 в карточку не пишется. removed 2 — только архив. */
 export function step7HeaderQuery(id: number, study?: number) {
-  return { id, is_study: study === 0 ? 0 : 1, removed: 2, page: 0, pageSize: 1 };
+  const role = study === 0 ? 0 : study === 1 ? 1 : 2;
+  return { id, is_study: role, removed: 2, page: 0, pageSize: 1 };
 }
 
 /** Архивный клиент и не в живой группе.
@@ -31,6 +33,12 @@ export function step7Study(row: { is_study?: unknown }): 0 | 1 | null {
   if (s === true || s === 1 || s === "1") return 1;
   if (s === false || s === 0 || s === "0") return 0;
   return null;
+}
+
+/** Роль строки списка. В теле 0/false — лид, 1/true — клиент. Пустое поле — роль запроса, не «клиент». 2 не пишется. */
+export function step7ListStudy(row: { is_study?: unknown }, asked: 0 | 1): 0 | 1 {
+  const role = step7Study(row);
+  return role == null ? asked : role;
 }
 
 /** Архивный клиент или архивный лид, не в живой группе. Активные лиды остаются на шаге 6. */
@@ -182,8 +190,13 @@ export function step7Shows(
   now = new Date(),
 ) {
   const lead = card.study === 0;
-  if (lead && !pick.leads) return false;
-  if (!lead && !pick.clients) return false;
+  const client = card.study === 1;
+  if (!lead && !client) {
+    if (!(pick.leads && pick.clients)) return false;
+  } else {
+    if (lead && !pick.leads) return false;
+    if (client && !pick.clients) return false;
+  }
   const dob = step7Dob(card.dob, now);
   const age = step7AgeYears(dob, now);
   if (pick.dobYes !== pick.dobNo) {

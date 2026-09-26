@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { step7ArchiveDay, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7RejectId, step7Shows } from "./crm-step7-core.ts";
+import { step7ArchiveDay, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7ListStudy, step7RejectId, step7Shows } from "./crm-step7-core.ts";
 
 describe("шаг 7", () => {
   const live = new Set([10]);
@@ -41,7 +41,12 @@ describe("шаг 7", () => {
   it("шапка архивного лида — is_study 0, клиента — 1, оба только архив", () => {
     assert.deepEqual(step7HeaderQuery(3, 0), { id: 3, is_study: 0, removed: 2, page: 0, pageSize: 1 });
     assert.deepEqual(step7HeaderQuery(7, 1), { id: 7, is_study: 1, removed: 2, page: 0, pageSize: 1 });
-    assert.equal(step7HeaderQuery(8).is_study, 1);
+    assert.equal(step7HeaderQuery(8).is_study, 2);
+    assert.equal(step7HeaderQuery(8, 2).is_study, 2);
+    assert.equal(step7ListStudy({ is_study: false }, 1), 0);
+    assert.equal(step7ListStudy({}, 0), 0);
+    assert.equal(step7ListStudy({ is_study: 2 }, 0), 0);
+    assert.equal(step7KeepAny({ id: 14, is_study: step7ListStudy({}, 0), removed: 2 }, live), true);
   });
 
   it("архивный лид входит, активный лид нет", () => {
@@ -74,6 +79,9 @@ describe("шаг 7", () => {
     const both = { clients: true, leads: true, dobYes: false, dobNo: false, fio: false, groupsYes: false, groupsNo: false, years: 0 as const };
     assert.equal(step7Shows({ study: 0, name: "Лид", dob: "01.01.2015" }, both, now), true);
     assert.equal(step7Shows({ study: 0, name: "Лид" }, { ...both, leads: false }, now), false);
+    assert.equal(step7Shows({ name: "Без роли" }, { ...both, clients: false }, now), false);
+    assert.equal(step7Shows({ name: "Без роли" }, { ...both, leads: false }, now), false);
+    assert.equal(step7Shows({ name: "Без роли" }, both, now), true);
     assert.equal(step7Shows({ study: 1, name: "тест", dob: "01.01.2015" }, { ...both, fio: true }, now), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", hadGroups: false }, { ...both, groupsYes: true }, now), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", hadGroups: false }, { ...both, groupsNo: true }, now), true);

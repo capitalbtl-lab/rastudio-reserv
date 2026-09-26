@@ -3274,6 +3274,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         jobMode: String((data as { jobMode?: string }).jobMode || ""),
         take: Number((data as { take?: number }).take) || 0,
         name: String((data as { name?: string }).name || ""),
+        filter: String((data as { filter?: string }).filter || ""),
         peopleKind: (data as { peopleKind?: string }).peopleKind === "balance" ? "balance" : "students",
         periodLabel: String((data as { periodLabel?: string }).periodLabel || ""),
         jobItems: (await import("./crm-journal-job-core")).parseJobItems((data as { jobItems?: unknown }).jobItems),

@@ -1749,6 +1749,7 @@ export async function journalPull(opts: {
   jobMode?: string;
   take?: number;
   name?: string;
+  filter?: string;
   peopleKind?: "students" | "balance";
   periodLabel?: string;
   lite?: boolean;
@@ -1904,7 +1905,7 @@ export async function journalPull(opts: {
       branchId: opts.branchId,
       customerId: opts.customerId,
       take: opts.take,
-      filter: opts.school || "",
+      filter: opts.filter || opts.school || "",
       probe: Boolean(opts.probe),
       name: opts.name,
       periodKey: opts.periodKey,
