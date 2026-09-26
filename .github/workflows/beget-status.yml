@@ -84,20 +84,50 @@ jobs:
             tail -n 80 /root/.pm2/logs/rastudio-error-8.log 2>/dev/null
             echo "=== port ==="
             ss -ltnp | grep 3000 || echo no-3000
-            echo "=== step7 groups ==="
-            node --input-type=module <<'NODE'
-            import { readFileSync } from "fs";
-            const raw = JSON.parse(readFileSync("/var/www/rastudio/storage/crm-leads-board.json", "utf8"));
-            const items = raw.keys?.["7"]?.items || [];
-            let had = 0, no = 0, undef = 0, leads = 0, clients = 0, norole = 0;
-            for (const x of items) {
-              if (x.hadGroups === true) had += 1;
-              else if (x.hadGroups === false) no += 1;
-              else undef += 1;
-              if (x.study === 0) leads += 1;
-              else if (x.study === 1) clients += 1;
-              else norole += 1;
+            echo "=== step7 groups api ==="
+            cat > /tmp/ra-groups.mjs <<'NODE'
+            import { request, token } from "/var/www/rastudio/src/data/alfacrm.ts";
+            const tok = await token();
+            const branch = 1;
+            async function page(path, body) {
+              const json = await request(path, { ...body, page: 0, pageSize: 5 }, tok);
+              const o = json && typeof json === "object" ? json : {};
+              const items = Array.isArray(o.items) ? o.items : [];
+              return { total: o.total ?? o.count ?? items.length, n: items.length, first: items[0] || null, keys: items[0] ? Object.keys(items[0]) : [] };
             }
-            console.log(JSON.stringify({ total: items.length, had, no, undef, leads, clients, norole, note: String(raw.keys?.["7"]?.note || "").slice(0, 240) }));
+            const active = await page(`/v2api/${branch}/group/index`, { removed: 0 });
+            const archived = await page(`/v2api/${branch}/group/index`, { removed: 2 });
+            const gid = Number(archived.first?.id || active.first?.id || 0);
+            let cgi = null;
+            if (gid) {
+              const pack = await page(`/v2api/${branch}/cgi/index?group_id=${gid}`, { group_id: gid });
+              const row = pack.first || {};
+              cgi = {
+                gid,
+                total: pack.total,
+                n: pack.n,
+                keys: pack.keys,
+                hasCustomerId: Object.prototype.hasOwnProperty.call(row, "customer_id"),
+                customerIdType: row.customer_id == null ? "empty" : typeof row.customer_id,
+                hasGroupId: Object.prototype.hasOwnProperty.call(row, "group_id"),
+                hasB: Object.prototype.hasOwnProperty.call(row, "b_date"),
+                hasE: Object.prototype.hasOwnProperty.call(row, "e_date"),
+              };
+            }
+            const cust = await page(`/v2api/${branch}/customer/index`, { is_study: 1, removed: 2 });
+            const c = cust.first || {};
+            const gids = c.group_ids;
+            console.log(JSON.stringify({
+              activeGroups: active.total,
+              archivedGroups: archived.total,
+              cgi,
+              customerKeysHas: {
+                group_ids: Object.prototype.hasOwnProperty.call(c, "group_ids"),
+                groups: Object.prototype.hasOwnProperty.call(c, "groups"),
+                group_id: Object.prototype.hasOwnProperty.call(c, "group_id"),
+              },
+              groupIdsType: gids == null ? "empty" : Array.isArray(gids) ? `array:${gids.length}` : typeof gids,
+            }));
             NODE
+            node --experimental-strip-types --import ./scripts/ts-ext-register.mjs /tmp/ra-groups.mjs
             exit 0
