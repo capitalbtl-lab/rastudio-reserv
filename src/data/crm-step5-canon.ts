@@ -82,6 +82,15 @@ export function step5RoleDefined(isStudy: unknown, removed: unknown) {
   return step5Role(isStudy, removed) !== "не разобрали";
 }
 
+/** Роль с ответа customer/index. is_study: 0 лид, 1 клиент, false/true то же. 2 — только фильтр запроса, не роль. Архив карточки — removed 2, не is_study. removed 1 — фильтр «все», на карточку не пишется. */
+export function step5ApiRole(isStudy: unknown, removed: unknown, archived = false): Step5Role {
+  const rem = step5RemovedNum(removed);
+  if (archived || rem === 2) return "архив";
+  if (isStudy === false || isStudy === 0 || isStudy === "0") return "лид";
+  if (isStudy === true || isStudy === 1 || isStudy === "1") return "клиент";
+  return "не разобрали";
+}
+
 /** Пустая строка — не 0 (лид). Number("") === 0 ломает роль. */
 export function step5StudyNum(raw: unknown): number {
   if (raw == null) return Number.NaN;

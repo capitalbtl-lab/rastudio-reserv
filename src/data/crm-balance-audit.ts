@@ -27,7 +27,7 @@ import {
   step5SkipNote,
   step5StudyNum,
   step5RemovedNum,
-  step5Role,
+  step5ApiRole,
   step5Ymd,
   step5FitRemainder,
   step5ApplyDebts,
@@ -798,7 +798,29 @@ export async function auditOne(cid: number, branchId: number) {
         stopped: true,
       };
     }
-    if (shown.authStop || !Number.isFinite(shown.study)) {
+    if (shown.authStop) {
+      return {
+        hit: {
+          cid: id,
+          branchId: branch,
+          name: first.name,
+          clients: first.clients,
+          alfa: Number.NaN,
+          cash: first.cash,
+          woSum: first.woCal,
+          woN: first.woN,
+          codes: ["нет ответа"],
+          repaired: false,
+          at,
+          extra: "Alfa не ответила, роль с диска не берём",
+          headerStamped: first.headerStamped,
+        } satisfies AuditHit,
+      };
+    }
+    const archived = "archived" in shown && Boolean((shown as { archived?: boolean }).archived);
+    const apiStudy = archived && "archiveStudy" in shown ? (shown as { archiveStudy?: unknown }).archiveStudy : shown.study;
+    const liveRole = step5ApiRole(apiStudy, shown.removed, archived);
+    if (!archived && liveRole === "не разобрали") {
       return {
         hit: {
           cid: id,
@@ -817,17 +839,19 @@ export async function auditOne(cid: number, branchId: number) {
         } satisfies AuditHit,
       };
     }
-    const liveRole = step5Role(shown.study, shown.removed);
     try {
       const { upsertDossier } = await import("./dossiers");
+      const extras: Record<string, string> = {};
+      if (apiStudy === false || apiStudy === 0 || apiStudy === "0") extras.is_study = "0";
+      else if (apiStudy === true || apiStudy === 1 || apiStudy === "1") extras.is_study = "1";
+      const rem = step5RemovedNum(shown.removed);
+      if (liveRole === "архив" || rem === 2) extras.removed = "2";
+      else if (rem === 0) extras.removed = "0";
       upsertDossier({
         crmId: id,
         branchId: shown.branch || branch,
         status: liveRole === "лид" ? "лид" : liveRole === "архив" ? "архив" : "учится",
-        extras: {
-          is_study: Number.isFinite(shown.study) ? String(shown.study) : "",
-          removed: Number.isFinite(shown.removed) ? String(shown.removed) : "",
-        },
+        extras,
         source: "alfacrm",
         crmWins: true,
         quiet: true,

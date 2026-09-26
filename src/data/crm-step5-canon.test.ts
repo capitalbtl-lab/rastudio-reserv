@@ -21,9 +21,22 @@ import {
   step5UnitScale,
   step5ReviveEmptySkip,
   step6DiskAgrees,
+  step5ApiRole,
 } from "./crm-step5-canon.ts";
 
 describe("шаг 5 канон", () => {
+  it("роль с customer/index: 0 лид, 1 клиент, removed 2 архив, 2 и removed 1 не роль", () => {
+    assert.equal(step5ApiRole(0, 0), "лид");
+    assert.equal(step5ApiRole(false, 0), "лид");
+    assert.equal(step5ApiRole("0", 0), "лид");
+    assert.equal(step5ApiRole(1, 0), "клиент");
+    assert.equal(step5ApiRole(true, 0), "клиент");
+    assert.equal(step5ApiRole(0, 2), "архив");
+    assert.equal(step5ApiRole(1, 2, true), "архив");
+    assert.equal(step5ApiRole(2, 0), "не разобрали");
+    assert.equal(step5ApiRole(0, 1), "лид");
+  });
+
   it("id как число", () => {
     assert.equal(sameCustomerId("12", 12), true);
     assert.equal(sameCustomerId(12, 13), false);
