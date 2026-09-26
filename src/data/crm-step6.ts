@@ -271,7 +271,7 @@ export async function recheckStep7Cash(onlyId = 0, pick?: Step7Pick, restart = f
     customer: (id) => step7HeaderQuery(id, (peekStep7Board()?.items || []).find((x) => x.id === id)?.study),
     emptyNote: "Кассу шага 7 снимать некого. Сначала прочитайте архив.",
     missingNote: "Этого клиента нет на шаге 7.",
-    keep: pick ? (card) => step7Shows(card, pick) : undefined,
+    keep: pick ? (card) => step7Shows(card, { ...pick, groupsYes: false, groupsNo: false }) : undefined,
   });
 }
 

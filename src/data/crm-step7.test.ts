@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { step7ArchiveDay, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId, step7Shows } from "./crm-step7-core.ts";
+import { step7ArchiveDay, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId, step7Shows, step7StudiedClient } from "./crm-step7-core.ts";
 
 describe("шаг 7", () => {
   const live = new Set([10]);
@@ -94,8 +94,14 @@ describe("шаг 7", () => {
     assert.equal(step7Shows({ name: "Без роли" }, { ...both, leads: false }, now), false);
     assert.equal(step7Shows({ name: "Без роли" }, both, now), true);
     assert.equal(step7Shows({ study: 1, name: "тест", dob: "01.01.2015" }, { ...both, fio: true }, now), false);
-    assert.equal(step7Shows({ study: 1, name: "Иванов", hadGroups: false }, { ...both, groupsYes: true }, now), false);
-    assert.equal(step7Shows({ study: 1, name: "Иванов", hadGroups: false }, { ...both, groupsNo: true }, now), true);
+    assert.equal(step7StudiedClient({ study: 1, cashLesN: 1, cashPayN: 1 }), true);
+    assert.equal(step7StudiedClient({ study: 1, cashNoCommission: 1, cashRefundN: 1 }), true);
+    assert.equal(step7StudiedClient({ study: 1, cashLesN: 1 }), false);
+    assert.equal(step7StudiedClient({ study: 1, cashPayN: 2 }), false);
+    assert.equal(step7StudiedClient({ study: 0, cashLesN: 1, cashPayN: 1 }), false);
+    assert.equal(step7Shows({ study: 1, name: "Иванов", cashLesN: 2, cashPayN: 1 }, { ...both, groupsYes: true }, now), true);
+    assert.equal(step7Shows({ study: 1, name: "Иванов", hadGroups: true }, { ...both, groupsYes: true }, now), false);
+    assert.equal(step7Shows({ study: 1, name: "Иванов", cashLesN: 2, cashPayN: 1 }, { ...both, groupsNo: true }, now), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "0000-00-00" }, { ...both, dobYes: true }, now), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "0000-00-00" }, { ...both, dobNo: true }, now), true);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "01.01.2015" }, { ...both, dobYes: true }, now), true);

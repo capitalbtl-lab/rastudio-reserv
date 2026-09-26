@@ -197,8 +197,34 @@ export type Step7Pick = {
   years: Step7Years;
 };
 
+/** Шаг 7, таблетка «учился в группах»: клиент, проведённый урок (статус 3) и платёж. Запись в группу не считается. */
+export function step7StudiedClient(card: {
+  study?: number;
+  cashLesN?: number;
+  cashNoCommission?: number;
+  cashPayN?: number;
+  cashCorrN?: number;
+  cashRefundN?: number;
+}) {
+  if (card.study !== 1) return false;
+  const conducted = (Number(card.cashLesN) || 0) + (Number(card.cashNoCommission) || 0);
+  const pays = (Number(card.cashPayN) || 0) + (Number(card.cashCorrN) || 0) + (Number(card.cashRefundN) || 0);
+  return conducted > 0 && pays > 0;
+}
+
 export function step7Shows(
-  card: { study?: number; name?: string; dob?: string; hadGroups?: boolean; archivedAt?: string },
+  card: {
+    study?: number;
+    name?: string;
+    dob?: string;
+    hadGroups?: boolean;
+    archivedAt?: string;
+    cashLesN?: number;
+    cashNoCommission?: number;
+    cashPayN?: number;
+    cashCorrN?: number;
+    cashRefundN?: number;
+  },
   pick: Step7Pick,
   now = new Date(),
 ) {
@@ -223,8 +249,9 @@ export function step7Shows(
   }
   if (pick.fio && !step7FioOk(card.name)) return false;
   if (pick.groupsYes !== pick.groupsNo) {
-    if (pick.groupsYes && !card.hadGroups) return false;
-    if (pick.groupsNo && card.hadGroups) return false;
+    const studied = step7StudiedClient(card);
+    if (pick.groupsYes && !studied) return false;
+    if (pick.groupsNo && studied) return false;
   }
   if (!step7InYears(String(card.archivedAt || ""), pick.years, now)) return false;
   return true;
