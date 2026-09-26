@@ -2616,7 +2616,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           </button>
         </div>
         <p className="mt-1 truncate text-[0.72rem] leading-snug text-muted">
-          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? (x.study === 0 ? "лид" : x.study === 1 ? "клиент" : "без роли") : stageName(x.statusId)} · {archive ? word : step6SortWord(x.cashSort)}
+          №{x.id} · {(branch ? [x] : filtered.filter((y) => y.id === x.id)).map((y) => step6Branch(y.branchId)).join(", ")} · {archive ? (x.study === 0 ? "лид" : x.study === 1 ? "клиент" : "без роли") : stageName(x.statusId)} · {step6SortWord(x.cashSort)}
           {x.cashState && x.cashState !== "wait" ? ` · шапка ${rubAudit(x.cashBalance)} · формула ${rubAudit(x.cashFormula)}` : ""}
         </p>
         {ok ? null : (
@@ -2628,7 +2628,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         )}
         {shown ? (
           <div className="mt-3 border-t border-black/5 pt-3 text-[0.72rem] leading-snug">
-            <p>Филиал — {step6Branch(x.branchId)}.{archive ? "" : ` Колонка — ${stageName(x.statusId)}. Разбор — ${step6SortWord(x.cashSort)}.`}</p>
+            <p>Филиал — {step6Branch(x.branchId)}. {archive ? `Роль — ${x.study === 0 ? "лид" : x.study === 1 ? "клиент" : "без роли"}. ` : `Колонка — ${stageName(x.statusId)}. `}Разбор — {step6SortWord(x.cashSort)}.</p>
             <table className="mt-2 w-full text-left text-[0.72rem] leading-snug">
               <thead>
                 <tr className="text-muted">
@@ -2673,7 +2673,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
                     {x.cashPayHole == null
                       ? "ещё не снимали"
                       : x.cashDiskKnown
-                        ? `платежи: дырки ${x.cashPayHole || 0}, лишние ${x.cashPayExtra || 0} · занятия: дырки ${x.cashLesHole || 0}, лишние ${x.cashLesExtra || 0}${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}${(x.cashNoCommission || 0) > 0 ? ` · без commission ${x.cashNoCommission}` : ""}`
+                        ? `платежи: на диске, нет в Alfa ${x.cashPayHole || 0}, в Alfa, нет на диске ${x.cashPayExtra || 0} · занятия: на диске, нет в Alfa ${x.cashLesHole || 0}, в Alfa, нет на диске ${x.cashLesExtra || 0}${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}${(x.cashNoCommission || 0) > 0 ? ` · без commission ${x.cashNoCommission}` : ""}`
                         : `календаря на диске нет${(x.cashNoId || 0) > 0 ? ` · без id ${x.cashNoId}` : ""}${(x.cashNoCommission || 0) > 0 ? ` · без commission ${x.cashNoCommission}` : ""}`}
                   </td>
                 </tr>
@@ -2694,7 +2694,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
               </tbody>
             </table>
             <p className="mt-1">{step6Why(x)}</p>
-            <p className="mt-1 text-muted">Филиалы 1–4. Платежи: общий pay/index и отдельно типы возврата и корректировки. Занятия: status 3, дата 2015-01-01. Списание — details.commission этого customer_id, иначе cost. Бонус и price в остаток не входят. Шапка — Customer.balance.</p>
+            <p className="mt-1 text-muted">Филиалы 1–4. Платежи: общий pay/index и отдельно типы возврата и корректировки. Занятия: status 3, дата 2015-01-01. Списание — details.commission этого customer_id, иначе cost. Бонус и price в остаток не входят. Шапка — Customer.balance. Пустой balance — 0. Поля balance нет — шапки нет, платежи не читаются. Совпало: формула с шапкой и те же id. Лишний проведённый номер, которого нет в Alfa, с диска снимается. В Alfa не пишется.</p>
           </div>
         ) : null}
       </li>
@@ -2809,7 +2809,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           ["gap", "не сошлось"],
           ["no-balance", "нет balance"],
           ["aside", "не в колонке"],
-        ] as const).filter(([id]) => (archive ? id === "all" || id === "wait" || id === "gap" || id === "no-balance" : true)).map(([id, label]) => (
+        ] as const).filter(([id]) => (archive ? id !== "aside" : true)).map(([id, label]) => (
           <button key={id} type="button" className={cn(chips, sort === id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setSort(id); setPageLeft(0); setPageRight(0); }}>
             {label}
           </button>
