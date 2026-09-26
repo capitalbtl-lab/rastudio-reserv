@@ -38,12 +38,22 @@ jobs:
           script: |
             cd /var/www/rastudio
             git fetch origin main && git reset --hard origin/main
-            if [ -f /tmp/rastudio-deploy.lock ]; then
+            ps -eo pid,etimes,cmd | awk '/beget-deploy\.sh|vite build|with-app-env\.mjs vite/ && !/awk/ && $2+0 > 2700 {print $1}' | while read -r pid; do
+              echo "снимаю зависшую сборку $pid"
+              kill "$pid" 2>/dev/null || true
+              echo 1 >> /tmp/rastudio-deploy.hung
+            done
+            sleep 1
+            if [ -f /tmp/rastudio-deploy.hung ]; then
+              rm -f /tmp/rastudio-deploy.hung /tmp/rastudio-deploy.lock
+              echo "зависшая сборка снята"
+            elif [ -f /tmp/rastudio-deploy.lock ]; then
               age=$(( $(date +%s) - $(stat -c %Y /tmp/rastudio-deploy.lock 2>/dev/null || echo 0) ))
               if [ "$age" -lt 2400 ]; then
                 echo "сборка уже идёт (${age}s), вторую не стартую"
                 exit 0
               fi
+              rm -f /tmp/rastudio-deploy.lock
             fi
             env RA_DEPLOY_REEXEC=1 RA_DEPLOY_BG=1 bash scripts/beget-deploy.sh --force
 

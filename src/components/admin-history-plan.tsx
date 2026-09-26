@@ -280,6 +280,7 @@ function DraftForm({
       </div>
       <p className="mt-3 font-display text-[1.35rem] leading-none">{titles[step]}</p>
       {step === 0 ? (
+        <>
         <label className="mt-3 block text-sm font-semibold">
           Режим
           <select
@@ -304,6 +305,7 @@ function DraftForm({
           onSteps={(n) => setStepsOn((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort((a, b) => a - b)))}
           onAlso={(id) => setAlso((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))}
         />
+        </>
       ) : null}
       {step === 1 ? (
         <>
