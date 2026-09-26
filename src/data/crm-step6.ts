@@ -408,7 +408,7 @@ export async function recheckCashPass(opts: CashPass) {
       lslot.sum += commission;
       lslot.ids.push(lid);
       lesAt.set(lbid, lslot);
-      if (opts.step === 6) alfaLessons.push({ row, commission, branch });
+      alfaLessons.push({ row, commission, branch });
     }
     } catch {
       /* чужой филиал без доступа не обрывает остальные */
@@ -423,7 +423,7 @@ export async function recheckCashPass(opts: CashPass) {
   }
   let wroteLessons = 0;
   let lessonNote = "";
-  if (opts.step === 6 && alfaLessons.length) {
+  if (alfaLessons.length) {
     try {
       const packed = [];
       let noDate = 0;

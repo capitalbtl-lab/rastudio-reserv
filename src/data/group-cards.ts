@@ -325,7 +325,7 @@ export function replaceCustomerCalendar(customerId: number, lessons: GroupCalLes
   return list;
 }
 
-/** Шаг 6: дописать недостающие уроки. Уже лежащие строки не трогает. Потолок 2500 не поднимает. */
+/** Шаги 6 и 7: дописать недостающие уроки. Уже лежащие строки не трогает. Потолок 2500 не поднимает. */
 export function appendMissingCustomerLessons(customerId: number, rows: GroupCalLesson[]) {
   const id = Number(customerId) || 0;
   if (!id) return { wrote: 0, capped: false };
