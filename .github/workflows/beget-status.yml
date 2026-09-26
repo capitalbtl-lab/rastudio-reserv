@@ -84,4 +84,16 @@ jobs:
             tail -n 80 /root/.pm2/logs/rastudio-error-8.log 2>/dev/null
             echo "=== port ==="
             ss -ltnp | grep 3000 || echo no-3000
+            echo "=== two cards ==="
+            node --experimental-strip-types --import ./scripts/ts-ext-register.mjs -e '
+            import { readFileSync } from "fs";
+            import { step7AgeYears, step7Dob, step7FioOk, step7InYears } from "./src/data/crm-step7-core.ts";
+            const items = JSON.parse(readFileSync("storage/crm-leads-board.json","utf8")).keys?.["7"]?.items || [];
+            const now = new Date();
+            for (const id of [861, 7417]) {
+              const x = items.find((c) => c.id === id) || {};
+              const dob = step7Dob(x.dob, now);
+              console.log(JSON.stringify({ id, study: x.study, dob, age: step7AgeYears(x.dob, now), fio: step7FioOk(x.name), year: step7InYears(String(x.archivedAt||""), 2015, now), archivedAt: x.archivedAt || "", les: x.cashLesN || 0, noCom: x.cashNoCommission || 0, pay: x.cashPayN || 0, corr: x.cashCorrN || 0, refund: x.cashRefundN || 0, branch: x.branchId }));
+            }
+            '
             exit 0
