@@ -37,19 +37,19 @@ jobs:
           command_timeout: 10m
           script: |
             cd /var/www/rastudio
-            stuck=$(ps -eo pid,etimes,cmd | awk '/[b]eget-deploy\.sh/ && $2+0 > 120 {print $1}')
+            stuck=$(ps -eo pid,etimes,args | awk '$3=="bash" && $4=="/var/www/rastudio/scripts/beget-deploy.sh" && $2+0 > 120 {print $1}')
             if [ -n "$stuck" ]; then
-              echo "снимаю зависшую выкладку"
+              echo "снимаю зависшую выкладку $stuck"
               kill $stuck 2>/dev/null || true
               pkill -f '/var/www/rastudio/public/media/imported' 2>/dev/null || true
               sleep 1
               rm -f /tmp/rastudio-deploy.lock
               rm -rf /var/www/rastudio/.build-stage || true
             fi
-            if ! ps -eo cmd | grep -E '[b]eget-deploy\.sh|[v]ite build|[w]ith-app-env\.mjs vite' >/dev/null; then
+            if ! ps -eo args | awk '$1=="bash" && $2=="/var/www/rastudio/scripts/beget-deploy.sh" {found=1} END{exit !found}'; then
               echo "сборки нет — снимаю замок прошлой"
               rm -f /tmp/rastudio-deploy.lock
-              rm -rf /var/www/rastudio/.build-stage
+              rm -rf /var/www/rastudio/.build-stage || true
             fi
             git fetch origin main && git reset --hard origin/main
             ps -eo pid,etimes,cmd | awk '/beget-deploy\.sh|vite build|with-app-env\.mjs vite/ && !/awk/ && $2+0 > 2700 {print $1}' | while read -r pid; do
