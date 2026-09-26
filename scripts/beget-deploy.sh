@@ -126,7 +126,13 @@ HOLD="$ROOT/.media-imported-hold"
 restore_media() {
   if [ -d "$HOLD" ]; then
     mkdir -p "$ROOT/public/media"
-    rm -rf "$ROOT/public/media/imported"
+    rm -rf "$ROOT/public/media/imported" || true
+    if [ -e "$ROOT/public/media/imported" ]; then
+      echo "[deploy] папка медиа занята — копирую обратно, выкладку не останавливаю"
+      cp -a "$HOLD"/. "$ROOT/public/media/imported"/ || true
+      rm -rf "$HOLD" || true
+      return 0
+    fi
     mv "$HOLD" "$ROOT/public/media/imported"
   fi
 }
