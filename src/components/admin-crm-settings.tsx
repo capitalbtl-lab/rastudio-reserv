@@ -1307,6 +1307,12 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   if (codes.includes("нет роли") || /нет роли на досье/.test(extra) || extra === "не разобрали") {
     return { id: "no-role", label: "Нет роли на досье", rec: "Роль не разобрали, шапку не зовём. Это не «касса меньше шапки»." };
   }
+  if (codes.includes("лид")) {
+    return { id: "lead", label: "Лид в Альфе", rec: "Alfa ответила is_study 0. Шаг 5 сверяет клиентов. Лид в действующей группе — шаг 6." };
+  }
+  if (codes.includes("архив") && !codes.includes("нет сверки")) {
+    return { id: "arch", label: "Архив в Альфе", rec: "Alfa ответила архив. Как текущего клиента не сверяем." };
+  }
   if (codes.includes("нет сверки") || /кассы нет|нет А|не в наборе шага 2, не сверяем|сверки нет/.test(extra)) {
     return {
       id: "no-sverka",

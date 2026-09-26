@@ -27,6 +27,7 @@ import {
   step5SkipNote,
   step5StudyNum,
   step5RemovedNum,
+  step5Role,
   step5Ymd,
   step5FitRemainder,
   step5ApplyDebts,
@@ -775,15 +776,129 @@ export async function auditOne(cid: number, branchId: number) {
     removed: first.removed,
     inArchiveSet: first.inArchiveSet,
   });
-  const skip = step5SkipNote({
-    livePays: first.liveFair,
-    isStudy: first.study,
-    removed: first.removed,
-    inArchiveSet: first.inArchiveSet,
-    payFilled: first.paysComplete,
-  });
   if (!sverka) {
-    const noRole = /нет роли|не разобрали/.test(skip);
+    const shown = await alfaShow(branch, id, first.study);
+    if (shown.stopped) {
+      return {
+        hit: {
+          cid: id,
+          branchId: branch,
+          name: first.name,
+          clients: first.clients,
+          alfa: Number.NaN,
+          cash: first.cash,
+          woSum: first.woCal,
+          woN: first.woN,
+          codes: ["нет ответа"],
+          repaired: false,
+          at,
+          extra: "стоп на 429",
+          headerStamped: first.headerStamped,
+        } satisfies AuditHit,
+        stopped: true,
+      };
+    }
+    if (shown.authStop || !Number.isFinite(shown.study)) {
+      return {
+        hit: {
+          cid: id,
+          branchId: branch,
+          name: first.name,
+          clients: first.clients,
+          alfa: Number.NaN,
+          cash: first.cash,
+          woSum: first.woCal,
+          woN: first.woN,
+          codes: [shown.miss === "id" ? "нет id" : "нет ответа"],
+          repaired: false,
+          at,
+          extra: shown.miss === "id" ? "id не найден" : "Alfa не ответила, роль с диска не берём",
+          headerStamped: first.headerStamped,
+        } satisfies AuditHit,
+      };
+    }
+    const liveRole = step5Role(shown.study, shown.removed);
+    try {
+      const { upsertDossier } = await import("./dossiers");
+      upsertDossier({
+        crmId: id,
+        branchId: shown.branch || branch,
+        status: liveRole === "лид" ? "лид" : liveRole === "архив" ? "архив" : "учится",
+        extras: {
+          is_study: Number.isFinite(shown.study) ? String(shown.study) : "",
+          removed: Number.isFinite(shown.removed) ? String(shown.removed) : "",
+        },
+        source: "alfacrm",
+        crmWins: true,
+        quiet: true,
+      });
+    } catch {
+      /* роль на карточке сверки уже с Alfa */
+    }
+    if (liveRole === "лид") {
+      return {
+        hit: {
+          cid: id,
+          branchId: branch,
+          name: first.name,
+          clients: first.clients,
+          alfa: Number.NaN,
+          cash: first.cash,
+          woSum: first.woCal,
+          woN: first.woN,
+          codes: ["лид"],
+          repaired: false,
+          at,
+          extra: "лид в Альфе. Шаг 5 сверяет клиентов. Лид в действующей группе — шаг 6.",
+          headerStamped: first.headerStamped,
+        } satisfies AuditHit,
+      };
+    }
+    if (liveRole === "архив") {
+      return {
+        hit: {
+          cid: id,
+          branchId: branch,
+          name: first.name,
+          clients: first.clients,
+          alfa: Number.NaN,
+          cash: first.cash,
+          woSum: first.woCal,
+          woN: first.woN,
+          codes: ["архив"],
+          repaired: false,
+          at,
+          extra: "архив в Альфе",
+          headerStamped: first.headerStamped,
+        } satisfies AuditHit,
+      };
+    }
+    if (liveRole === "не разобрали") {
+      return {
+        hit: {
+          cid: id,
+          branchId: branch,
+          name: first.name,
+          clients: first.clients,
+          alfa: Number.NaN,
+          cash: first.cash,
+          woSum: first.woCal,
+          woN: first.woN,
+          codes: ["нет роли"],
+          repaired: false,
+          at,
+          extra: "нет роли на досье, шапку не зовём",
+          headerStamped: first.headerStamped,
+        } satisfies AuditHit,
+      };
+    }
+    const skip = step5SkipNote({
+      livePays: first.liveFair,
+      isStudy: shown.study,
+      removed: shown.removed,
+      inArchiveSet: first.inArchiveSet,
+      payFilled: first.paysComplete,
+    });
     return {
       hit: {
         cid: id,
@@ -794,7 +909,7 @@ export async function auditOne(cid: number, branchId: number) {
         cash: first.cash,
         woSum: first.woCal,
         woN: first.woN,
-        codes: (noRole ? ["нет роли"] : ["нет сверки"]) as AuditCode[],
+        codes: ["нет сверки"] as AuditCode[],
         repaired: false,
         at,
         extra: skip || "кассы нет / нет А",
