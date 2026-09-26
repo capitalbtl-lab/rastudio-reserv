@@ -733,6 +733,26 @@ function holdPayIds() {
   return pendingExportIds(["pay.create", "pay.delete"]);
 }
 
+/** Платежи Alfa этого клиента дописать на диск. Чужие и без даты не берём. Уже лежащие не дублируем и не стираем. В Alfa не пишем. */
+export function absorbAlfaPays(customerId: number, branchId: number, items: Record<string, unknown>[]) {
+  const id = Number(customerId) || 0;
+  if (!id) return 0;
+  const pulled = items
+    .map((it) => {
+      const explicit = payCustomerIdOf(it, 0);
+      if (explicit && explicit !== id) return null;
+      return packPay(it, id, branchId);
+    })
+    .filter((x): x is PayRow => x != null && Number(x.customerId) === id && Number(x.id) > 0);
+  if (!pulled.length) return 0;
+  const before = new Set(paysOf(id).map((x) => Number(x.id) || 0));
+  const merged = markRefundOfGoods(mergePayInbound(pulled, paysOf(id), holdPayIds()));
+  replaceCustomerPays(id, merged, { keepAll: true });
+  let added = 0;
+  for (const row of pulled) if (!before.has(Number(row.id))) added += 1;
+  return added;
+}
+
 function mergePulledPays(pulled: PayRow[], hold: Iterable<number>) {
   const byCid = new Map<number, PayRow[]>();
   for (const row of pulled) {

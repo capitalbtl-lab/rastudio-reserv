@@ -256,7 +256,7 @@ export async function recheckStep7Cash(onlyId = 0) {
 export async function recheckCashPass(opts: CashPass) {
   const items = opts.items();
   const wanted = Number(opts.onlyId) || 0;
-  const waiting = items.filter((x) => x.cashState === "wait" || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null || x.cashNoCommission == null || x.cashBranches == null)));
+  const waiting = items.filter((x) => x.cashState === "wait" || !x.cashState || ((x.cashState === "ok" || x.cashState === "gap") && (x.cashPayN == null || x.cashDiskKnown == null || x.cashNoCommission == null || x.cashBranches == null || !step6DiskAgrees(x))));
   const id = wanted || waiting[0]?.id || 0;
   if (!id) return { ok: true as const, more: false, note: opts.emptyNote };
   if (wanted && !items.some((x) => x.id === wanted)) return { ok: false as const, more: false, error: opts.missingNote };
@@ -316,6 +316,7 @@ export async function recheckCashPass(opts: CashPass) {
   let cash = 0;
   const goods: number[] = [];
   const payIds = new Set<number>();
+  const alfaPayRows: Record<string, unknown>[] = [];
   const lesIds = new Set<number>();
   let payNoId = 0;
   let lesNoId = 0;
@@ -357,6 +358,7 @@ export async function recheckCashPass(opts: CashPass) {
       }
       if (payIds.has(pid)) continue;
       payIds.add(pid);
+      alfaPayRows.push({ ...row, branch_id: posId(row.branch_id) || branch });
       const part = payParts(row);
       const bid = posId(row.branch_id) || branch;
       if (part.product) {
@@ -408,6 +410,13 @@ export async function recheckCashPass(opts: CashPass) {
     } catch {
       /* чужой филиал без доступа не обрывает остальные */
     }
+  }
+  let wrotePays = 0;
+  try {
+    const { absorbAlfaPays } = await import("./crm-pay");
+    wrotePays = absorbAlfaPays(id, branches[0] || scan[0] || 1, alfaPayRows);
+  } catch {
+    wrotePays = -1;
   }
   const cal = loadCustomerCalendar(id);
   const diskLesIds = new Set<number>();
@@ -531,7 +540,7 @@ export async function recheckCashPass(opts: CashPass) {
     result: matched ? "right" : "left",
     ok: true,
     matched,
-    note: `${sortRu} · шапка ${header} · формула ${fitted.n}${idMiss ? ` · id не сошлись ${idMiss}` : ""}`,
+    note: `${sortRu} · шапка ${header} · формула ${fitted.n}${wrotePays > 0 ? ` · платежи дописаны ${wrotePays}` : ""}${idMiss ? ` · id не сошлись ${idMiss}` : ""}`,
     after: { header, formula: fitted.n },
   }], !left, opts.step);
   return {
