@@ -84,4 +84,43 @@ jobs:
             tail -n 80 /root/.pm2/logs/rastudio-error-8.log 2>/dev/null
             echo "=== port ==="
             ss -ltnp | grep 3000 || echo no-3000
+            echo "=== kulikova header ==="
+            cat > /tmp/ra-kulikova.mjs <<'NODE'
+            import { request, token } from "/var/www/rastudio/src/data/alfacrm.ts";
+            const tok = await token();
+            const queries = [
+              { name: "step6", body: { id: 9687, is_study: 0, removed: 0, page: 0, pageSize: 1 } },
+              { name: "any-role", body: { id: 9687, is_study: 2, removed: 1, page: 0, pageSize: 1 } },
+              { name: "id-only", body: { id: 9687, page: 0, pageSize: 1 } },
+            ];
+            for (const branch of [1, 2, 3, 4]) {
+              for (const q of queries) {
+                try {
+                  const json = await request(`/v2api/${branch}/customer/index`, q.body, tok);
+                  const bag = json && typeof json === "object" ? json : {};
+                  const items = Array.isArray(bag.items) ? bag.items : [];
+                  const hit = items.find((x) => Number(x.id) === 9687) || null;
+                  const b = hit ? hit.balance : undefined;
+                  const kind = b === undefined ? "absent" : b === null ? "null" : Array.isArray(b) ? "array" : typeof b;
+                  console.log(JSON.stringify({
+                    branch,
+                    q: q.name,
+                    total: bag.total ?? bag.count ?? items.length,
+                    items: items.length,
+                    found: Boolean(hit),
+                    is_study: hit ? hit.is_study : null,
+                    e_date: hit ? hit.e_date ?? null : null,
+                    lead_reject_id: hit ? hit.lead_reject_id ?? null : null,
+                    customer_reject_id: hit ? hit.customer_reject_id ?? null : null,
+                    balanceKind: kind,
+                    balanceKeys: b && typeof b === "object" && !Array.isArray(b) ? Object.keys(b) : [],
+                    balance: kind === "number" || kind === "string" ? b : kind === "object" ? b : kind,
+                  }));
+                } catch (e) {
+                  console.log(JSON.stringify({ branch, q: q.name, error: e instanceof Error ? e.message.slice(0, 160) : "ошибка" }));
+                }
+              }
+            }
+            NODE
+            node --experimental-strip-types --import ./scripts/ts-ext-register.mjs /tmp/ra-kulikova.mjs
             exit 0
