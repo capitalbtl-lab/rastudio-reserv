@@ -65,27 +65,28 @@ jobs:
                 if gid and bid: live.add((bid,gid))
             print("live", len(live), "sample", list(live)[:3])
             d=json.load(open("storage/dossiers.json"))
-            hit_pair=hit_gid=0
-            kind={}
+            hit_pair=hit_gid=active_true=active_false=0
             for x in d.get("items") or []:
                 ex=x.get("extras") or {}
                 if str(x.get("status") or "")!="архив" and str(ex.get("removed") or "")!="2":
                     continue
+                matched=False
+                flag=False
                 for g in x.get("groupLinks") or []:
                     if not isinstance(g, dict):
                         continue
                     gid=int(g.get("id") or g.get("groupId") or 0)
                     bid=int(g.get("branchId") or 0) or int(x.get("branchId") or 0)
-                    if not gid:
-                        kind["nolinkid"]=kind.get("nolinkid",0)+1
+                    if not gid or (bid,gid) not in live:
                         continue
-                    if (bid,gid) in live:
-                        hit_pair+=1
-                        break
-                    if any(p[1]==gid for p in live):
-                        hit_gid+=1
-                        break
-            print("pair", hit_pair, "gid_only", hit_gid)
+                    matched=True
+                    if g.get("active") is not False:
+                        flag=True
+                if matched:
+                    hit_pair+=1
+                    if flag: active_true+=1
+                    else: active_false+=1
+            print("pair", hit_pair, "active_true", active_true, "active_false", active_false)
             PY
             echo "=== out log ==="
             ls /root/.pm2/logs/ | head
