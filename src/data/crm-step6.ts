@@ -638,6 +638,14 @@ export async function recheckCashPass(opts: CashPass) {
     cashGiveUp: false,
     cashFail: "",
   });
+  if (opts.step === 7 && matched && card) {
+    try {
+      const { publishStep7Working } = await import("./crm-step7-publish");
+      publishStep7Working(card);
+    } catch {
+      /* касса уже снята, рабочий архив допишется следующим совпадением */
+    }
+  }
   const name = who();
   const left = still();
   const sortRu = sort === "new" ? "новый" : sort === "paid" ? "новый с деньгами" : "вернувшийся";

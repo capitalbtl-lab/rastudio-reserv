@@ -100,6 +100,10 @@ describe("шаг 7", () => {
     assert.equal(step7Shows({ study: 0, name: "Лид", hadGroups: false }, { ...both, groupsYes: true }, now), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", hadGroups: true }, { ...both, groupsNo: true }, now), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", hadGroups: false }, { ...both, groupsNo: true }, now), true);
+    assert.equal(step7Shows({ study: 1, name: "Иванов Иван", dob: "01.01.2015" }, { ...both, fioNo: true }, now), false);
+    assert.equal(step7Shows({ study: 1, name: "клиент 12" }, { ...both, fioNo: true }, now), true);
+    assert.equal(step7InYears("2024-01-01", 3, new Date("2026-09-26")), true);
+    assert.equal(step7InYears("2023-01-01", 3, new Date("2026-09-26")), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "0000-00-00" }, { ...both, dobYes: true }, now), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "0000-00-00" }, { ...both, dobNo: true }, now), true);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "01.01.2015" }, { ...both, dobYes: true }, now), true);

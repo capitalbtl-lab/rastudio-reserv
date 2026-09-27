@@ -2398,6 +2398,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [archDobYes, setArchDobYes] = useState(false);
   const [archDobNo, setArchDobNo] = useState(false);
   const [archFio, setArchFio] = useState(false);
+  const [archFioNo, setArchFioNo] = useState(false);
   const [archGrpYes, setArchGrpYes] = useState(false);
   const [archGrpNo, setArchGrpNo] = useState(false);
   const [archYears, setArchYears] = useState<Step7Years>(0);
@@ -2533,7 +2534,6 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
 
   const q = query.trim().toLowerCase();
   const named = items.filter((x) => !q || x.name.toLowerCase().includes(q) || String(x.id).includes(q));
-  const byBranch = (id: number) => named.filter((x) => x.branchId === id).length;
   const ageFromN = archAgeFrom === "" ? undefined : Number(archAgeFrom);
   const ageToN = archAgeTo === "" ? undefined : Number(archAgeTo);
   const archPick = {
@@ -2544,10 +2544,13 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     dobYes: archDobYes,
     dobNo: archDobNo,
     fio: archFio,
+    fioNo: archFioNo,
     groupsYes: archGrpYes,
     groupsNo: archGrpNo,
     years: archYears,
   };
+  const picked = archive ? named.filter((x) => step7Shows(x, archPick)) : named;
+  const byBranch = (id: number) => picked.filter((x) => x.branchId === id).length;
   const filtered = named.filter((x) => {
     if (branch && x.branchId !== branch) return false;
     if (archive && !step7Shows(x, archPick)) return false;
@@ -2756,14 +2759,15 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
             </span>
             <button type="button" className={cn(chips, archDobYes ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchDobYes((v) => !v); setArchDobNo(false); setPageLeft(0); setPageRight(0); }}>с д/р</button>
             <button type="button" className={cn(chips, archDobNo ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchDobNo((v) => !v); setArchDobYes(false); setPageLeft(0); setPageRight(0); }}>без д/р</button>
-            <button type="button" className={cn(chips, archFio ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchFio((v) => !v); setPageLeft(0); setPageRight(0); }}>только с ФИО</button>
+            <button type="button" className={cn(chips, archFio ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchFio((v) => !v); setArchFioNo(false); setPageLeft(0); setPageRight(0); }}>с ФИО</button>
+            <button type="button" className={cn(chips, archFioNo ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchFioNo((v) => !v); setArchFio(false); setPageLeft(0); setPageRight(0); }}>без ФИО</button>
             <button type="button" className={cn(chips, archGrpYes ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchGrpYes((v) => !v); setArchGrpNo(false); setPageLeft(0); setPageRight(0); }}>учился в группах</button>
             <button type="button" className={cn(chips, archGrpNo ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchGrpNo((v) => !v); setArchGrpYes(false); setPageLeft(0); setPageRight(0); }}>не учился в группах</button>
-            {([[1, "за год"], [2, "за 2 года"], [4, "за 4 года"], [6, "за 6 лет"], [2015, "с 2015"]] as const).map(([n, label]) => (
+            {([[1, "за год"], [2, "за 2 года"], [3, "за 3 года"], [4, "за 4 года"], [2015, "с 2015"]] as const).map(([n, label]) => (
               <button key={n} type="button" className={cn(chips, archYears === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchYears((v) => (v === n ? 0 : n)); setPageLeft(0); setPageRight(0); }}>{label}</button>
             ))}
           </div>
-          <p className="mt-2 text-[0.72rem] leading-snug text-muted">ФИО — не «тест» и не телефон. Возраст и день рождения — с карточки архива. Учился в группах — явка на проведённом уроке группы, читается при «Прочитать архив». Срок — дата архива, пустая дата в срок не входит. «Перепроверить кассу» пишет только этот отбор.</p>
+          <p className="mt-2 text-[0.72rem] leading-snug text-muted">Отбор режет филиалы ниже и оба столбца. Совпавшая касса уходит вправо и в рабочий архив сайта. Остальные в клиентах остаются скрытыми.</p>
         </div>
       ) : null}
       <p className="mt-3 text-sm">
@@ -2784,7 +2788,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {[{ id: 0, label: "Все филиалы" }, ...[1, 2, 3, 4].map((id) => ({ id, label: step6Branch(id) }))].map((b) => (
           <button key={b.id} type="button" className={cn(chips, branch === b.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setBranch(b.id); setPageLeft(0); setPageRight(0); }}>
-            {b.label} · {b.id ? byBranch(b.id) : named.length}
+            {b.label} · {b.id ? byBranch(b.id) : picked.length}
           </button>
         ))}
       </div>

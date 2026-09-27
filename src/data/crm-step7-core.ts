@@ -166,7 +166,7 @@ export function step7AgeYears(dob?: string, now = new Date()) {
   return years;
 }
 
-export type Step7Years = 0 | 1 | 2 | 4 | 6 | 2015;
+export type Step7Years = 0 | 1 | 2 | 3 | 4 | 6 | 2015;
 
 function dayBack(now: Date, span: number) {
   const y = now.getFullYear() - span;
@@ -192,6 +192,7 @@ export type Step7Pick = {
   dobYes: boolean;
   dobNo: boolean;
   fio: boolean;
+  fioNo?: boolean;
   groupsYes: boolean;
   groupsNo: boolean;
   years: Step7Years;
@@ -248,7 +249,11 @@ export function step7Shows(
     if (pick.ageFrom != null && age < pick.ageFrom) return false;
     if (pick.ageTo != null && age > pick.ageTo) return false;
   }
-  if (pick.fio && !step7FioOk(card.name)) return false;
+  if (pick.fio !== Boolean(pick.fioNo)) {
+    const ok = step7FioOk(card.name);
+    if (pick.fio && !ok) return false;
+    if (pick.fioNo && ok) return false;
+  }
   if (pick.groupsYes !== pick.groupsNo) {
     if (pick.groupsYes && !card.hadGroups) return false;
     if (pick.groupsNo && card.hadGroups) return false;
@@ -262,7 +267,7 @@ export function step7PickOf(raw: unknown): Step7Pick | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const o = raw as Partial<Step7Pick>;
   const years = Number(o.years);
-  const allowed = [0, 1, 2, 4, 6, 2015];
+  const allowed = [0, 1, 2, 3, 4, 6, 2015];
   const age = (v: unknown) => {
     if (v == null || v === "") return undefined;
     const n = Number(v);
@@ -276,6 +281,7 @@ export function step7PickOf(raw: unknown): Step7Pick | undefined {
     dobYes: Boolean(o.dobYes),
     dobNo: Boolean(o.dobNo),
     fio: Boolean(o.fio),
+    fioNo: Boolean(o.fioNo),
     groupsYes: Boolean(o.groupsYes),
     groupsNo: Boolean(o.groupsNo),
     years: (allowed.includes(years) ? years : 0) as Step7Years,
