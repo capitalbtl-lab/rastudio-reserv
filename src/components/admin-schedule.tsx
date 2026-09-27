@@ -2791,7 +2791,7 @@ export function AdminSchedule() {
         className={cn(groupsWide && "fixed inset-0 z-[60] flex flex-col overflow-hidden bg-bg p-4 md:px-8 md:py-5")}
         data-screen={groupsWide ? "wide" : "normal"}
       >
-      <div className="flex shrink-0 flex-nowrap items-center gap-1 overflow-x-auto border-b border-black/10">
+      <div className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-black/10">
         {([
           ["groups", "Группы"],
           ["clients", "Клиенты"],
@@ -2810,11 +2810,15 @@ export function AdminSchedule() {
             type="button"
             onClick={() => showPane(id)}
             className={cn(
-              "rounded-t-xl px-7 py-2.5 text-base font-semibold transition-colors",
+              "flex min-h-[3.35rem] min-w-[6.75rem] items-center justify-center rounded-t-xl px-3 py-1.5 text-center text-base font-semibold leading-tight transition-colors",
               pane === id ? "bg-primary text-white" : "bg-surface-2 text-fg hover:bg-white",
             )}
           >
-            {label}
+            <span>
+              {label.split(" ").map((word) => (
+                <span key={word} className="block">{word}</span>
+              ))}
+            </span>
           </button>
         ))}
         {groupsWide ? (
