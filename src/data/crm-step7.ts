@@ -6,7 +6,7 @@ import { replaceStep7List, peekStep7Board, stampStep7Cash } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup, step7DiskRows } from "./dossiers";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-import { step7ArchiveDay, step7AttendedIds, step7DiskFrom, step7DiskKeep, step7Dob, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId, type Step7DiskMonths } from "./crm-step7-core";
+import { step7ArchiveDay, step7AttendedIds, step7DiskFrom, step7DiskKeep, step7Dob, step7HeaderQuery, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId, type Step7DiskMonths } from "./crm-step7-core";
 import { dossierCardArchive } from "./crm-archive-policy";
 import { recheckStep7Cash } from "./crm-step6";
 import type { LeadCard } from "./crm-leads-stages";
@@ -226,6 +226,30 @@ export async function syncStep7List() {
     else if (card.study === 1) clients += 1;
   }
   return { ok: true as const, note: `Шаг 7 · архив ${board.items.length} · клиенты ${clients} · лиды ${leads} · учился в группах ${board.items.filter((x) => x.hadGroups).length} · в живых группах снято ${dropped} · ${notes.join(" · ")}` };
+}
+
+/** Одна карточка левого столбца. Весь архив не обходим, совпавших справа не трогаем. */
+export async function syncStep7Card(id: number) {
+  const card = (peekStep7Board()?.items || []).find((x) => x.id === id);
+  if (!card) return { ok: true as const, note: `№${id} нет в левом столбце` };
+  const tok = await alfaToken();
+  const asked: 0 | 1 = card.study === 0 ? 0 : 1;
+  const study = card.study === 0 || card.study === 1 ? card.study : undefined;
+  const rows = await readPages(`/v2api/${card.branchId || 1}/customer/index`, step7HeaderQuery(id, study), tok);
+  const row = rows.find((r) => Number(r.id) === id);
+  if (!row) return { ok: true as const, note: `№${id} в архиве не найден` };
+  const nextStudy = step7ListStudy(row, asked);
+  const name = String(row.name || "").trim();
+  const dob = dobOf(row);
+  const archivedAt = step7ArchiveDay(row);
+  stampStep7Cash(id, {
+    ...(name ? { name } : {}),
+    study: nextStudy,
+    ...(dob ? { dob } : {}),
+    ...(archivedAt ? { archivedAt } : {}),
+    rejectId: step7RejectId(row, nextStudy),
+  });
+  return { ok: true as const, note: `№${id} · ${name || card.name}` };
 }
 
 /** Перепроверка с диска: окно 1, 3 или 6 месяцев. Живые группы не входят. Касса клиентов из окна снимается заново. */

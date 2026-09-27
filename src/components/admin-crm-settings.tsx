@@ -2387,6 +2387,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const listMode = archive ? "step7-list" : "step6-columns";
   const cashMode = archive ? "step7-cash" : "step6-cash";
   const pollJob = useRef<ReturnType<typeof setInterval> | null>(null);
+  const leftReadIds = useRef<number[]>([]);
   const [items, setItems] = useState<Step6Item[]>([]);
   const [stages, setStages] = useState<LeadStage[]>(archive ? [{ id: 0, name: "Архив", color: "#6a6a6a", weight: 0, pipelineId: 0 }] : LEAD_STAGES);
   const [query, setQuery] = useState("");
@@ -2515,7 +2516,9 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     setRunMode(mode);
     setProg({ n: 0, cur: "Запускаю на сервере…" });
     setNote("Запускаю на сервере…");
-    const filter = archive && mode === "step7-cash"
+    const filter = archive && mode === "step7-list"
+      ? JSON.stringify({ ids: leftReadIds.current })
+      : archive && mode === "step7-cash"
       ? JSON.stringify(archPick)
       : archive && mode === "step7-recheck"
         ? JSON.stringify({ diskMonths: archDiskMonths })
@@ -2588,6 +2591,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const left = onePerson(filtered.filter((x) => !closed(x)).sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id));
   const rightOrder = new Map(justRight.map((id, i) => [id, i]));
   const right = onePerson(filtered.filter(closed).sort((a, b) => (rightOrder.get(a.id) ?? 1000) - (rightOrder.get(b.id) ?? 1000) || a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id));
+  leftReadIds.current = archive ? left.map((x) => x.id) : [];
   const pagesL = Math.max(1, Math.ceil(left.length / pageSize) || 1);
   const pagesR = Math.max(1, Math.ceil(right.length / pageSize) || 1);
   const safeL = Math.min(pageLeft, pagesL - 1);
@@ -2796,7 +2800,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         ) : null}
         <button type="button" className={BTN_GHOST} disabled={!busy} onClick={stopServer}>Стоп</button>
       </div>
-      {archive ? <p className="mt-2 text-[0.72rem] leading-snug text-muted">«Перепроверить архив» берёт с диска выбранное окно: месяц, 3 или 6. Живые группы не входят, исключённые из групп входят. Касса этих клиентов снимается заново. «Очистить архив» стирает список шага.</p> : null}
+      {archive ? <p className="mt-2 text-[0.72rem] leading-snug text-muted">«Прочитать архив» берёт по ID только левый столбец текущего отбора. Совпавших справа не читает. «Перепроверить архив» берёт с диска выбранное окно: месяц, 3 или 6. Живые группы не входят, исключённые из групп входят. Касса этих клиентов снимается заново. «Очистить архив» стирает список шага.</p> : null}
       {busy ? (
         <p className="mt-2 text-sm font-semibold">
           Идёт на сервере{prog ? ` · сделано ${prog.n}` : ""}{prog?.cur ? ` · ${prog.cur}` : ""}

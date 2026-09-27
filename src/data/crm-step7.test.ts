@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { step7ArchiveDay, step7AttendedIds, step7DiskFrom, step7DiskKeep, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId, step7Shows } from "./crm-step7-core.ts";
+import { step7ArchiveDay, step7AttendedIds, step7DiskFrom, step7DiskKeep, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7ReadIds, step7RejectId, step7Shows } from "./crm-step7-core.ts";
 
 describe("шаг 7", () => {
   const live = new Set([10]);
@@ -36,6 +36,16 @@ describe("шаг 7", () => {
     assert.equal(step7RejectId({ customer_reject_id: null }), 0);
     assert.equal(step7RejectId({ lead_reject_id: 9 }, 0), 9);
     assert.equal(step7RejectId({ customer_reject_id: 6, lead_reject_id: 9 }, 0), 9);
+  });
+
+  it("прочитка архива берёт только левый столбец, совпавших справа нет", () => {
+    assert.deepEqual(step7ReadIds([
+      { id: 1, closed: false },
+      { id: 2, closed: true },
+      { id: 1, closed: false },
+      { id: 0, closed: false },
+      { id: 3, closed: false },
+    ]), [1, 3]);
   });
 
   it("шапка архивного лида — is_study 0, клиента — 1, оба только архив", () => {

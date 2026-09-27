@@ -166,6 +166,19 @@ export function step7AgeYears(dob?: string, now = new Date()) {
   return years;
 }
 
+/** Левый столбец: уже совпавших справа не читаем, повтор одного id не читаем. */
+export function step7ReadIds(rows: { id: number; closed: boolean }[]): number[] {
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const row of rows) {
+    const id = Number(row.id) || 0;
+    if (!id || row.closed || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 export type Step7Years = 0 | 1 | 2 | 3 | 4 | 6 | 2015;
 
 function dayBack(now: Date, span: number) {

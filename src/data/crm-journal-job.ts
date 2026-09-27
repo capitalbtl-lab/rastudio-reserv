@@ -1400,6 +1400,43 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       return { done: false, gap: pause || 800 };
     }
     if (mode === "step7-list") {
+      const picked = (() => {
+        if (!String(job.filter || "").trim().startsWith("{")) return null;
+        try {
+          const parsed = JSON.parse(String(job.filter)) as { ids?: unknown; at?: unknown };
+          if (!Array.isArray(parsed.ids)) return null;
+          return { ids: parsed.ids.map(Number).filter((n) => n > 0), at: Number(parsed.at) || 0 };
+        } catch {
+          return null;
+        }
+      })();
+      if (picked) {
+        if (!picked.ids.length || picked.at >= picked.ids.length) {
+          const msg = picked.ids.length ? `Шаг 7 · левый столбец прочитан · ${picked.ids.length}` : "Шаг 7 · в левом столбце некого читать.";
+          patch({ id, running: false, n: picked.ids.length, total: picked.ids.length, cur: "", fill: null, msg });
+          return { done: true, gap: 0, msg };
+        }
+        const cid = picked.ids[picked.at];
+        const { syncStep7Card } = await import("./crm-step7");
+        const got = await awaitWhileJob(id, syncStep7Card(cid));
+        if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+        if (loadJournalJob().id !== id) return { done: true, gap: 0 };
+        const note = got.value.note;
+        const at = picked.at + 1;
+        const filter = JSON.stringify({ ids: picked.ids, at });
+        const last = at >= picked.ids.length;
+        patch({
+          id,
+          n: at,
+          total: picked.ids.length,
+          cur: note,
+          msg: `${note} · ${at} из ${picked.ids.length}`,
+          filter,
+          running: !last,
+          ...(last ? { cur: "", fill: null } : {}),
+        });
+        return { done: last, gap: last ? 0 : 400, msg: note };
+      }
       const { syncStep7List } = await import("./crm-step7");
       const got = await awaitWhileJob(id, syncStep7List());
       if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
