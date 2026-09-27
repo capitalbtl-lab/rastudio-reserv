@@ -129,7 +129,10 @@ describe("шаг 7", () => {
     assert.equal(step7DiskSpanOf("нет"), "week");
     assert.equal(step7StillArchive(null), null);
     assert.equal(step7StillArchive({ removed: 2 }), true);
-    assert.equal(step7StillArchive({}), true);
+    assert.equal(step7StillArchive({}), false);
+    assert.equal(step7StillArchive({ e_date: "31.12.2030" }), false);
+    assert.equal(step7StillArchive({ e_date: "18.09.2026" }), true);
+    assert.equal(step7StillArchive({ removed: 2, e_date: "31.12.2030" }), true);
     assert.equal(step7StillArchive({ removed: 0 }), false);
     assert.equal(step7StillArchive({ removed: 1 }), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "0000-00-00" }, { ...both, dobYes: true }, now), false);

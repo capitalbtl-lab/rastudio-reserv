@@ -257,6 +257,12 @@ function step7Closed(card: LeadCard) {
   return card.cashState === "ok" && step6DiskAgrees(card);
 }
 
+/** Касса реально снята: не пустое «ок» без номеров платежей и занятий. */
+function step7CashCounted(card: LeadCard) {
+  const taken = card.cashDiskKnown != null || card.cashPayHole != null || card.cashPayN != null || card.cashLesN != null;
+  return Boolean(taken) && step7Closed(card);
+}
+
 /** Новые за окно: левый столбец и те, кого ещё нет на доске. Справа уже совпавшие в кассу не ставятся. */
 export function planStep7Recheck(span: Step7DiskSpan) {
   const from = step7DiskFrom(span);
@@ -294,7 +300,7 @@ export function planStep7Recheck(span: Step7DiskSpan) {
   const items = peekStep7Board()?.items || [];
   const inWindow = (at?: string) => Boolean(at) && String(at) >= from;
   const newIds = items.filter((x) => inWindow(x.archivedAt) && !step7Closed(x)).map((x) => x.id);
-  const rightIds = items.filter((x) => inWindow(x.archivedAt) && step7Closed(x)).map((x) => x.id);
+  const rightIds = items.filter((x) => step7Closed(x)).map((x) => x.id);
   return {
     ok: true as const,
     newIds,
@@ -315,7 +321,7 @@ export async function confirmStep7StillArchive(id: number) {
     dropStep7Ids([id]);
     return { ok: true as const, gone: true, needCash: false, note: `№${id} больше не архив` };
   }
-  const needCash = !step7Closed(card);
+  const needCash = !step7CashCounted(card);
   return { ok: true as const, gone: false, needCash, note: needCash ? `№${id} архив, касса не снималась` : `№${id} архив, касса совпала` };
 }
 

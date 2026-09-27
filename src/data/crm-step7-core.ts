@@ -250,15 +250,19 @@ export function step7DiskSpanOf(raw: unknown): Step7DiskSpan {
   return "week";
 }
 
-/** Фильтр removed 1 отдаёт карточку в любом состоянии. 0 и 1 в строке — уже не архив. Пусто и 2 — архив. Нет строки — не решаем. */
-export function step7StillArchive(row: { removed?: unknown } | null) {
+/** Фильтр removed 1 отдаёт карточку в любом состоянии.
+ * 0 и 1 в строке — уже не архив. 2 — архив.
+ * Поля нет: архив только если есть реальная дата ухода. Заглушка 31.12.2030 — не архив.
+ * Строки нет — не решаем. */
+export function step7StillArchive(row: { removed?: unknown; e_date?: unknown; removed_at?: unknown } | null) {
   if (!row) return null;
   const raw = row.removed;
-  if (raw == null || raw === "") return true;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return true;
-  if (n === 0 || n === 1) return false;
-  return n === 2;
+  if (raw != null && raw !== "") {
+    const n = Number(raw);
+    if (n === 0 || n === 1) return false;
+    if (n === 2) return true;
+  }
+  return Boolean(step7ArchiveDay(row));
 }
 
 /** С диска в перепроверку: архив в окне и уже не в действующей группе. Исключённый из группы проходит. */
