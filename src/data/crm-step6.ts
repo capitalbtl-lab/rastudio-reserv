@@ -261,8 +261,9 @@ export async function recheckStep6Cash(onlyId = 0, restart = false) {
   });
 }
 
-export async function recheckStep7Cash(onlyId = 0, pick?: Step7Pick, restart = false) {
+export async function recheckStep7Cash(onlyId = 0, pick?: Step7Pick, restart = false, onlyIds?: number[]) {
   if (restart) reopenStepCash(7);
+  const allow = onlyIds?.length ? new Set(onlyIds) : null;
   return recheckCashPass({
     step: 7,
     onlyId,
@@ -271,7 +272,7 @@ export async function recheckStep7Cash(onlyId = 0, pick?: Step7Pick, restart = f
     customer: (id) => step7HeaderQuery(id, (peekStep7Board()?.items || []).find((x) => x.id === id)?.study),
     emptyNote: "Кассу шага 7 снимать некого. Сначала прочитайте архив.",
     missingNote: "Этого клиента нет на шаге 7.",
-    keep: pick ? (card) => step7Shows(card, pick) : undefined,
+    keep: allow ? (card) => allow.has(card.id) : pick ? (card) => step7Shows(card, pick) : undefined,
   });
 }
 

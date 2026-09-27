@@ -214,6 +214,22 @@ export function step7AttendedIds(row: { status?: unknown; details?: unknown }) {
   return out;
 }
 
+export type Step7DiskMonths = 1 | 3 | 6;
+
+/** Нижняя дата окна: месяц, три или шесть назад. */
+export function step7DiskFrom(months: number, now = new Date()) {
+  const day = new Date(now.getTime());
+  day.setMonth(day.getMonth() - (months === 1 || months === 3 || months === 6 ? months : 6));
+  return day.toISOString().slice(0, 10);
+}
+
+/** С диска в перепроверку: архив в окне и уже не в действующей группе. Исключённый из группы проходит. */
+export function step7DiskKeep(row: { archived: boolean; archivedAt: string; live: boolean }, from: string) {
+  if (!row.archived || row.live) return false;
+  const at = String(row.archivedAt || "");
+  return Boolean(at) && at >= from;
+}
+
 export function step7Shows(
   card: {
     study?: number;

@@ -97,6 +97,7 @@ function modeRu(mode: string, kind = "") {
   if (mode === "step6-cash") return "шаг 6 · касса";
   if (mode === "step7-list") return "шаг 7 · архив";
   if (mode === "step7-cash") return "шаг 7 · касса";
+  if (mode === "step7-recheck") return "шаг 7 · перепроверка с диска";
   if (mode === "archivesPupils") return "архив групп действующих";
   if (mode === "archives") return "архивные группы";
   return mode || "очередь";
@@ -529,8 +530,8 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   if (mode === "step6-recount" || mode === "step6-columns" || mode === "step6-cash") {
     items = [{ name: mode === "step6-cash" ? "касса лидов" : mode === "step6-recount" ? "пересчет лидов" : "колонки лидов" }];
   }
-  if (mode === "step7-list" || mode === "step7-cash") {
-    items = [{ name: mode === "step7-cash" ? "касса архива" : "архив без живых групп" }];
+  if (mode === "step7-list" || mode === "step7-cash" || mode === "step7-recheck") {
+    items = [{ name: mode === "step7-cash" ? "касса архива" : mode === "step7-recheck" ? "перепроверка архива с диска" : "архив без живых групп" }];
   }
   if (!items.length && !loopPullKind(mode)) {
     const saved = saveJournalJob({
@@ -1372,7 +1373,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, msg });
     return { done: true, gap: 0, msg };
   }
-  if (mode === "step6-recount" || mode === "step6-columns" || mode === "step6-cash" || mode === "step7-list" || mode === "step7-cash") {
+  if (mode === "step6-recount" || mode === "step6-columns" || mode === "step6-cash" || mode === "step7-list" || mode === "step7-cash" || mode === "step7-recheck") {
     if (mode === "step6-cash" || mode === "step7-cash") {
       const only = Number(job.customerId) || 0;
       const restart = !only && (Number(job.n) || 0) === 0;
@@ -1407,6 +1408,48 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       const msg = res.note || "Архив шага 7 прочитан.";
       patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, msg });
       return { done: true, gap: 0, msg };
+    }
+    if (mode === "step7-recheck") {
+      const raw = (() => {
+        try {
+          return JSON.parse(String(job.filter || "{}")) as { diskMonths?: number; ready?: boolean; newIds?: number[] };
+        } catch {
+          return {};
+        }
+      })();
+      if (!raw.ready) {
+        const { syncStep7FromDisk } = await import("./crm-step7");
+        const months = raw.diskMonths === 1 || raw.diskMonths === 3 || raw.diskMonths === 6 ? raw.diskMonths : 6;
+        const res = await awaitWhileJob(id, Promise.resolve(syncStep7FromDisk(months)));
+        if ("stopped" in res) return { done: true, gap: 0, msg: stoppedMsg() };
+        if (loadJournalJob().id !== id) return { done: true, gap: 0 };
+        const got = res.value;
+        const filter = JSON.stringify({ diskMonths: months, ready: true, newIds: got.newClientIds });
+        if (!got.newClientIds.length) {
+          patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, filter, msg: got.note });
+          return { done: true, gap: 0, msg: got.note };
+        }
+        patch({ id, n: 0, total: got.newClientIds.length, cur: got.note, msg: got.note, filter, running: true });
+        return { done: false, gap: 0, msg: got.note };
+      }
+      const ids = Array.isArray(raw.newIds) ? raw.newIds.map(Number).filter((n) => n > 0) : [];
+      const got = await awaitWhileJob(id, (await import("./crm-step6")).recheckStep7Cash(0, undefined, false, ids));
+      if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+      const res = got.value;
+      if (loadJournalJob().id !== id) return { done: true, gap: 0 };
+      const n = job.n + 1;
+      const note = "note" in res ? res.note : res.error || "";
+      const pause = Math.max(0, Number("pauseMs" in res ? res.pauseMs : 0) || 0);
+      if (!res.ok) {
+        patch({ id, n, cur: note, msg: note, running: true });
+        return { done: false, gap: pause || 5000 };
+      }
+      if (!("more" in res) || !res.more) {
+        patch({ id, running: false, n, total: Math.max(Number(job.total) || 0, n), cur: "", fill: null, msg: note || "Касса новых архивных снята." });
+        return { done: true, gap: 0, msg: note || "Касса новых архивных снята." };
+      }
+      patch({ id, n, total: Math.max(Number(job.total) || 0, ids.length), cur: note, msg: note });
+      return { done: false, gap: pause || 800 };
     }
     const { syncStep6Columns } = await import("./crm-step6");
     const got = await awaitWhileJob(id, syncStep6Columns());

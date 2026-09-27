@@ -1203,6 +1203,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "step7List"
           | "step7Board"
           | "step7Cash"
+          | "step7Clear"
           | "leadMove"
           | "leadArchive"
           | "leadStageSave"
@@ -2633,6 +2634,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { peekStep7Board } = await import("./crm-leads");
       const board = peekStep7Board();
       return { ok: true as const, stages: board?.stages || [], items: board?.items || [], total: board?.items.length || 0, note: board?.note || "" };
+    }
+    if (data.action === "step7Clear") {
+      const { clearStep7Board } = await import("./crm-step7");
+      const res = clearStep7Board();
+      return { ok: true as const, note: res.note };
     }
     if (data.action === "step7Cash") {
       const { recheckStep7Cash } = await import("./crm-step6");

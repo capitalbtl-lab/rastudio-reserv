@@ -947,6 +947,42 @@ export function stampLeadStages(rows: { id: number; statusId: number }[]) {
 /** Состав группы с диска сайта: кто уже лежит в groupLinks. CGI не трогает. */
 export { groupLinkHits } from "./crm-group-disk";
 
+export function step7DiskRows() {
+  const live = new Set(overlayAdminGroups().map((g) => `${g.branchId}:${g.groupId}`));
+  const out: {
+    id: number;
+    branchId: number;
+    name: string;
+    dob: string;
+    cardStatus: string;
+    removed: string;
+    studyRaw: string;
+    eDate: string;
+    hadGroup: boolean;
+    live: boolean;
+  }[] = [];
+  for (const d of loadStore().items) {
+    const id = Number(d.crmId) || 0;
+    if (!id) continue;
+    const ex = d.extras || {};
+    const links = d.groupLinks || [];
+    const home = Number(d.branchId) || 0;
+    out.push({
+      id,
+      branchId: home,
+      name: String(d.child?.fio || "").trim(),
+      dob: String(d.child?.dob || ""),
+      cardStatus: String(d.status || ""),
+      removed: String(ex.removed || ""),
+      studyRaw: String(ex.is_study || ""),
+      eDate: String(ex.e_date || ex.removed_at || ""),
+      hadGroup: links.some((g) => Number(g.id) > 0),
+      live: links.some((g) => g.active !== false && live.has(`${Number(g.branchId) || home}:${Number(g.id) || 0}`)),
+    });
+  }
+  return out;
+}
+
 export function dossiersInGroup(branchId: number, groupId: number) {
   if (!Number(groupId)) return [] as Dossier[];
   return loadStore().items.filter((d) => groupLinkHits(d.groupLinks, branchId, groupId));

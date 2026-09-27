@@ -2381,7 +2381,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [justRight, setJustRight] = useState<number[]>([]);
   const seenBoard = useRef(false);
   const prevClosed = useRef<Set<number>>(new Set());
-  const ownModes = archive ? ["step7-list", "step7-cash"] : ["step6-recount", "step6-columns", "step6-cash"];
+  const ownModes = archive ? ["step7-list", "step7-cash", "step7-recheck"] : ["step6-recount", "step6-columns", "step6-cash"];
   const listMode = archive ? "step7-list" : "step6-columns";
   const cashMode = archive ? "step7-cash" : "step6-cash";
   const pollJob = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -2402,6 +2402,8 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [archGrpYes, setArchGrpYes] = useState(false);
   const [archGrpNo, setArchGrpNo] = useState(false);
   const [archYears, setArchYears] = useState<Step7Years>(0);
+  const [archDiskMonths, setArchDiskMonths] = useState<1 | 3 | 6>(6);
+  const [clearAsk, setClearAsk] = useState(false);
   const [open, setOpen] = useState("");
   const [logOpen, setLogOpen] = useState(false);
   const [pageSize, setPageSize] = useState(20);
@@ -2511,7 +2513,11 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     setRunMode(mode);
     setProg({ n: 0, cur: "Запускаю на сервере…" });
     setNote("Запускаю на сервере…");
-    const filter = archive && mode === "step7-cash" ? JSON.stringify(archPick) : "";
+    const filter = archive && mode === "step7-cash"
+      ? JSON.stringify(archPick)
+      : archive && mode === "step7-recheck"
+        ? JSON.stringify({ diskMonths: archDiskMonths })
+        : "";
     void adminSchedule({
       data: { token: token(), action: "journalPull", kind: "jobStart", jobMode: mode, customerId, filter } as never,
     })
@@ -2777,8 +2783,18 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
         <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>{archive ? "Прочитать архив" : "Прочитать колонки"}</button>
         <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>
+        {archive ? (
+          <>
+            {([1, "1 месяц"], [3, "3 месяца"], [6, "6 месяцев"] as const).map(([n, label]) => (
+              <button key={n} type="button" className={cn(chips, archDiskMonths === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setArchDiskMonths(n)}>{label}</button>
+            ))}
+            <button type="button" className={cn(BTN_GHOST, runMode === "step7-recheck" && "ra-btn-blink")} disabled={busy} onClick={() => startServer("step7-recheck")}>Перепроверить архив</button>
+            <button type="button" className={BTN_GHOST} disabled={busy} onClick={() => setClearAsk(true)}>Очистить архив</button>
+          </>
+        ) : null}
         <button type="button" className={BTN_GHOST} disabled={!busy} onClick={stopServer}>Стоп</button>
       </div>
+      {archive ? <p className="mt-2 text-[0.72rem] leading-snug text-muted">«Перепроверить архив» берёт с диска выбранное окно: месяц, 3 или 6. Живые группы не входят, исключённые из групп входят. Касса снимается только у новых клиентов. «Очистить архив» стирает список шага.</p> : null}
       {busy ? (
         <p className="mt-2 text-sm font-semibold">
           Идёт на сервере{prog ? ` · сделано ${prog.n}` : ""}{prog?.cur ? ` · ${prog.cur}` : ""}
@@ -2844,6 +2860,34 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           <ul className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto p-0.5">{sliceR.map(card)}</ul>
         </section>
       </div>
+      {clearAsk ? (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-3 sm:items-center" role="presentation" onClick={() => setClearAsk(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <p className="font-display text-[1.15rem]">Очистить архив шага 7?</p>
+            <p className="mt-2 text-sm text-muted">Список на этом шаге будет стёрт. Карточки в разделе «Клиенты» не удаляются.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className={BTN_GHOST} onClick={() => setClearAsk(false)}>Отмена</button>
+              <button
+                type="button"
+                className={BTN_RED}
+                onClick={() => {
+                  setClearAsk(false);
+                  setNote("Очищаю список…");
+                  void adminSchedule({ data: { token: token(), action: "step7Clear" } as never })
+                    .then((res) => {
+                      const got = res as { ok?: boolean; error?: string; note?: string };
+                      setNote(got.ok ? got.note || "Список очищен." : got.error || "Не очистилось.");
+                      return loadList();
+                    })
+                    .catch((e) => setNote(e instanceof Error ? e.message : "Не очистилось."));
+                }}
+              >
+                Очистить
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
