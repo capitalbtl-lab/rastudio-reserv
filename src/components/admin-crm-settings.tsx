@@ -369,12 +369,17 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 const CRM_SET_TABS = [
   { id: "people", label: "Люди и роли" },
   { id: "sync", label: "Центр синхронизации" },
-  { id: "queue", label: "Очередь" },
   { id: "funnel", label: "Воронка" },
-  { id: "cache", label: "Кэш сайта" },
   { id: "branches", label: "Филиалы" },
 ] as const;
 type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
+const SYNC_PANES = [
+  { id: "history", label: "История из Alfa" },
+  { id: "bg", label: "Фоновая загрузка" },
+  { id: "queue", label: "Очередь" },
+  { id: "cache", label: "Кэш сайта" },
+] as const;
+type SyncPane = (typeof SYNC_PANES)[number]["id"];
 type HistTab = "roster" | "groups" | "students" | "money" | "audit" | "step6" | "step7";
 const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "roster", label: "Шаг 1 · Группы и состав" },
@@ -3502,6 +3507,7 @@ export function AdminCrmSettings() {
   const [archNeedGroups, setArchNeedGroups] = useState(false);
   const [archAttendYears, setArchAttendYears] = useState<0 | 1 | 2>(1);
   const [crmTab, setCrmTab] = useState<CrmSetTab>("sync");
+  const [syncPane, setSyncPane] = useState<SyncPane>("history");
   const [syncPolicy, setSyncPolicy] = useState<CrmSyncPolicy>(POLICY_FACTORY);
   const [histTab, setHistTab] = useState<HistTab>("roster");
   const [loadGuide, setLoadGuide] = useState<HistLoadTab | null>(null);
@@ -3539,15 +3545,31 @@ export function AdminCrmSettings() {
       const g = localStorage.getItem("crm-journal-grain") || "";
       const t = localStorage.getItem("crm-settings-tab") || "";
       const h = localStorage.getItem("crm-history-tab") || "";
+      const sp = localStorage.getItem("crm-sync-pane") || "";
       if (s) setJournalSchool(s);
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
-      const tab = t === "historyAuto" || t === "history" || t === "alfa" ? "sync" : t;
-      if (CRM_SET_TABS.some((x) => x.id === tab)) setCrmTab(tab as CrmSetTab);
+      if (t === "queue" || t === "cache") {
+        setCrmTab("sync");
+        setSyncPane(t);
+      } else {
+        const tab = t === "historyAuto" || t === "history" || t === "alfa" ? "sync" : t;
+        if (CRM_SET_TABS.some((x) => x.id === tab)) setCrmTab(tab as CrmSetTab);
+        if (sp === "history" || sp === "bg" || sp === "queue" || sp === "cache") setSyncPane(sp);
+      }
       if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit" || h === "step6" || h === "step7") setHistTab(h);
     } catch {
       /* */
     }
   }, []);
+
+  function pickSyncPane(v: SyncPane) {
+    setSyncPane(v);
+    try {
+      localStorage.setItem("crm-sync-pane", v);
+    } catch {
+      /* */
+    }
+  }
 
   function pickCrmTab(v: CrmSetTab) {
     tabLockY.current = crmTabsRef.current?.getBoundingClientRect().top ?? null;
@@ -4693,6 +4715,21 @@ export function AdminCrmSettings() {
         ))}
       </div>
 
+      {crmTab === "sync" ? (
+      <div className="flex flex-wrap gap-1">
+        {SYNC_PANES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", syncPane === t.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+            onClick={() => pickSyncPane(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      ) : null}
+
       <div className="flex min-h-[70vh] flex-col gap-4">
       {crmTab === "people" ? (
       <Card
@@ -4728,8 +4765,7 @@ export function AdminCrmSettings() {
       </Card>
       ) : null}
 
-      {crmTab === "sync" ? (
-      <div className="order-2">
+      {crmTab === "sync" && syncPane === "bg" ? (
       <Card
         title="Фоновая загрузка"
         hint="Диск сайта — правда. Ольга и формы пишут сюда сразу. Ниже — что подгружать из Alfa, что выгружать обратно, и предохранители трубы (лимит, токен, повтор создания)."
@@ -4894,11 +4930,9 @@ export function AdminCrmSettings() {
           <li>Касса пока в Alfa: платёж у нас сразу на диск и в очередь.</li>
         </ul>
       </Card>
-      </div>
       ) : null}
 
-      {crmTab === "sync" ? (
-      <div className="order-1">
+      {crmTab === "sync" && syncPane === "history" ? (
       <Card
         title="История из Alfa"
       >
@@ -5832,10 +5866,9 @@ export function AdminCrmSettings() {
           );
         })()}
       </Card>
-      </div>
       ) : null}
 
-      {crmTab === "queue" ? (
+      {crmTab === "sync" && syncPane === "queue" ? (
       <Card
         title="Очередь в Alfa"
         hint={
@@ -6095,7 +6128,7 @@ export function AdminCrmSettings() {
       </>
       ) : null}
 
-      {crmTab === "cache" ? (
+      {crmTab === "sync" && syncPane === "cache" ? (
       <Card
         title="Кэш сайта"
         hint="Что читать из хранилища админки, а что каждый раз из AlfaCRM. Оперативные данные — на лету. Абонементы учеников: счётчик сразу с диска сайта, без пакетов. Сверка CRM — фоном по филиалам."
