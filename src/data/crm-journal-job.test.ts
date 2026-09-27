@@ -673,8 +673,8 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /function startHistJob/);
     assert.match(ui, /periodKey: opts.periodKey/);
     assert.match(ui, /periodLabel: opts.periodLabel/);
-    assert.match(ui, /Загрузить по одному/);
-    assert.match(ui, /Перепроверить по одному/);
+    assert.match(ui, /Прочитать календарь учеников/);
+    assert.match(ui, /Перепроверить календарь/);
     assert.match(ui, /PEOPLE_LOAD_GAP_MS = 5000/);
     assert.match(ui, /function pauseFive/);
     assert.match(ui, /async function recheckSchool/);

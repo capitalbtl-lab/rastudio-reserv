@@ -95,7 +95,7 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pull, /a\.done - b\.done/);
     assert.match(pull, /kind === "details"/);
     assert.match(pull, /clampGrain/);
-    assert.match(ui, /Загрузить по одному/);
+    assert.match(ui, /Прочитать журнал групп/);
     assert.match(ui, /Медленный автодобор/);
     assert.match(ui, /people-slow/);
     assert.match(ui, /peopleQueue\(people, "students", false\)/);
@@ -220,7 +220,7 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(ui, /return "нет"/);
     assert.match(ui, /const by = new Map\(hits.map/);
     assert.doesNotMatch(ui, /for \(const h of hits\)/);
-    assert.match(ui, /clientRows.filter\(\(r\) => rowMatched\(r\)\)/);
+    assert.match(ui, /done=\{scanned\}/);
     assert.match(ui, /archPeople/);
     assert.doesNotMatch(ui, /diskArch/);
     assert.match(ui, /asAuditRow\(r, by.get\(r.cid\)\)/);
@@ -229,7 +229,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /role === "архив" \? true : rowMatched\(r\)/);
     assert.doesNotMatch(pull, /function auditArchivePeople/);
     assert.match(pull, /parseArchiveUiFilters/);
-    assert.match(ui, /Сверить рабочий архив/);
+    assert.match(ui, /Сверить остаток архивных клиентов/);
     assert.match(ui, /Набор шага 2/);
     assert.match(ui, /за 2 года/);
     assert.match(ui, /В роли/);
@@ -274,7 +274,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Загрузить кассу/);
     assert.match(ui, /years=\{/);
     assert.match(ui, /onGrain/);
-    assert.match(ui, /Перепроверить по одному/);
+    assert.match(ui, /Перепроверить календарь/);
     assert.match(ui, /HINT\.recheckOnePeople/);
     assert.match(ui, /RecheckDaysSelect/);
     assert.match(ui, /RECHECK_DAY_OPTS/);
@@ -349,7 +349,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /lessonsRecheckAt/);
     assert.match(pull, /customerId/);
     assert.match(pull, /lastStudents/);
-    assert.match(ui, /Загрузить по одному/);
+    assert.match(ui, /Прочитать состав групп/);
     assert.match(job, /касса · ещё/);
     assert.match(ui, /startHistJob/);
     assert.doesNotMatch(ui, /runStudentPack/);
