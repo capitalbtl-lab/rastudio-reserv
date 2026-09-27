@@ -228,12 +228,36 @@ export function step7AttendedIds(row: { status?: unknown; details?: unknown }) {
 }
 
 export type Step7DiskMonths = 1 | 3 | 6;
+export type Step7DiskSpan = Step7DiskMonths | "week" | "2020";
 
-/** Нижняя дата окна: месяц, три или шесть назад. */
-export function step7DiskFrom(months: number, now = new Date()) {
+/** Нижняя дата окна: неделя, месяц, три, шесть или с 02.05.2020. */
+export function step7DiskFrom(span: Step7DiskSpan | number, now = new Date()) {
+  if (span === "2020") return "2020-05-02";
+  if (span === "week") {
+    const day = new Date(now.getTime());
+    day.setDate(day.getDate() - 7);
+    return day.toISOString().slice(0, 10);
+  }
+  const months = span === 1 || span === 3 || span === 6 ? span : 6;
   const day = new Date(now.getTime());
-  day.setMonth(day.getMonth() - (months === 1 || months === 3 || months === 6 ? months : 6));
+  day.setMonth(day.getMonth() - months);
   return day.toISOString().slice(0, 10);
+}
+
+export function step7DiskSpanOf(raw: unknown): Step7DiskSpan {
+  if (raw === "week" || raw === "2020" || raw === 1 || raw === 3 || raw === 6) return raw;
+  return "week";
+}
+
+/** Фильтр removed 1 отдаёт карточку в любом состоянии. 0 и 1 в строке — уже не архив. Пусто и 2 — архив. Нет строки — не решаем. */
+export function step7StillArchive(row: { removed?: unknown } | null) {
+  if (!row) return null;
+  const raw = row.removed;
+  if (raw == null || raw === "") return true;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return true;
+  if (n === 0 || n === 1) return false;
+  return n === 2;
 }
 
 /** С диска в перепроверку: архив в окне и уже не в действующей группе. Исключённый из группы проходит. */

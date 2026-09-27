@@ -2,12 +2,13 @@
 
 import { request, token as alfaToken, dropAlfaIndex } from "./alfacrm";
 import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
-import { replaceStep7List, peekStep7Board, stampStep7Cash } from "./crm-leads";
+import { replaceStep7List, peekStep7Board, stampStep7Cash, resetStep7Cash, dropStep7Ids } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup, step7DiskRows } from "./dossiers";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-import { step7ArchiveDay, step7AttendedIds, step7DiskFrom, step7DiskKeep, step7Dob, step7HeaderQuery, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId, type Step7DiskMonths } from "./crm-step7-core";
+import { step7ArchiveDay, step7AttendedIds, step7DiskFrom, step7DiskKeep, step7Dob, step7HeaderQuery, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId, step7StillArchive, type Step7DiskMonths, type Step7DiskSpan } from "./crm-step7-core";
 import { dossierCardArchive } from "./crm-archive-policy";
+import { step6DiskAgrees } from "./crm-step5-canon";
 import { recheckStep7Cash } from "./crm-step6";
 import type { LeadCard } from "./crm-leads-stages";
 
@@ -250,6 +251,72 @@ export async function syncStep7Card(id: number) {
     rejectId: step7RejectId(row, nextStudy),
   });
   return { ok: true as const, note: `№${id} · ${name || card.name}` };
+}
+
+function step7Closed(card: LeadCard) {
+  return card.cashState === "ok" && step6DiskAgrees(card);
+}
+
+/** Новые за окно: левый столбец и те, кого ещё нет на доске. Справа уже совпавшие в кассу не ставятся. */
+export function planStep7Recheck(span: Step7DiskSpan) {
+  const from = step7DiskFrom(span);
+  const board = peekStep7Board()?.items || [];
+  const have = new Set(board.map((x) => x.id));
+  const added: LeadCard[] = [];
+  for (const row of step7DiskRows()) {
+    if (have.has(row.id)) continue;
+    const archivedAt = step7ArchiveDay({ e_date: row.eDate });
+    const archived = dossierCardArchive(row.cardStatus, row.removed, "");
+    if (!step7DiskKeep({ archived, archivedAt, live: row.live }, from)) continue;
+    const study = row.studyRaw === "0" ? 0 : 1;
+    added.push({
+      id: row.id,
+      customerId: row.id,
+      branchId: row.branchId || 1,
+      branches: [row.branchId || 1],
+      name: row.name || (study === 0 ? `лид ${row.id}` : `клиент ${row.id}`),
+      age: "",
+      phone: "",
+      email: "",
+      note: "",
+      assigned: "",
+      statusId: 0,
+      at: new Date().toISOString(),
+      chats: 0,
+      cashState: "wait",
+      study,
+      dob: step7Dob(row.dob),
+      hadGroups: row.hadGroup,
+      archivedAt,
+    });
+  }
+  if (added.length) replaceStep7List([...board, ...added]);
+  const items = peekStep7Board()?.items || [];
+  const inWindow = (at?: string) => Boolean(at) && String(at) >= from;
+  const newIds = items.filter((x) => inWindow(x.archivedAt) && !step7Closed(x)).map((x) => x.id);
+  const rightIds = items.filter((x) => inWindow(x.archivedAt) && step7Closed(x)).map((x) => x.id);
+  return {
+    ok: true as const,
+    newIds,
+    rightIds,
+    note: `Шаг 7 · окно с ${from} · новых слева ${newIds.length} · справа ${rightIds.length}`,
+  };
+}
+
+/** Справа: карточка ещё архив или уже лид/активный клиент. Совпавшую кассу не переснимаем. */
+export async function confirmStep7StillArchive(id: number) {
+  const card = (peekStep7Board()?.items || []).find((x) => x.id === id);
+  if (!card) return { ok: true as const, gone: false, needCash: false, note: `№${id} нет на шаге 7` };
+  const tok = await alfaToken();
+  const rows = await readPages(`/v2api/${card.branchId || 1}/customer/index`, { id, is_study: 2, removed: 1, page: 0, pageSize: 1 }, tok);
+  const row = rows.find((r) => Number(r.id) === id) || null;
+  const still = step7StillArchive(row);
+  if (still === false) {
+    dropStep7Ids([id]);
+    return { ok: true as const, gone: true, needCash: false, note: `№${id} больше не архив` };
+  }
+  const needCash = !step7Closed(card);
+  return { ok: true as const, gone: false, needCash, note: needCash ? `№${id} архив, касса не снималась` : `№${id} архив, касса совпала` };
 }
 
 /** Перепроверка с диска: окно 1, 3 или 6 месяцев. Живые группы не входят. Касса клиентов из окна снимается заново. */

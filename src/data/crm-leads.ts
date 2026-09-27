@@ -252,6 +252,25 @@ export function stampStep7Cash(id: number, patch: Partial<LeadCard>) {
   persistLeads();
 }
 
+/** Загрузка архива кладёт всех в левый столбец: касса снова не снята. */
+export function resetStep7Cash() {
+  const hit = bag().get("7");
+  if (!hit) return;
+  hit.items = hit.items.map((row) => ({ ...row, cashState: "wait" as const, cashGiveUp: false, cashRetry: false, cashTries: 0, cashFail: "" }));
+  hit.at = Date.now();
+  persistLeads();
+}
+
+/** Кто перестал быть архивом, из шага 7 уходит. */
+export function dropStep7Ids(ids: number[]) {
+  const hit = bag().get("7");
+  if (!hit || !ids.length) return;
+  const drop = new Set(ids);
+  hit.items = hit.items.filter((x) => !drop.has(x.id));
+  hit.at = Date.now();
+  persistLeads();
+}
+
 /** Новое нажатие «Перепроверить кассу»: три неудачи прошлого прогона снова в очередь. */
 export function reopenStepCash(step: 6 | 7) {
   const hit = bag().get(step === 6 ? "0" : "7");

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { step7ArchiveDay, step7AttendedIds, step7DiskFrom, step7DiskKeep, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7ReadIds, step7RejectId, step7Shows } from "./crm-step7-core.ts";
+import { step7ArchiveDay, step7AttendedIds, step7DiskFrom, step7DiskKeep, step7DiskSpanOf, step7FioOk, step7HadGroups, step7HeaderQuery, step7InYears, step7Keep, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7ReadIds, step7RejectId, step7Shows, step7StillArchive } from "./crm-step7-core.ts";
 
 describe("шаг 7", () => {
   const live = new Set([10]);
@@ -119,6 +119,16 @@ describe("шаг 7", () => {
     assert.equal(step7DiskKeep({ archived: true, archivedAt: "2026-08-01", live: true }, from), false);
     assert.equal(step7DiskKeep({ archived: true, archivedAt: "2020-01-01", live: false }, from), false);
     assert.equal(step7DiskKeep({ archived: false, archivedAt: "2026-08-01", live: false }, from), false);
+    assert.equal(step7DiskFrom("week", new Date("2026-09-27T12:00:00Z")), "2026-09-20");
+    assert.equal(step7DiskFrom("2020"), "2020-05-02");
+    assert.equal(step7DiskSpanOf("week"), "week");
+    assert.equal(step7DiskSpanOf(3), 3);
+    assert.equal(step7DiskSpanOf("нет"), "week");
+    assert.equal(step7StillArchive(null), null);
+    assert.equal(step7StillArchive({ removed: 2 }), true);
+    assert.equal(step7StillArchive({}), true);
+    assert.equal(step7StillArchive({ removed: 0 }), false);
+    assert.equal(step7StillArchive({ removed: 1 }), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "0000-00-00" }, { ...both, dobYes: true }, now), false);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "0000-00-00" }, { ...both, dobNo: true }, now), true);
     assert.equal(step7Shows({ study: 1, name: "Иванов", dob: "01.01.2015" }, { ...both, dobYes: true }, now), true);

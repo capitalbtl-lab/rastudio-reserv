@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
-import { step7Shows, type Step7Years } from "@/data/crm-step7-core";
+import { step7Shows, type Step7DiskSpan, type Step7Years } from "@/data/crm-step7-core";
 import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage } from "@/data/crm-leads-stages";
 import { FUNNEL_AUTO_DEFAULT, type FunnelAuto } from "@/data/funnel-auto-core";
 import { CRM_BRANCH } from "@/data/ids";
@@ -2405,7 +2405,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [archGrpYes, setArchGrpYes] = useState(archive);
   const [archGrpNo, setArchGrpNo] = useState(false);
   const [archYears, setArchYears] = useState<Step7Years>(archive ? 2015 : 0);
-  const [archDiskMonths, setArchDiskMonths] = useState<1 | 3 | 6>(6);
+  const [archDiskMonths, setArchDiskMonths] = useState<Step7DiskSpan>("week");
   const [clearAsk, setClearAsk] = useState(false);
   const [open, setOpen] = useState("");
   const [logOpen, setLogOpen] = useState(false);
@@ -2517,11 +2517,9 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
     setProg({ n: 0, cur: "Запускаю на сервере…" });
     setNote("Запускаю на сервере…");
     const filter = archive && mode === "step7-list"
-      ? JSON.stringify({ ids: leftReadIds.current })
-      : archive && mode === "step7-cash"
-      ? JSON.stringify(archPick)
+      ? JSON.stringify({ thenCash: true, pick: archPick })
       : archive && mode === "step7-recheck"
-        ? JSON.stringify({ diskMonths: archDiskMonths })
+        ? JSON.stringify({ span: archDiskMonths })
         : !archive && mode === "step6-columns"
           ? JSON.stringify({ thenCash: true })
           : !archive && mode === "step6-cash" && !customerId
@@ -2792,15 +2790,12 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
         {archive ? withHint(
-          <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>Прочитать архив</button>,
-          "Читает по ID только левый столбец «Не закрыто» по текущему отбору. Кто не попал в отбор и кто уже справа в «Совпало» — не читается. Весь архив заново не обходит. В Alfa ничего не пишет.",
+          <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>Загрузить архив с Альфа</button>,
+          "Сначала загружает весь архив из Альфы в левый столбец. Затем снимает кассу только по отбору сверху. Совпавшие уходят вправо. В Alfa ничего не пишет.",
         ) : (
           <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>Загрузить лиды с альфа</button>
         )}
-        {archive ? withHint(
-          <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>,
-          "Снимает кассу у карточек текущего отбора, тем же расчётом, что шаг 6. Совпавшая шапка и формула уходят вправо. В Alfa ничего не пишет.",
-        ) : (
+        {archive ? null : (
           <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить лидов</button>
         )}
         {archive ? (
@@ -2808,9 +2803,9 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
             <BtnCluster tone="sky">
               {withHint(
                 <button type="button" className={cn(BTN_BLUE, runMode === "step7-recheck" && "ra-btn-blink")} disabled={busy} onClick={() => startServer("step7-recheck")}>Перепроверить архив</button>,
-                "Берёт с диска архив за окно в этой же синей рамке: 1 месяц, 3 или 6. Живые группы не входят, исключённые из групп входят. Касса этих клиентов снимается заново. В Alfa ничего не пишет.",
+                "Окно — чипы в этой рамке, по умолчанию неделя. Ищет новых архивных в левом столбце за это окно и снимает их кассу. Справа проверяет, что клиент всё ещё архив: стал лидом или активным клиентом — убирает. Уже совпавших и всё ещё архивных заново не считает. В Alfa ничего не пишет.",
               )}
-              {([[1, "1 месяц"], [3, "3 месяца"], [6, "6 месяцев"]] as const).map(([n, label]) => (
+              {([["week", "1 неделя"], [1, "1 месяц"], [3, "3 месяца"], [6, "6 месяцев"], ["2020", "с 02.05.2020"]] as const).map(([n, label]) => (
                 <button key={n} type="button" className={cn(chips, archDiskMonths === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setArchDiskMonths(n)}>{label}</button>
               ))}
             </BtnCluster>
@@ -2819,7 +2814,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         ) : null}
         <button type="button" className={BTN_GHOST} disabled={!busy} onClick={stopServer}>Стоп</button>
       </div>
-      {archive ? <p className="mt-2 text-[0.72rem] leading-snug text-muted">«Прочитать архив» берёт по ID только левый столбец текущего отбора. Совпавших справа не читает. «Перепроверить архив» берёт с диска выбранное окно: месяц, 3 или 6. Живые группы не входят, исключённые из групп входят. Касса этих клиентов снимается заново. «Очистить архив» стирает список шага.</p> : null}
+      {archive ? <p className="mt-2 text-[0.72rem] leading-snug text-muted">«Загрузить архив с Альфа» кладёт весь архив влево и затем снимает кассу по отбору сверху. «Перепроверить архив» смотрит окно в синей рамке: новых слева считает, справа оставляет только тех, кто всё ещё архив, и не переснимает уже совпавших.</p> : null}
       {busy ? (
         <p className="mt-2 text-sm font-semibold">
           Идёт на сервере{prog ? ` · сделано ${prog.n}` : ""}{prog?.cur ? ` · ${prog.cur}` : ""}

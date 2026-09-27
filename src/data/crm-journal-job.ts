@@ -1441,6 +1441,38 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       return { done: false, gap: pause || 800 };
     }
     if (mode === "step7-list") {
+      const load = (() => {
+        if (!String(job.filter || "").trim().startsWith("{")) return { thenCash: false, phase: "", pick: undefined as unknown };
+        try {
+          const parsed = JSON.parse(String(job.filter)) as { thenCash?: unknown; phase?: unknown; pick?: unknown };
+          return { thenCash: parsed.thenCash === true, phase: String(parsed.phase || ""), pick: parsed.pick };
+        } catch {
+          return { thenCash: false, phase: "", pick: undefined as unknown };
+        }
+      })();
+      if (load.thenCash && load.phase === "cash") {
+        const pick = (await import("./crm-step7-core")).step7PickOf(load.pick);
+        const only = Number(job.customerId) || 0;
+        const restart = !only && (Number(job.n) || 0) === 0;
+        const got = await awaitWhileJob(id, (await import("./crm-step6")).recheckStep7Cash(only, pick, restart));
+        if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+        const res = got.value;
+        if (loadJournalJob().id !== id) return { done: true, gap: 0 };
+        const n = job.n + 1;
+        const note = "note" in res ? res.note : res.error || "";
+        const pause = Math.max(0, Number("pauseMs" in res ? res.pauseMs : 0) || 0);
+        if (!res.ok) {
+          patch({ id, n, cur: note, msg: note, running: true });
+          return { done: false, gap: pause || 5000 };
+        }
+        if (!("more" in res) || !res.more) {
+          const msg = note || "Касса архива по отбору снята.";
+          patch({ id, running: false, n, total: Math.max(Number(job.total) || 0, n), cur: "", fill: null, msg });
+          return { done: true, gap: 0, msg };
+        }
+        patch({ id, n, total: Math.max(Number(job.total) || 0, n + 1), cur: note, msg: note, filter: job.filter });
+        return { done: false, gap: pause || 800, msg: note };
+      }
       const picked = (() => {
         if (!String(job.filter || "").trim().startsWith("{")) return null;
         try {
@@ -1483,51 +1515,101 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
       const res = got.value;
       if (loadJournalJob().id !== id) return { done: true, gap: 0 };
-      const msg = res.note || "Архив шага 7 прочитан.";
-      patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, msg });
-      return { done: true, gap: 0, msg };
+      const note = res.note || "Архив шага 7 загружен.";
+      if (load.thenCash) {
+        const { resetStep7Cash } = await import("./crm-leads");
+        resetStep7Cash();
+        const filter = JSON.stringify({ thenCash: true, phase: "cash", pick: load.pick });
+        const msg = `${note} Снимаю кассу по отбору.`;
+        patch({ id, running: true, n: 0, total: 1, cur: msg, msg, filter });
+        return { done: false, gap: 0, msg };
+      }
+      patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, msg: note });
+      return { done: true, gap: 0, msg: note };
     }
     if (mode === "step7-recheck") {
       const raw = (() => {
         try {
-          return JSON.parse(String(job.filter || "{}")) as { diskMonths?: number; ready?: boolean; newIds?: number[] };
+          return JSON.parse(String(job.filter || "{}")) as { span?: unknown; diskMonths?: unknown; phase?: string; newIds?: number[]; rightIds?: number[]; restIds?: number[]; at?: number };
         } catch {
           return {};
         }
       })();
-      if (!raw.ready) {
-        const { syncStep7FromDisk } = await import("./crm-step7");
-        const months = raw.diskMonths === 1 || raw.diskMonths === 3 || raw.diskMonths === 6 ? raw.diskMonths : 6;
-        const res = await awaitWhileJob(id, Promise.resolve(syncStep7FromDisk(months)));
+      const { step7DiskSpanOf } = await import("./crm-step7-core");
+      const span = step7DiskSpanOf(raw.span ?? raw.diskMonths);
+      const phase = raw.phase || "discover";
+      const idsOf = (list?: number[]) => (Array.isArray(list) ? list.map(Number).filter((n) => n > 0) : []);
+      if (phase === "discover") {
+        const { planStep7Recheck } = await import("./crm-step7");
+        const res = await awaitWhileJob(id, Promise.resolve(planStep7Recheck(span)));
         if ("stopped" in res) return { done: true, gap: 0, msg: stoppedMsg() };
         if (loadJournalJob().id !== id) return { done: true, gap: 0 };
         const got = res.value;
-        const filter = JSON.stringify({ diskMonths: months, ready: true, newIds: got.newClientIds });
-        if (!got.newClientIds.length) {
+        const next = got.newIds.length ? "cash-new" : "right";
+        const filter = JSON.stringify({ span, phase: next, newIds: got.newIds, rightIds: got.rightIds, restIds: [], at: 0 });
+        if (!got.newIds.length && !got.rightIds.length) {
           patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, filter, msg: got.note });
           return { done: true, gap: 0, msg: got.note };
         }
-        patch({ id, n: 0, total: got.newClientIds.length, cur: got.note, msg: got.note, filter, running: true });
+        patch({ id, n: 0, total: Math.max(1, next === "cash-new" ? got.newIds.length : got.rightIds.length), cur: got.note, msg: got.note, filter, running: true });
         return { done: false, gap: 0, msg: got.note };
       }
-      const ids = Array.isArray(raw.newIds) ? raw.newIds.map(Number).filter((n) => n > 0) : [];
-      const got = await awaitWhileJob(id, (await import("./crm-step6")).recheckStep7Cash(0, undefined, false, ids));
+      if (phase === "cash-new" || phase === "cash-rest") {
+        const ids = phase === "cash-new" ? idsOf(raw.newIds) : idsOf(raw.restIds);
+        const got = await awaitWhileJob(id, (await import("./crm-step6")).recheckStep7Cash(0, undefined, false, ids));
+        if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+        const res = got.value;
+        if (loadJournalJob().id !== id) return { done: true, gap: 0 };
+        const n = job.n + 1;
+        const note = "note" in res ? res.note : res.error || "";
+        const pause = Math.max(0, Number("pauseMs" in res ? res.pauseMs : 0) || 0);
+        if (!res.ok) {
+          patch({ id, n, cur: note, msg: note, running: true });
+          return { done: false, gap: pause || 5000 };
+        }
+        if (!("more" in res) || !res.more) {
+          if (phase === "cash-new") {
+            const filter = JSON.stringify({ span, phase: "right", newIds: ids, rightIds: idsOf(raw.rightIds), restIds: [], at: 0 });
+            const msg = `${note} Проверяю правый столбец.`;
+            patch({ id, n: 0, total: Math.max(1, idsOf(raw.rightIds).length), cur: msg, msg, filter, running: true });
+            return { done: false, gap: 0, msg };
+          }
+          const msg = note || "Архив перепроверен. Совпавших заново не считал.";
+          patch({ id, running: false, n, total: Math.max(Number(job.total) || 0, n), cur: "", fill: null, msg });
+          return { done: true, gap: 0, msg };
+        }
+        patch({ id, n, total: Math.max(Number(job.total) || 0, ids.length), cur: note, msg: note, filter: job.filter });
+        return { done: false, gap: pause || 800, msg: note };
+      }
+      const rightIds = idsOf(raw.rightIds);
+      const at = Number(raw.at) || 0;
+      const restIds = idsOf(raw.restIds);
+      if (at >= rightIds.length) {
+        if (!restIds.length) {
+          const msg = "Правый столбец проверен. Совпавших архивных заново не считал.";
+          patch({ id, running: false, n: rightIds.length, total: rightIds.length, cur: "", fill: null, msg });
+          return { done: true, gap: 0, msg };
+        }
+        const filter = JSON.stringify({ span, phase: "cash-rest", newIds: idsOf(raw.newIds), rightIds, restIds, at });
+        patch({ id, n: 0, total: restIds.length, cur: "Снимаю кассу тех, кого ещё не считали.", msg: "Снимаю кассу тех, кого ещё не считали.", filter, running: true });
+        return { done: false, gap: 0, msg: "Снимаю кассу тех, кого ещё не считали." };
+      }
+      const cid = rightIds[at] ?? 0;
+      const { confirmStep7StillArchive } = await import("./crm-step7");
+      const got = await awaitWhileJob(id, confirmStep7StillArchive(cid));
       if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
-      const res = got.value;
       if (loadJournalJob().id !== id) return { done: true, gap: 0 };
-      const n = job.n + 1;
-      const note = "note" in res ? res.note : res.error || "";
-      const pause = Math.max(0, Number("pauseMs" in res ? res.pauseMs : 0) || 0);
-      if (!res.ok) {
-        patch({ id, n, cur: note, msg: note, running: true });
-        return { done: false, gap: pause || 5000 };
+      const nextRest = got.value.needCash ? [...restIds, cid] : restIds;
+      const nextAt = at + 1;
+      const last = nextAt >= rightIds.length;
+      const filter = JSON.stringify({ span, phase: last && nextRest.length ? "cash-rest" : "right", newIds: idsOf(raw.newIds), rightIds, restIds: nextRest, at: nextAt });
+      const note = `${got.value.note} · ${nextAt} из ${rightIds.length}`;
+      if (last && !nextRest.length) {
+        patch({ id, running: false, n: nextAt, total: rightIds.length, cur: "", fill: null, filter, msg: note });
+        return { done: true, gap: 0, msg: note };
       }
-      if (!("more" in res) || !res.more) {
-        patch({ id, running: false, n, total: Math.max(Number(job.total) || 0, n), cur: "", fill: null, msg: note || "Касса новых архивных снята." });
-        return { done: true, gap: 0, msg: note || "Касса новых архивных снята." };
-      }
-      patch({ id, n, total: Math.max(Number(job.total) || 0, ids.length), cur: note, msg: note });
-      return { done: false, gap: pause || 800 };
+      patch({ id, n: last ? 0 : nextAt, total: last ? nextRest.length : rightIds.length, cur: note, msg: note, filter, running: true });
+      return { done: false, gap: last ? 0 : 200, msg: note };
     }
     const { syncStep6Columns } = await import("./crm-step6");
     const got = await awaitWhileJob(id, syncStep6Columns());
