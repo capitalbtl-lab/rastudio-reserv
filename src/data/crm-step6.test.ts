@@ -1,8 +1,30 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk, mergeMissingLessons, lessonsAbsentFromAlfa, cashRetryPlan, cashAttemptMs, raceUntil, step67NullBalance } from "./crm-step6-core.ts";
+import { isApiClientStudy, isApiLeadStudy, step6ColumnId, step6LessonDisk, mergeMissingLessons, lessonsAbsentFromAlfa, cashRetryPlan, cashAttemptMs, raceUntil, step67NullBalance, step6MergeItems } from "./crm-step6-core.ts";
 
 describe("шаг 6", () => {
+  it("перепроверка лидов не стирает старых и обновляет колонку", () => {
+    const prev = [
+      { id: 1, branchId: 1, name: "Иванов Иван Иванович", phone: "1", email: "a@b.c", cashState: "ok", cashPayN: 2, statusId: 9 },
+      { id: 2, branchId: 1, name: "Петров Пётр", phone: "2", email: "", cashState: "ok", statusId: 2 },
+      { id: 3, branchId: 2, name: "Другой филиал", phone: "", email: "", cashState: "ok", statusId: 2 },
+    ] as never;
+    const next = step6MergeItems(prev, 1, [
+      { id: 1, branchId: 1, name: "Иванов Иван Петрович", phone: "", email: "new@b.c", cashState: "wait", statusId: 4 },
+      { id: 4, branchId: 1, name: "Новый лид", phone: "4", email: "", cashState: "wait", statusId: 0 },
+    ] as never);
+    const ivan = next.find((x) => x.id === 1);
+    assert.equal(ivan?.name, "Иванов Иван Петрович");
+    assert.equal(ivan?.phone, "1");
+    assert.equal(ivan?.email, "new@b.c");
+    assert.equal(ivan?.statusId, 4);
+    assert.equal(ivan?.cashState, "wait");
+    assert.equal(ivan?.cashPayN, 2);
+    assert.equal(next.some((x) => x.id === 2), true);
+    assert.equal(next.some((x) => x.id === 4), true);
+    assert.equal(next.find((x) => x.id === 3)?.branchId, 2);
+  });
+
   it("лид по is_study, клиент не лид", () => {
     assert.equal(isApiLeadStudy(0), true);
     assert.equal(isApiLeadStudy(false), true);

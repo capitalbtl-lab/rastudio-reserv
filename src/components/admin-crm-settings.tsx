@@ -2522,7 +2522,11 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       ? JSON.stringify(archPick)
       : archive && mode === "step7-recheck"
         ? JSON.stringify({ diskMonths: archDiskMonths })
-        : "";
+        : !archive && mode === "step6-columns"
+          ? JSON.stringify({ thenCash: true })
+          : !archive && mode === "step6-cash" && !customerId
+            ? JSON.stringify({ refresh: true })
+            : "";
     void adminSchedule({
       data: { token: token(), action: "journalPull", kind: "jobStart", jobMode: mode, customerId, filter } as never,
     })
@@ -2791,13 +2795,13 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>Прочитать архив</button>,
           "Читает по ID только левый столбец «Не закрыто» по текущему отбору. Кто не попал в отбор и кто уже справа в «Совпало» — не читается. Весь архив заново не обходит. В Alfa ничего не пишет.",
         ) : (
-          <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>Прочитать колонки</button>
+          <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>Загрузить лиды с альфа</button>
         )}
         {archive ? withHint(
           <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>,
           "Снимает кассу у карточек текущего отбора, тем же расчётом, что шаг 6. Совпавшая шапка и формула уходят вправо. В Alfa ничего не пишет.",
         ) : (
-          <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>
+          <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить лидов</button>
         )}
         {archive ? (
           <>

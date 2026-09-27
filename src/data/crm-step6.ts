@@ -5,7 +5,7 @@ import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-le
 import { kindFromAlfaPay, alfaPayIndexDate, extraPayTypeIds, payCustomerIdOf } from "./crm-pay-core";
 import { writeoffSumOf, uniqueBranches } from "./crm-ledger-core";
 import { step5Close, step5FitRemainder, step5Money, parseAlfaHeaderCanon, step6DiskAgrees } from "./crm-step5-canon";
-import { replaceStep6Branch, stampStep6Cash, peekLeadBoard, peekStep7Board, stampStep7Cash, readCrmLeadColumns, deferStepCash, reopenStepCash } from "./crm-leads";
+import { replaceStep6Branch, mergeStep6Branch, stampStep6Cash, peekLeadBoard, peekStep7Board, stampStep7Cash, readCrmLeadColumns, deferStepCash, reopenStepCash } from "./crm-leads";
 import { beginStepRun, closeStepRun, saveRun } from "./crm-step-run-log";
 import { loadCustomerCalendar } from "./group-cards";
 import { paysOf } from "./crm-pay";
@@ -111,7 +111,7 @@ function cardOf(row: Record<string, unknown>, branchId: number, stages: LeadStag
   };
 }
 
-export async function syncStep6Columns() {
+export async function syncStep6Columns(keep = false) {
   dropAlfaIndex();
   const tok = await alfaToken();
   const notes: string[] = [];
@@ -145,7 +145,8 @@ export async function syncStep6Columns() {
           else if (card.statusId < 0) card.statusId = 0;
         }
       }
-      replaceStep6Branch(branch, cards, stages);
+      if (keep) mergeStep6Branch(branch, cards, stages);
+      else replaceStep6Branch(branch, cards, stages);
       const placed = cards.filter((c) => c.statusId >= 0).length;
       notes.push(`${branch}: ${placed}`);
       for (const card of cards) {

@@ -1374,7 +1374,48 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     return { done: true, gap: 0, msg };
   }
   if (mode === "step6-recount" || mode === "step6-columns" || mode === "step6-cash" || mode === "step7-list" || mode === "step7-cash" || mode === "step7-recheck") {
-    if (mode === "step6-cash" || mode === "step7-cash") {
+    const step6Flag = (() => {
+      if (!String(job.filter || "").trim().startsWith("{")) return { thenCash: false, phase: "", refresh: false, ready: false };
+      try {
+        const parsed = JSON.parse(String(job.filter)) as { thenCash?: unknown; phase?: unknown; refresh?: unknown; ready?: unknown };
+        return {
+          thenCash: parsed.thenCash === true,
+          phase: String(parsed.phase || ""),
+          refresh: parsed.refresh === true,
+          ready: parsed.ready === true,
+        };
+      } catch {
+        return { thenCash: false, phase: "", refresh: false, ready: false };
+      }
+    })();
+    if (mode === "step6-columns" && !(step6Flag.thenCash && step6Flag.phase === "cash")) {
+      const { syncStep6Columns } = await import("./crm-step6");
+      const got = await awaitWhileJob(id, syncStep6Columns(false));
+      if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+      if (loadJournalJob().id !== id) return { done: true, gap: 0 };
+      const note = got.value.note || "Лиды загружены.";
+      if (step6Flag.thenCash) {
+        const filter = JSON.stringify({ thenCash: true, phase: "cash" });
+        const msg = `${note} Снимаю кассу.`;
+        patch({ id, running: true, n: 0, total: 1, cur: msg, msg, filter });
+        return { done: false, gap: 0, msg };
+      }
+      patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, msg: note });
+      return { done: true, gap: 0, msg: note };
+    }
+    if (mode === "step6-cash" && step6Flag.refresh && !step6Flag.ready && !Number(job.customerId)) {
+      const { syncStep6Columns } = await import("./crm-step6");
+      const got = await awaitWhileJob(id, syncStep6Columns(true));
+      if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+      if (loadJournalJob().id !== id) return { done: true, gap: 0 };
+      const note = got.value.note || "Лиды обновлены.";
+      const filter = JSON.stringify({ refresh: true, ready: true });
+      const msg = `${note} Снимаю кассу.`;
+      patch({ id, running: true, n: 0, total: 1, cur: msg, msg, filter });
+      return { done: false, gap: 0, msg };
+    }
+    const cashNow = mode === "step6-cash" || mode === "step7-cash" || (mode === "step6-columns" && step6Flag.thenCash && step6Flag.phase === "cash");
+    if (cashNow) {
       const only = Number(job.customerId) || 0;
       const restart = !only && (Number(job.n) || 0) === 0;
       const pick = mode === "step7-cash" ? (await import("./crm-step7-core")).step7PickOf(jobPick(job.filter)) : undefined;

@@ -1,4 +1,37 @@
 import type { GroupCalLesson } from "./crm-slots-core";
+import type { LeadCard } from "./crm-leads-stages";
+
+function keptText(next: string | undefined, prev: string | undefined) {
+  const n = String(next || "").trim();
+  if (!n || /^лид \d+$/.test(n)) return String(prev || n);
+  return n;
+}
+
+/** Перепроверка лидов: старые карточки остаются, поля с Альфы обновляются, новые добавляются. Касса этих карточек снова в очередь. */
+export function step6MergeItems(prev: LeadCard[], branchId: number, cards: LeadCard[]): LeadCard[] {
+  const incoming = new Map(cards.map((c) => [c.id, c]));
+  const items = prev.map((old) => {
+    if (old.branchId !== branchId) return old;
+    const next = incoming.get(old.id);
+    if (!next) return old;
+    incoming.delete(old.id);
+    return {
+      ...old,
+      ...next,
+      name: keptText(next.name, old.name),
+      phone: String(next.phone || "").trim() || old.phone,
+      email: String(next.email || "").trim() || old.email,
+      assigned: String(next.assigned || "").trim() || old.assigned,
+      cashState: "wait" as const,
+      cashGiveUp: false,
+      cashRetry: false,
+      cashTries: 0,
+      cashFail: "",
+    };
+  });
+  for (const card of incoming.values()) items.push(card);
+  return items;
+}
 
 export function isApiLeadStudy(raw: unknown) {
   return raw === false || raw === 0 || raw === "0";

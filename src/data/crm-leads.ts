@@ -38,6 +38,7 @@ import { crmHost, crmWebLogin, csrfOf, mergeCookies, setCookieList } from "./crm
 import type { CrmActorId } from "./crm-actors";
 import { nextLocalId } from "./crm-local-id";
 import { dossierIsStudying } from "./dossiers";
+import { step6MergeItems } from "./crm-step6-core";
 
 export type { LeadStage, LeadCard } from "./crm-leads-stages";
 export {
@@ -152,6 +153,19 @@ export function replaceStep6Branch(branchId: number, cards: LeadCard[], stages: 
   const byId = new Map(hit.stages.map((s) => [s.id, s]));
   for (const s of stages) if (Number.isFinite(s.id)) byId.set(s.id, s);
   const next: Bag = { at: Date.now(), stages: [...byId.values()], items, note: `шаг 6 · филиал ${bid}: ${cards.length}`, step6: true };
+  bag().set("0", next);
+  persistLeads();
+  return next;
+}
+
+/** Перепроверка: карточки филиала не стирает. Обновляет пришедших и дописывает новых. */
+export function mergeStep6Branch(branchId: number, cards: LeadCard[], stages: LeadStage[]) {
+  const bid = Number(branchId) || 0;
+  const hit = bag().get("0") || { at: Date.now(), stages: LEAD_STAGES.map((s) => ({ ...s })), items: [] as LeadCard[] };
+  const items = step6MergeItems(hit.items, bid, cards);
+  const byId = new Map(hit.stages.map((s) => [s.id, s]));
+  for (const s of stages) if (Number.isFinite(s.id)) byId.set(s.id, s);
+  const next: Bag = { at: Date.now(), stages: [...byId.values()], items, note: `шаг 6 · филиал ${bid}: обновлено ${cards.length}, на доске ${items.length}`, step6: true };
   bag().set("0", next);
   persistLeads();
   return next;
