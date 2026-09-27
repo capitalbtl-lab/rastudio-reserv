@@ -4706,14 +4706,13 @@ export function AdminCrmSettings() {
         <div className="grid grid-cols-3 border-b border-black/15 sm:grid-cols-6">
           {CRM_SET_TABS.map((t) => {
             const on = crmTab === t.id;
-            const lead = on && t.id === "sync";
             return (
               <button
                 key={t.id}
                 type="button"
                 className={cn(
-                  "relative px-1 py-3 text-center font-semibold leading-tight text-fg transition-all duration-300",
-                  lead ? "text-base font-bold text-primary sm:text-lg" : on ? "text-sm font-bold" : "text-sm text-fg/75 hover:text-fg",
+                  "relative px-1 py-3 text-center font-semibold leading-tight transition-all duration-300",
+                  on ? "text-base font-bold text-black sm:text-lg" : "text-sm text-fg/75 hover:text-black",
                 )}
                 onClick={() => pickCrmTab(t.id)}
               >
@@ -4722,7 +4721,6 @@ export function AdminCrmSettings() {
                   className={cn(
                     "absolute inset-x-3 bottom-0 h-[3px] origin-center rounded-full bg-primary transition-transform duration-300",
                     on ? "scale-x-100" : "scale-x-0",
-                    lead && "h-1 shadow-[0_0_14px] shadow-primary/70",
                   )}
                 />
               </button>
