@@ -177,7 +177,7 @@ export const IDS_FOR_AGENT = `КАРТА ID (обязательно). Не ищ�
 AlfaCRM не источник ответа. Она догоняет очередью: customer.update · group.update · regular-lesson.update · cgi.apply · customer-tariff.create.
 Читать API CRM нельзя, если на диске уже есть customerId или groupId.
 Писать (админка): сначала диск, потом очередь. Не ждать ответ Alfa.
-Актор записи: human · assistant · consultant · sync. Настройка CRM → Центр синхронизации → Люди в Alfa.
+Актор записи: human · assistant · consultant · sync. Настройка CRM → Люди и роли.
 Свой id < 0, пока Alfa не вернула номер. Перепись диска и очереди. 9000+ только у старых предметов.
 Журнал уроков: calendar[].lessonId. Явка = customerIds, не cgi и не last_attend. status 1 план · 2 отмена · 3 проведено.
 Деньги: pays[].id + customerId + cttId. Шапка «Клиенты» = extras.balance с customer.balance (шаг 5 и «Обновить»). Касса не пишет шапку. Pending pay — лента. Rest ctt — не шапка. Alfa касса — pay.create/pay.delete сразу, автоопрос каждые 15 мин за 3 дня. Не F5. paid_till не касса.

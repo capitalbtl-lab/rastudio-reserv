@@ -367,6 +367,7 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 }
 
 const CRM_SET_TABS = [
+  { id: "people", label: "Люди и роли" },
   { id: "sync", label: "Центр синхронизации" },
   { id: "funnel", label: "Воронка" },
   { id: "branches", label: "Филиалы" },
@@ -377,7 +378,7 @@ const SYNC_PANES = [
   { id: "queue", label: "Очередь" },
   { id: "cache", label: "Кэш сайта" },
   { id: "bg", label: "Фоновая загрузка" },
-  { id: "people", label: "Люди в Alfa" },
+  { id: "alfaPeople", label: "Люди в Alfa" },
 ] as const;
 type SyncPane = (typeof SYNC_PANES)[number]["id"];
 type HistTab = "roster" | "groups" | "students" | "money" | "audit" | "step6" | "step7";
@@ -3548,13 +3549,13 @@ export function AdminCrmSettings() {
       const sp = localStorage.getItem("crm-sync-pane") || "";
       if (s) setJournalSchool(s);
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
-      if (t === "queue" || t === "cache" || t === "people" || t === "alfa") {
+      if (t === "queue" || t === "cache" || t === "alfa") {
         setCrmTab("sync");
-        setSyncPane(t === "alfa" ? "bg" : t === "people" ? "people" : t);
+        setSyncPane(t === "alfa" ? "bg" : t);
       } else {
         const tab = t === "historyAuto" || t === "history" ? "sync" : t;
         if (CRM_SET_TABS.some((x) => x.id === tab)) setCrmTab(tab as CrmSetTab);
-        if (sp === "history" || sp === "bg" || sp === "queue" || sp === "cache" || sp === "people") setSyncPane(sp);
+        if (sp === "history" || sp === "bg" || sp === "queue" || sp === "cache" || sp === "alfaPeople" || sp === "people") setSyncPane(sp === "people" ? "alfaPeople" : sp);
       }
       if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit" || h === "step6" || h === "step7") setHistTab(h);
     } catch {
@@ -4731,9 +4732,9 @@ export function AdminCrmSettings() {
       ) : null}
 
       <div className="flex min-h-[70vh] flex-col gap-4">
-      {crmTab === "sync" && syncPane === "people" ? (
+      {crmTab === "people" ? (
       <Card
-        title="Люди в Alfa"
+        title="Люди и роли"
         hint="Кто пишет на диск. Alfa догоняет очередью и не меняет автора. Пароль кабинета один — сотрудник. Два ИИ без пароля: ассистент в админке, консультант на сайте. Очередь — пакеты cgi и выгрузка."
       >
         <ul className="space-y-2">
@@ -4894,7 +4895,9 @@ export function AdminCrmSettings() {
           Выключенный канал: на сайте запись есть, в Alfa не уходит, пока не включите. Очередь хранит задание. Касса опрашивает окно дней, не всю историю.
         </p>
       </Card>
+      ) : null}
 
+      {crmTab === "sync" && syncPane === "alfaPeople" ? (
       <Card
         title="Люди в Alfa"
         hint="Сейчас работают и у нас, и в Alfa. Интервал и каналы — выше. F5 Alfa не ждёт."
