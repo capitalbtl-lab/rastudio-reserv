@@ -228,11 +228,11 @@ export function step7AttendedIds(row: { status?: unknown; details?: unknown }) {
 }
 
 export type Step7DiskMonths = 1 | 3 | 6;
-export type Step7DiskSpan = Step7DiskMonths | "week" | "2020";
+export type Step7DiskSpan = Step7DiskMonths | "week" | "2015";
 
-/** Нижняя дата окна: неделя, месяц, три, шесть или с 02.05.2020. */
-export function step7DiskFrom(span: Step7DiskSpan | number, now = new Date()) {
-  if (span === "2020") return "2020-05-02";
+/** Нижняя дата окна: неделя, месяц, три, шесть или весь период с 01.01.2015. */
+export function step7DiskFrom(span: Step7DiskSpan | "2020" | number, now = new Date()) {
+  if (span === "2015" || span === "2020") return "2015-01-01";
   if (span === "week") {
     const day = new Date(now.getTime());
     day.setDate(day.getDate() - 7);
@@ -245,7 +245,8 @@ export function step7DiskFrom(span: Step7DiskSpan | number, now = new Date()) {
 }
 
 export function step7DiskSpanOf(raw: unknown): Step7DiskSpan {
-  if (raw === "week" || raw === "2020" || raw === 1 || raw === 3 || raw === 6) return raw;
+  if (raw === "week" || raw === 1 || raw === 3 || raw === 6) return raw;
+  if (raw === "2015" || raw === "2020") return "2015";
   return "week";
 }
 

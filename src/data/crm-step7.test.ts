@@ -120,8 +120,11 @@ describe("шаг 7", () => {
     assert.equal(step7DiskKeep({ archived: true, archivedAt: "2020-01-01", live: false }, from), false);
     assert.equal(step7DiskKeep({ archived: false, archivedAt: "2026-08-01", live: false }, from), false);
     assert.equal(step7DiskFrom("week", new Date("2026-09-27T12:00:00Z")), "2026-09-20");
-    assert.equal(step7DiskFrom("2020"), "2020-05-02");
+    assert.equal(step7DiskFrom("2015"), "2015-01-01");
+    assert.equal(step7DiskFrom("2020"), "2015-01-01");
     assert.equal(step7DiskSpanOf("week"), "week");
+    assert.equal(step7DiskSpanOf("2015"), "2015");
+    assert.equal(step7DiskSpanOf("2020"), "2015");
     assert.equal(step7DiskSpanOf(3), 3);
     assert.equal(step7DiskSpanOf("нет"), "week");
     assert.equal(step7StillArchive(null), null);
