@@ -2822,7 +2822,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
       </div>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {([
+        {archive ? null : ([
           ["all", "Вся касса"],
           ["wait", "не снята"],
           ["new", "новый"],
@@ -2831,12 +2831,12 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
           ["gap", "не сошлось"],
           ["no-balance", "нет balance"],
           ["aside", "не в колонке"],
-        ] as const).filter(([id]) => (archive ? id !== "aside" : true)).map(([id, label]) => (
+        ] as const).map(([id, label]) => (
           <button key={id} type="button" className={cn(chips, sort === id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setSort(id); setPageLeft(0); setPageRight(0); }}>
             {label}
           </button>
         ))}
-        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[0.78rem]">
+        <span className={cn("flex shrink-0 items-center gap-1.5 text-[0.78rem]", archive ? "" : "ml-auto")}>
           <span className="text-muted">На странице</span>
           {([10, 20, 30, 100] as const).map((n) => (
             <button key={n} type="button" className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setPageSize(n); setPageLeft(0); setPageRight(0); }}>{n}</button>
