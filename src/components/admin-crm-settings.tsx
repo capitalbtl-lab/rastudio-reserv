@@ -2796,7 +2796,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         ) : null}
         <button type="button" className={BTN_GHOST} disabled={!busy} onClick={stopServer}>Стоп</button>
       </div>
-      {archive ? <p className="mt-2 text-[0.72rem] leading-snug text-muted">«Перепроверить архив» берёт с диска выбранное окно: месяц, 3 или 6. Живые группы не входят, исключённые из групп входят. Касса снимается только у новых клиентов. «Очистить архив» стирает список шага.</p> : null}
+      {archive ? <p className="mt-2 text-[0.72rem] leading-snug text-muted">«Перепроверить архив» берёт с диска выбранное окно: месяц, 3 или 6. Живые группы не входят, исключённые из групп входят. Касса этих клиентов снимается заново. «Очистить архив» стирает список шага.</p> : null}
       {busy ? (
         <p className="mt-2 text-sm font-semibold">
           Идёт на сервере{prog ? ` · сделано ${prog.n}` : ""}{prog?.cur ? ` · ${prog.cur}` : ""}

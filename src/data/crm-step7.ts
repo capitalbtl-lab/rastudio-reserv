@@ -2,7 +2,7 @@
 
 import { request, token as alfaToken, dropAlfaIndex } from "./alfacrm";
 import { crmUnwrapIndex, crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
-import { replaceStep7List, peekStep7Board } from "./crm-leads";
+import { replaceStep7List, peekStep7Board, stampStep7Cash } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup, step7DiskRows } from "./dossiers";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
@@ -228,12 +228,12 @@ export async function syncStep7List() {
   return { ok: true as const, note: `Шаг 7 · архив ${board.items.length} · клиенты ${clients} · лиды ${leads} · учился в группах ${board.items.filter((x) => x.hadGroups).length} · в живых группах снято ${dropped} · ${notes.join(" · ")}` };
 }
 
-/** Перепроверка с диска: окно 1, 3 или 6 месяцев. Живые группы не входят. Касса — только новые клиенты. */
+/** Перепроверка с диска: окно 1, 3 или 6 месяцев. Живые группы не входят. Касса клиентов из окна снимается заново. */
 export function syncStep7FromDisk(months: Step7DiskMonths) {
   const from = step7DiskFrom(months);
   const prevIds = new Set((peekStep7Board()?.items || []).map((x) => x.id));
   const cards: LeadCard[] = [];
-  const newClientIds: number[] = [];
+  const cashIds: number[] = [];
   for (const row of step7DiskRows()) {
     const archivedAt = step7ArchiveDay({ e_date: row.eDate });
     const archived = dossierCardArchive(row.cardStatus, row.removed, "");
@@ -259,7 +259,7 @@ export function syncStep7FromDisk(months: Step7DiskMonths) {
       hadGroups: row.hadGroup,
       archivedAt,
     });
-    if (!prevIds.has(row.id) && study === 1) newClientIds.push(row.id);
+    if (study === 1) cashIds.push(row.id);
   }
   const prev = peekStep7Board()?.items || [];
   const fresh = new Map(cards.map((c) => [c.id, c]));
@@ -268,16 +268,18 @@ export function syncStep7FromDisk(months: Step7DiskMonths) {
     const next = fresh.get(old.id);
     if (!next) return old;
     keptIds.add(old.id);
-    return { ...old, ...next, cashState: old.cashState, cashSort: old.cashSort };
+    return { ...old, ...next };
   });
   for (const card of cards) if (!keptIds.has(card.id)) merged.push(card);
-  const board = replaceStep7List(merged);
+  replaceStep7List(merged);
+  for (const id of cashIds) stampStep7Cash(id, { cashState: "wait", cashGiveUp: false, cashRetry: false, cashTries: 0, cashFail: "" });
+  const board = peekStep7Board();
   return {
     ok: true as const,
     months,
     cards: cards.length,
-    newClientIds,
-    note: `Шаг 7 · с диска за ${months} мес. ${cards.length} · новых клиентов ${newClientIds.length} · на доске ${board.items.length}`,
+    newClientIds: cashIds,
+    note: `Шаг 7 · с диска за ${months} мес. ${cards.length} · касса ${cashIds.length} · уже были ${cards.filter((c) => prevIds.has(c.id)).length} · на доске ${board?.items.length || 0}`,
   };
 }
 
