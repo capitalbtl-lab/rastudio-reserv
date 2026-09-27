@@ -367,7 +367,6 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 }
 
 const CRM_SET_TABS = [
-  { id: "people", label: "Люди и роли" },
   { id: "sync", label: "Центр синхронизации" },
   { id: "funnel", label: "Воронка" },
   { id: "branches", label: "Филиалы" },
@@ -375,9 +374,10 @@ const CRM_SET_TABS = [
 type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
 const SYNC_PANES = [
   { id: "history", label: "История из Alfa" },
-  { id: "bg", label: "Фоновая загрузка" },
   { id: "queue", label: "Очередь" },
   { id: "cache", label: "Кэш сайта" },
+  { id: "bg", label: "Фоновая загрузка" },
+  { id: "people", label: "Люди в Alfa" },
 ] as const;
 type SyncPane = (typeof SYNC_PANES)[number]["id"];
 type HistTab = "roster" | "groups" | "students" | "money" | "audit" | "step6" | "step7";
@@ -3548,13 +3548,13 @@ export function AdminCrmSettings() {
       const sp = localStorage.getItem("crm-sync-pane") || "";
       if (s) setJournalSchool(s);
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
-      if (t === "queue" || t === "cache") {
+      if (t === "queue" || t === "cache" || t === "people" || t === "alfa") {
         setCrmTab("sync");
-        setSyncPane(t);
+        setSyncPane(t === "alfa" ? "bg" : t === "people" ? "people" : t);
       } else {
-        const tab = t === "historyAuto" || t === "history" || t === "alfa" ? "sync" : t;
+        const tab = t === "historyAuto" || t === "history" ? "sync" : t;
         if (CRM_SET_TABS.some((x) => x.id === tab)) setCrmTab(tab as CrmSetTab);
-        if (sp === "history" || sp === "bg" || sp === "queue" || sp === "cache") setSyncPane(sp);
+        if (sp === "history" || sp === "bg" || sp === "queue" || sp === "cache" || sp === "people") setSyncPane(sp);
       }
       if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit" || h === "step6" || h === "step7") setHistTab(h);
     } catch {
@@ -4731,9 +4731,9 @@ export function AdminCrmSettings() {
       ) : null}
 
       <div className="flex min-h-[70vh] flex-col gap-4">
-      {crmTab === "people" ? (
+      {crmTab === "sync" && syncPane === "people" ? (
       <Card
-        title="Люди и роли"
+        title="Люди в Alfa"
         hint="Кто пишет на диск. Alfa догоняет очередью и не меняет автора. Пароль кабинета один — сотрудник. Два ИИ без пароля: ассистент в админке, консультант на сайте. Очередь — пакеты cgi и выгрузка."
       >
         <ul className="space-y-2">
