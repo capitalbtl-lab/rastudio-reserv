@@ -4699,19 +4699,16 @@ export function AdminCrmSettings() {
     <div className="space-y-4 pb-8 [overflow-anchor:none]">
       <div>
         <h2 className="font-display text-3xl">Настройка CRM</h2>
-        <p className="mt-1 max-w-2xl text-sm text-muted">
-          Этапы, журнал и связь с Alfa — по вкладкам, не одной простынёй.
-        </p>
       </div>
-      <div ref={crmTabsRef} className="sticky top-0 z-20 -mx-1 border-b border-black/10 bg-[var(--color-bg)] px-1 pt-1">
-        <div className="inline-grid max-w-full grid-flow-col items-end gap-1 [grid-auto-columns:1fr]">
+      <div ref={crmTabsRef} className="sticky top-0 z-20 bg-[var(--color-bg)]">
+        <div className="grid grid-cols-2 border-b border-black/10 sm:grid-cols-4">
           {CRM_SET_TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               className={cn(
-                "flex min-h-[2.85rem] items-center justify-center rounded-t-xl px-4 text-center text-sm font-semibold leading-tight",
-                crmTab === t.id ? "bg-primary text-white" : "bg-surface-2 text-fg hover:bg-white",
+                "-mb-px border-b-2 px-2 py-3 text-center text-sm font-semibold",
+                crmTab === t.id ? "border-primary text-fg" : "border-transparent text-muted hover:text-fg",
               )}
               onClick={() => pickCrmTab(t.id)}
             >
@@ -4719,27 +4716,24 @@ export function AdminCrmSettings() {
             </button>
           ))}
         </div>
+        {crmTab === "sync" ? (
+          <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-surface-2 p-1 sm:grid-cols-5">
+            {SYNC_PANES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={cn(
+                  "rounded-xl px-2 py-2 text-center text-[0.82rem] font-semibold leading-tight",
+                  syncPane === t.id ? "bg-white text-fg shadow-sm" : "text-muted hover:text-fg",
+                )}
+                onClick={() => pickSyncPane(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
-
-      {crmTab === "sync" ? (
-      <div className="-mt-4 border-b border-black/10">
-        <div className="inline-grid max-w-full grid-flow-col items-end gap-1 [grid-auto-columns:1fr]">
-          {SYNC_PANES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={cn(
-                "flex min-h-[2.45rem] items-center justify-center rounded-t-lg px-3 text-center text-[0.82rem] font-semibold leading-tight",
-                syncPane === t.id ? "bg-black text-white" : "bg-white text-fg ring-1 ring-black/10 hover:bg-surface-2",
-              )}
-              onClick={() => pickSyncPane(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      ) : null}
 
       <div className="flex min-h-[70vh] flex-col gap-4">
       {crmTab === "people" ? (
