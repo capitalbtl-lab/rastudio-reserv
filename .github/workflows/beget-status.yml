@@ -50,34 +50,24 @@ jobs:
             head -c 300 /tmp/local.html 2>/dev/null; echo
             echo "=== probe ==="
             cd /var/www/rastudio
-            cat > /tmp/ra-probe.mjs <<'NODE'
-            async function check(name, fn) {
-              try {
-                const v = await fn();
-                console.log(name, "ok", v || "");
-              } catch (e) {
-                console.error(name, "FAIL", e && e.stack ? e.stack : e);
-              }
-            }
-            await check("layout", async () => {
-              const { loadHomeLayout } = await import("/var/www/rastudio/src/data/home-layout.ts");
-              const l = loadHomeLayout();
-              return String(l.order?.length) + " " + String(l.order?.[0] || "");
-            });
-            await check("edits", async () => {
-              const { ensureLiveEdits } = await import("/var/www/rastudio/src/data/edits.ts");
-              ensureLiveEdits();
-            });
-            await check("prices", async () => {
-              const { ensureLivePrices } = await import("/var/www/rastudio/src/data/prices.ts");
-              ensureLivePrices();
-            });
-            await check("signup", async () => {
-              const { loadSiteSignup } = await import("/var/www/rastudio/src/data/site-signup.ts");
-              loadSiteSignup();
-            });
-            NODE
-            node --experimental-strip-types --import ./scripts/ts-ext-register.mjs /tmp/ra-probe.mjs
+            python3 - <<'PY'
+            import json, os
+            p="storage/crm-journal-job.json"
+            if os.path.exists(p):
+                j=json.load(open(p))
+                print("job", j.get("mode"), "running", j.get("running"), "stop", j.get("stop"), "n", j.get("n"), "total", j.get("total"))
+                print("msg", str(j.get("msg") or "")[:240])
+                print("cur", str(j.get("cur") or "")[:180])
+                print("started", j.get("startedAt"), "last", j.get("lastAt"))
+            else:
+                print("no job")
+            b=json.load(open("storage/crm-leads-board.json"))
+            rows=((b.get("keys") or {}).get("7") or {}).get("items") or []
+            print("step7", len(rows), "note", str(((b.get("keys") or {}).get("7") or {}).get("note") or "")[:240])
+            PY
+            echo "=== worker ==="
+            pm2 jlist | python3 -c "import json,sys; d=json.load(sys.stdin);
+            [print(p.get('name'), p.get('pm2_env',{}).get('status'), p.get('pm2_env',{}).get('pm_uptime')) for p in d]"
             echo "=== out log ==="
             ls /root/.pm2/logs/ | head
             tail -n 80 /root/.pm2/logs/rastudio-out-8.log 2>/dev/null
