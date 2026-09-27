@@ -6,7 +6,7 @@ import { replaceStep7List, peekStep7Board } from "./crm-leads";
 import { liveAdminGroups } from "./crm-journal-pull";
 import { dossiersInGroup } from "./dossiers";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-import { step7ArchiveDay, step7Dob, step7HadGroups, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId } from "./crm-step7-core";
+import { step7ArchiveDay, step7AttendedIds, step7Dob, step7KeepAny, step7KeepFailedBranch, step7ListStudy, step7RejectId } from "./crm-step7-core";
 import { recheckStep7Cash } from "./crm-step6";
 import type { LeadCard } from "./crm-leads-stages";
 
@@ -114,10 +114,39 @@ function dobOf(row: Record<string, unknown>) {
   return step7Dob(row.dob);
 }
 
+/** Явка на проведённом уроке группы с 2015-01-01. Запись в CGI сюда не входит. */
+async function attendedCustomers(tok: string) {
+  const ids = new Set<number>();
+  const seen = new Set<string>();
+  const lessonTo = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+  for (const branch of BRANCHES) {
+    for (const removed of [0, 2] as const) {
+      const groups = await readPages(`/v2api/${branch}/group/index`, { removed }, tok);
+      for (const g of groups) {
+        const gid = Number(g.id);
+        if (!gid) continue;
+        if (removed === 0 && Number(g.removed) === 2) continue;
+        const key = `${branch}:${gid}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const rows = await readPages(`/v2api/${branch}/lesson/index`, { group_id: gid, status: 3, date_from: "2015-01-01", date_to: lessonTo }, tok);
+        for (const row of rows) for (const cid of step7AttendedIds(row)) ids.add(cid);
+      }
+    }
+  }
+  return ids;
+}
+
 export async function syncStep7List() {
   dropAlfaIndex();
   const tok = await alfaToken();
-  const { live, studied } = await membershipSets(tok);
+  const { live } = await membershipSets(tok);
+  let attended: Set<number>;
+  try {
+    attended = await attendedCustomers(tok);
+  } catch (e) {
+    return { ok: true as const, note: `Шаг 7 · архив не заменён: явки не дочитаны · ${e instanceof Error ? e.message : "обрыв"}` };
+  }
   const clientReasons = await rejectNames(tok, "customer-reject");
   const leadReasons = await rejectNames(tok, "lead-reject");
   const byId = new Map<number, LeadCard>();
@@ -160,7 +189,7 @@ export async function syncStep7List() {
             rejectName: rejectId ? names.get(`${branch}:${rejectId}`) || `причина ${rejectId}` : "",
             study,
             dob: dobOf(row),
-            hadGroups: studied.has(id) || step7HadGroups(row),
+            hadGroups: attended.has(id),
             archivedAt: step7ArchiveDay(row),
           });
           n += 1;
@@ -182,5 +211,5 @@ export async function syncStep7List() {
     if (card.study === 0) leads += 1;
     else if (card.study === 1) clients += 1;
   }
-  return { ok: true as const, note: `Шаг 7 · архив ${board.items.length} · клиенты ${clients} · лиды ${leads} · в живых группах снято ${dropped} · ${notes.join(" · ")}` };
+  return { ok: true as const, note: `Шаг 7 · архив ${board.items.length} · клиенты ${clients} · лиды ${leads} · учился в группах ${board.items.filter((x) => x.hadGroups).length} · в живых группах снято ${dropped} · ${notes.join(" · ")}` };
 }

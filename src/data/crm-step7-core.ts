@@ -197,19 +197,20 @@ export type Step7Pick = {
   years: Step7Years;
 };
 
-/** Шаг 7, таблетка «учился в группах»: клиент, проведённый урок (статус 3) и платёж. Запись в группу не считается. */
-export function step7StudiedClient(card: {
-  study?: number;
-  cashLesN?: number;
-  cashNoCommission?: number;
-  cashPayN?: number;
-  cashCorrN?: number;
-  cashRefundN?: number;
-}) {
-  if (card.study !== 1) return false;
-  const conducted = (Number(card.cashLesN) || 0) + (Number(card.cashNoCommission) || 0);
-  const pays = (Number(card.cashPayN) || 0) + (Number(card.cashCorrN) || 0) + (Number(card.cashRefundN) || 0);
-  return conducted > 0 && pays > 0;
+/** Проведённый урок группы: кто отмечен присутствовавшим. is_attend 1 — был. 0 и пусто — не был. */
+export function step7AttendedIds(row: { status?: unknown; details?: unknown }) {
+  if (row.status != null && row.status !== "" && Number(row.status) !== 3) return [];
+  const details = Array.isArray(row.details) ? row.details : [];
+  const out: number[] = [];
+  for (const d of details) {
+    if (!d || typeof d !== "object") continue;
+    const rec = d as { customer_id?: unknown; customerId?: unknown; is_attend?: unknown };
+    const cid = Number(rec.customer_id || rec.customerId) || 0;
+    if (!cid) continue;
+    const v = rec.is_attend;
+    if (v === true || v === 1 || v === "1") out.push(cid);
+  }
+  return out;
 }
 
 export function step7Shows(
@@ -249,9 +250,8 @@ export function step7Shows(
   }
   if (pick.fio && !step7FioOk(card.name)) return false;
   if (pick.groupsYes !== pick.groupsNo) {
-    const studied = step7StudiedClient(card);
-    if (pick.groupsYes && !studied) return false;
-    if (pick.groupsNo && studied) return false;
+    if (pick.groupsYes && !card.hadGroups) return false;
+    if (pick.groupsNo && card.hadGroups) return false;
   }
   if (!step7InYears(String(card.archivedAt || ""), pick.years, now)) return false;
   return true;

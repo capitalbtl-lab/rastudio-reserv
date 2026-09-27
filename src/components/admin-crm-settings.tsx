@@ -2763,7 +2763,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
               <button key={n} type="button" className={cn(chips, archYears === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setArchYears((v) => (v === n ? 0 : n)); setPageLeft(0); setPageRight(0); }}>{label}</button>
             ))}
           </div>
-          <p className="mt-2 text-[0.72rem] leading-snug text-muted">ФИО — не «тест» и не телефон. Группы — любое участие в cgi, не только живое. Срок — дата архива, пустая дата в срок не входит. «Перепроверить кассу» пишет только этот отбор.</p>
+          <p className="mt-2 text-[0.72rem] leading-snug text-muted">ФИО — не «тест» и не телефон. Возраст и день рождения — с карточки архива. Учился в группах — явка на проведённом уроке группы, читается при «Прочитать архив». Срок — дата архива, пустая дата в срок не входит. «Перепроверить кассу» пишет только этот отбор.</p>
         </div>
       ) : null}
       <p className="mt-3 text-sm">
