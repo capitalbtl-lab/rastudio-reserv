@@ -61,6 +61,8 @@ const BTN_GHOST =
   "inline-flex h-10 items-center justify-center rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10 hover:bg-primary/5 hover:ring-primary/25";
 const BTN_GHOST_SM =
   "inline-flex h-8 items-center justify-center shrink-0 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10 hover:bg-primary/5 disabled:opacity-40";
+const BTN_BLUE =
+  "inline-flex h-10 items-center justify-center rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-[var(--shadow-border)] hover:bg-blue-700 disabled:opacity-50";
 const BTN_RED =
   "inline-flex h-10 items-center justify-center rounded-full bg-red-600 px-4 text-sm font-semibold text-white shadow-[var(--shadow-border)] hover:bg-red-700 disabled:opacity-50";
 
@@ -2785,10 +2787,10 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>
         {archive ? (
           <>
+            <button type="button" className={cn(BTN_BLUE, runMode === "step7-recheck" && "ra-btn-blink")} disabled={busy} onClick={() => startServer("step7-recheck")}>Перепроверить архив</button>
             {([[1, "1 месяц"], [3, "3 месяца"], [6, "6 месяцев"]] as const).map(([n, label]) => (
               <button key={n} type="button" className={cn(chips, archDiskMonths === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setArchDiskMonths(n)}>{label}</button>
             ))}
-            <button type="button" className={cn(BTN_GHOST, runMode === "step7-recheck" && "ra-btn-blink")} disabled={busy} onClick={() => startServer("step7-recheck")}>Перепроверить архив</button>
             <button type="button" className={BTN_GHOST} disabled={busy} onClick={() => setClearAsk(true)}>Очистить архив</button>
           </>
         ) : null}
