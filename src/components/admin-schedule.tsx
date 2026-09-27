@@ -2791,7 +2791,8 @@ export function AdminSchedule() {
         className={cn(groupsWide && "fixed inset-0 z-[60] flex flex-col overflow-hidden bg-bg p-4 md:px-8 md:py-5")}
         data-screen={groupsWide ? "wide" : "normal"}
       >
-      <div className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-black/10">
+      <div className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-black/10">
+        <div className="inline-grid grid-flow-col items-stretch gap-1 [grid-auto-columns:1fr]">
         {([
           ["groups", "Группы"],
           ["clients", "Клиенты"],
@@ -2809,17 +2810,18 @@ export function AdminSchedule() {
             type="button"
             onClick={() => showPane(id)}
             className={cn(
-              "flex min-h-[3.35rem] min-w-[6.75rem] items-center justify-center rounded-t-xl px-3 py-1.5 text-center text-base font-semibold leading-tight transition-colors",
+              "flex min-h-[3.35rem] w-full items-center justify-center rounded-t-xl px-3 py-1.5 text-center text-base font-semibold leading-tight transition-colors",
               pane === id ? "bg-primary text-white" : "bg-surface-2 text-fg hover:bg-white",
             )}
           >
             <span>
               {label.split(" ").map((word) => (
-                <span key={word} className="block">{word}</span>
+                <span key={word} className="block whitespace-nowrap">{word}</span>
               ))}
             </span>
           </button>
         ))}
+        </div>
         {groupsWide ? (
           <div className="ml-auto mb-1 flex items-center gap-2">
             <AdminReloadBtn />
