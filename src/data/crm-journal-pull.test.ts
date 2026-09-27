@@ -204,7 +204,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Шаг 3 · Занятия в группах/);
     assert.match(ui, /Шаг 4 · Деньги на карточке/);
     assert.match(ui, /Шаг 5 · Сверка остатка/);
-    assert.match(ui, /Сверить всех текущих/);
+    assert.match(ui, /Сверить остаток тех, кто сейчас ходит/);
     assert.doesNotMatch(ui, /Сверить 10/);
     assert.match(ui, /function pullAudit/);
     assert.match(ui, /HINT\.auditAll/);

@@ -1298,7 +1298,7 @@ function auditSeg(r: AuditSegIn): AuditSeg {
   const codes = r.codes || [];
   const extra = String(r.extra || "");
   if (!r.seen) {
-    return { id: "wait", label: "Не сверяли", rec: "Сверить всех текущих или на карточке «Перепроверить»." };
+    return { id: "wait", label: "Не сверяли", rec: "Сверить остаток тех, кто сейчас ходит, или на карточке «Перепроверить»." };
   }
   if (codes.includes("нет id") || extra === "id не найден") {
     return { id: "no-id", label: "id не найден", rec: "В Alfa нет карточки с этим id. Это не «цифры не сошлись» и не «касса меньше шапки»." };
@@ -2354,7 +2354,7 @@ function step6Why(x: Step6Item) {
   if (x.cashGiveUp) return x.cashFail ? `Не дочитали за 3 попытки. ${x.cashFail}` : "Не дочитали за 3 попытки по 30 секунд.";
   if (!x.cashState || x.cashState === "wait") return "Кассу ещё не снимали.";
   if (x.cashState === "no-balance") return "В ответе Alfa нет balance. Платежи и занятия не считали, шапку сравнить не с чем.";
-  if (x.cashPayN == null && x.cashLesN == null) return "Разбивки ещё нет, только шапка и формула. Нажмите «Перепроверить кассу» ещё раз.";
+  if (x.cashPayN == null && x.cashLesN == null) return "Разбивки ещё нет, только шапка и формула. Нажмите «Перепроверить этого» ещё раз.";
   const bits: string[] = [];
   const idsOk = step6DiskAgrees(x);
   const moneyOk = x.cashFormula != null && x.cashBalance != null && step5Close(Number(x.cashFormula), Number(x.cashBalance));
@@ -2733,7 +2733,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         <button type="button" className="ml-auto h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setLogOpen(true)}>Лог шага</button>
       </div>
       <StepRunLogModal open={logOpen} step={archive ? 7 : 6} onClose={() => setLogOpen(false)} tick={note} />
-      <ProgressBar done={right.length} total={left.length + right.length} run={busy} cur={prog?.cur || ""} stopped={!busy && note.startsWith("Остановили")} />
+      <ProgressBar done={right.length} total={left.length + right.length} run={busy} cur={prog?.cur || ""} stopped={!busy && note.startsWith("Остановили")} detail={busy && prog ? `на сервере прошло ${prog.n}` : ""} />
       {archive ? (
         <div className="mt-3 rounded-2xl bg-white px-3.5 py-3 ring-1 ring-black/10">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -3313,14 +3313,27 @@ function StudentPackView({
   );
 }
 
-function ProgressBar({ done, total, run, loading, cur, stopped }: { done: number; total: number; run?: boolean; loading?: boolean; cur?: string; stopped?: boolean }) {
+function jobRunDetail(job?: { running?: boolean; stop?: boolean; n?: number; total?: number; waits?: number; workerSilent?: boolean } | null) {
+  if (!job?.running || job.stop) return "";
+  const n = Number(job.n) || 0;
+  const total = Number(job.total) || 0;
+  const waits = Number(job.waits) || 0;
+  return [
+    total ? `на сервере ${n} из ${total}` : n ? `на сервере прошло ${n}` : "",
+    waits ? `пауза ${waits}/8` : "",
+    job.workerSilent ? "процесс истории молчит, подхватываем" : "",
+  ].filter(Boolean).join(" · ");
+}
+
+function ProgressBar({ done, total, run, loading, cur, stopped, detail }: { done: number; total: number; run?: boolean; loading?: boolean; cur?: string; stopped?: boolean; detail?: string }) {
   const left = Math.max(0, total - done);
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : run ? 18 : 0;
   const name = String(cur || "").trim();
+  const extra = String(detail || "").trim();
   const line = stopped
     ? `Остановили · прошло ${done} из ${Math.max(total, done)}. Уже записанное осталось.`
     : run
-      ? `Сейчас: ${name || "работаем"} · сделано ${done} из ${Math.max(total, done)}.`
+      ? `Сейчас: ${name || "работаем"} · сделано ${done} из ${Math.max(total, done)}.${extra ? ` ${extra}` : ""}`
       : total <= 0
         ? (loading ? "Список ещё читается." : "Список ещё пустой.")
         : `Готово ${done} из ${total}.`;
@@ -5032,7 +5045,7 @@ export function AdminCrmSettings() {
                   const archGroupN = (p?.groups?.rows || []).filter((r) => r.archived).length;
                   return (
                     <>
-                      <ProgressBar done={done.length} total={rows.length} run={run} loading={journalLoading && !journal} cur={journal?.job?.cur} stopped={Boolean(journal?.job?.stop) && (journal?.job?.mode === "roster" || journal?.job?.mode === "roster-recheck")} />
+                      <ProgressBar done={done.length} total={rows.length} run={run} loading={journalLoading && !journal} cur={journal?.job?.cur} stopped={Boolean(journal?.job?.stop) && (journal?.job?.mode === "roster" || journal?.job?.mode === "roster-recheck")} detail={jobRunDetail(journal?.job)} />
                       <div className="mt-3">
                         <ScopePills
                           value={groupArchived ? "archive" : "live"}
@@ -5218,7 +5231,7 @@ export function AdminCrmSettings() {
                   <LoadGuideBtn tab="groups" onOpen={setLoadGuide} />
                   <button type="button" className="ml-auto h-8 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10" onClick={() => setLogStep(3)}>Лог шага</button>
                 </div>
-                <ProgressBar done={schoolDone} total={schoolRows.length} run={Boolean(schoolRun || fillLoading)} loading={journalLoading && !journal} cur={schoolRun?.cur} />
+                <ProgressBar done={schoolDone} total={schoolRows.length} run={Boolean(schoolRun || fillLoading)} loading={journalLoading && !journal} cur={schoolRun?.cur} detail={jobRunDetail(journal?.job)} />
                 <div className="mt-3 grid items-start gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {journal?.lastArchivesPupils ? (
                     <div className="min-w-0 rounded-2xl bg-white px-3 py-2 text-sm leading-snug ring-1 ring-black/10">
@@ -5536,7 +5549,7 @@ export function AdminCrmSettings() {
                   const cur = schoolRun?.cur || fillLoading?.label || journal?.job?.cur || "";
                   return (
                     <>
-                      <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} cur={cur || catalogProgressNote(journal?.note)} stopped={Boolean(journal?.job?.stop) && journal?.job?.kind === "students"} />
+                      <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} cur={cur || catalogProgressNote(journal?.note)} stopped={Boolean(journal?.job?.stop) && journal?.job?.kind === "students"} detail={jobRunDetail(journal?.job)} />
                       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
                         <BtnCluster tone="red">
                         {withHint(
@@ -5650,7 +5663,7 @@ export function AdminCrmSettings() {
                   const cur = schoolRun?.cur || fillLoading?.label || journal?.job?.cur || "";
                   return (
                     <>
-                      <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} cur={cur} stopped={Boolean(journal?.job?.stop) && journal?.job?.kind === "balance"} />
+                      <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} cur={cur} stopped={Boolean(journal?.job?.stop) && journal?.job?.kind === "balance"} detail={jobRunDetail(journal?.job)} />
                       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
                         <BtnCluster tone="red">
                         {withHint(
@@ -5762,7 +5775,7 @@ export function AdminCrmSettings() {
                           {archBlocked ? " Сначала шаги 2 и 4 по этому набору." : ""}
                         </p>
                       ) : null}
-                      <ProgressBar done={scanned} total={total} run={Boolean(run)} cur={fillLoading?.label || journal?.job?.cur} stopped={Boolean(journal?.job?.stop) && (journal?.job?.mode === "audit" || journal?.job?.kind === "audit")} />
+                      <ProgressBar done={scanned} total={total} run={Boolean(run)} cur={fillLoading?.label || journal?.job?.cur} stopped={Boolean(journal?.job?.stop) && (journal?.job?.mode === "audit" || journal?.job?.kind === "audit")} detail={jobRunDetail(journal?.job)} />
                       <div className="mt-3 flex min-w-0 w-full flex-nowrap items-center gap-2">
                         {withHint(
                           <button
