@@ -50,34 +50,38 @@ jobs:
             head -c 300 /tmp/local.html 2>/dev/null; echo
             echo "=== probe ==="
             cd /var/www/rastudio
-            cat > /tmp/ra-probe.mjs <<'NODE'
-            async function check(name, fn) {
-              try {
-                const v = await fn();
-                console.log(name, "ok", v || "");
-              } catch (e) {
-                console.error(name, "FAIL", e && e.stack ? e.stack : e);
-              }
-            }
-            await check("layout", async () => {
-              const { loadHomeLayout } = await import("/var/www/rastudio/src/data/home-layout.ts");
-              const l = loadHomeLayout();
-              return String(l.order?.length) + " " + String(l.order?.[0] || "");
-            });
-            await check("edits", async () => {
-              const { ensureLiveEdits } = await import("/var/www/rastudio/src/data/edits.ts");
-              ensureLiveEdits();
-            });
-            await check("prices", async () => {
-              const { ensureLivePrices } = await import("/var/www/rastudio/src/data/prices.ts");
-              ensureLivePrices();
-            });
-            await check("signup", async () => {
-              const { loadSiteSignup } = await import("/var/www/rastudio/src/data/site-signup.ts");
-              loadSiteSignup();
-            });
-            NODE
-            node --experimental-strip-types --import ./scripts/ts-ext-register.mjs /tmp/ra-probe.mjs
+            python3 - <<'PY'
+            import json
+            pol=json.load(open("storage/crm-archive-policy.json"))
+            working=set(int(x) for x in (pol.get("working") or []))
+            print("policy", pol.get("ready"), "working", len(working))
+            d=json.load(open("storage/dossiers.json"))
+            items=d.get("items") or []
+            st={}
+            arch=arch_link=arch_live_mark=work_hit=0
+            study_link=0
+            for x in items:
+                s=str(x.get("status") or "")
+                st[s]=st.get(s,0)+1
+                ex=x.get("extras") or {}
+                removed=str(ex.get("removed") or "")
+                links=[g for g in (x.get("groupLinks") or []) if isinstance(g, dict) and g.get("active") is not False and int(g.get("id") or 0)]
+                cid=int(x.get("crmId") or 0)
+                if cid in working: work_hit+=1
+                if s=="архив" or removed=="2":
+                    arch+=1
+                    if links: arch_link+=1
+                    if str(ex.get("crm_live_group") or "")=="1": arch_live_mark+=1
+                elif s=="учится" and links:
+                    study_link+=1
+            print("dossiers", len(items))
+            print("status", st)
+            print("archive", arch, "archive_with_group", arch_link, "archive_live_mark", arch_live_mark, "working_on_disk", work_hit, "study_with_group", study_link)
+            b=json.load(open("storage/crm-leads-board.json"))
+            rows=((b.get("keys") or {}).get("7") or {}).get("items") or []
+            ok=sum(1 for r in rows if r.get("cashState")=="ok")
+            print("step7", len(rows), "cash_ok", ok, "hadGroups", sum(1 for r in rows if r.get("hadGroups")))
+            PY
             echo "=== out log ==="
             ls /root/.pm2/logs/ | head
             tail -n 80 /root/.pm2/logs/rastudio-out-8.log 2>/dev/null
