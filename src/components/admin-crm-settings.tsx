@@ -367,17 +367,17 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 }
 
 const CRM_SET_TABS = [
-  { id: "people", label: "Люди и роли" },
   { id: "sync", label: "Центр синхронизации" },
+  { id: "people", label: "Люди, роли, дети" },
   { id: "funnel", label: "Воронка" },
   { id: "branches", label: "Филиалы" },
 ] as const;
 type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
 const SYNC_PANES = [
   { id: "history", label: "История из Alfa" },
-  { id: "queue", label: "Очередь" },
-  { id: "cache", label: "Кэш сайта" },
   { id: "bg", label: "Фоновая загрузка" },
+  { id: "cache", label: "Кэш сайта" },
+  { id: "queue", label: "Очередь" },
   { id: "alfaPeople", label: "Люди в Alfa" },
 ] as const;
 type SyncPane = (typeof SYNC_PANES)[number]["id"];
@@ -4734,7 +4734,7 @@ export function AdminCrmSettings() {
       <div className="flex min-h-[70vh] flex-col gap-4">
       {crmTab === "people" ? (
       <Card
-        title="Люди и роли"
+        title="Люди, роли, дети"
         hint="Кто пишет на диск. Alfa догоняет очередью и не меняет автора. Пароль кабинета один — сотрудник. Два ИИ без пароля: ассистент в админке, консультант на сайте. Очередь — пакеты cgi и выгрузка."
       >
         <ul className="space-y-2">
