@@ -57,20 +57,23 @@ jobs:
             print("versions", len(versions), "keys0", list((versions[0] or {}).keys())[:8] if versions else None)
             slots=(versions[0] or {}).get("slots") or []
             print("slots", len(slots))
-            live=set()
+            live=set(); status_of={}
             for s in slots:
                 if not isinstance(s, dict):
                     continue
                 gid=int(s.get("groupId") or 0); bid=int(s.get("branchId") or 0)
-                if gid and bid: live.add((bid,gid))
-            print("live", len(live), "sample", list(live)[:3])
+                if gid and bid:
+                    live.add((bid,gid))
+                    status_of[(bid,gid)]=int(s.get("statusId") or 0)
+            print("live", len(live))
             d=json.load(open("storage/dossiers.json"))
-            hit_pair=hit_gid=active_true=active_false=0
+            hit_pair=active_true=active_false=0
+            by_status={}
             for x in d.get("items") or []:
                 ex=x.get("extras") or {}
                 if str(x.get("status") or "")!="архив" and str(ex.get("removed") or "")!="2":
                     continue
-                matched=False
+                best=None
                 flag=False
                 for g in x.get("groupLinks") or []:
                     if not isinstance(g, dict):
@@ -79,14 +82,16 @@ jobs:
                     bid=int(g.get("branchId") or 0) or int(x.get("branchId") or 0)
                     if not gid or (bid,gid) not in live:
                         continue
-                    matched=True
+                    best=(bid,gid)
                     if g.get("active") is not False:
                         flag=True
-                if matched:
+                if best:
                     hit_pair+=1
-                    if flag: active_true+=1
-                    else: active_false+=1
-            print("pair", hit_pair, "active_true", active_true, "active_false", active_false)
+                    sid=status_of.get(best, -1)
+                    if flag:
+                        active_true+=1
+                        by_status[sid]=by_status.get(sid,0)+1
+            print("pair", hit_pair, "active_true", active_true, "by_status", by_status)
             PY
             echo "=== out log ==="
             ls /root/.pm2/logs/ | head
