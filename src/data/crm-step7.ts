@@ -141,31 +141,19 @@ async function attendedCustomers(tok: string) {
 export async function syncStep7List() {
   dropAlfaIndex();
   const tok = await alfaToken();
-  const { live } = await membershipSets(tok);
-  let attended: Set<number>;
-  try {
-    attended = await attendedCustomers(tok);
-  } catch (e) {
-    return { ok: true as const, note: `Шаг 7 · архив не заменён: явки не дочитаны · ${e instanceof Error ? e.message : "обрыв"}` };
-  }
   const clientReasons = await rejectNames(tok, "customer-reject");
   const leadReasons = await rejectNames(tok, "lead-reject");
   const byId = new Map<number, LeadCard>();
   const notes: string[] = [];
   const failed = new Set<number>();
-  let dropped = 0;
   for (const branch of BRANCHES) {
     try {
       const branchCards = new Map<number, LeadCard>();
       let n = 0;
-      let branchDropped = 0;
       for (const studyFilter of [1, 0] as const) {
         const rows = await readPages(`/v2api/${branch}/customer/index`, { is_study: studyFilter, removed: 2 }, tok);
         for (const row of rows) {
-          if (!step7KeepAny({ ...row, is_study: step7ListStudy(row, studyFilter) }, live)) {
-            if (live.has(Number(row.id))) branchDropped += 1;
-            continue;
-          }
+          if (!step7KeepAny({ ...row, is_study: step7ListStudy(row, studyFilter) }, new Set())) continue;
           const id = Number(row.id);
           if (byId.has(id) || branchCards.has(id)) continue;
           const study = step7ListStudy(row, studyFilter);
@@ -190,19 +178,44 @@ export async function syncStep7List() {
             rejectName: rejectId ? names.get(`${branch}:${rejectId}`) || `причина ${rejectId}` : "",
             study,
             dob: dobOf(row),
-            hadGroups: attended.has(id),
+            hadGroups: false,
             archivedAt: step7ArchiveDay(row),
           });
           n += 1;
         }
       }
       for (const [id, card] of branchCards) if (!byId.has(id)) byId.set(id, card);
-      dropped += branchDropped;
       notes.push(`${branch}: ${n}`);
+      replaceStep7List(step7KeepFailedBranch([...byId.values()], peekStep7Board()?.items || [], failed));
     } catch (e) {
       failed.add(branch);
       notes.push(`${branch}: оставлено · ${e instanceof Error ? e.message : "обрыв"}`);
     }
+  }
+  let live = new Set<number>();
+  let dropped = 0;
+  try {
+    live = (await membershipSets(tok)).live;
+  } catch (e) {
+    notes.push(`группы: ${e instanceof Error ? e.message : "обрыв"}`);
+  }
+  if (live.size) {
+    for (const [id, card] of byId) {
+      if (!live.has(id)) continue;
+      byId.delete(id);
+      dropped += 1;
+      void card;
+    }
+    replaceStep7List(step7KeepFailedBranch([...byId.values()], peekStep7Board()?.items || [], failed));
+  }
+  let attended = new Set<number>();
+  try {
+    attended = await attendedCustomers(tok);
+  } catch (e) {
+    notes.push(`явки: ${e instanceof Error ? e.message : "обрыв"}`);
+  }
+  if (attended.size) {
+    for (const card of byId.values()) card.hadGroups = attended.has(card.id);
   }
   const kept = step7KeepFailedBranch([...byId.values()], peekStep7Board()?.items || [], failed);
   const board = replaceStep7List(kept);
