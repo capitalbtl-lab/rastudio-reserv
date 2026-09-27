@@ -2787,14 +2787,29 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         {note ? ` · ${note}` : ""}
       </p>
       <div className="mt-3 flex min-w-0 w-full flex-wrap items-center gap-2">
-        <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>{archive ? "Прочитать архив" : "Прочитать колонки"}</button>
-        <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>
+        {archive ? withHint(
+          <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>Прочитать архив</button>,
+          "Читает по ID только левый столбец «Не закрыто» по текущему отбору. Кто не попал в отбор и кто уже справа в «Совпало» — не читается. Весь архив заново не обходит. В Alfa ничего не пишет.",
+        ) : (
+          <button type="button" className={cn(BTN_RED, runMode === listMode && "ra-btn-blink")} disabled={busy} onClick={() => startServer(listMode)}>Прочитать колонки</button>
+        )}
+        {archive ? withHint(
+          <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>,
+          "Снимает кассу у карточек текущего отбора, тем же расчётом, что шаг 6. Совпавшая шапка и формула уходят вправо. В Alfa ничего не пишет.",
+        ) : (
+          <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>
+        )}
         {archive ? (
           <>
-            <button type="button" className={cn(BTN_BLUE, runMode === "step7-recheck" && "ra-btn-blink")} disabled={busy} onClick={() => startServer("step7-recheck")}>Перепроверить архив</button>
-            {([[1, "1 месяц"], [3, "3 месяца"], [6, "6 месяцев"]] as const).map(([n, label]) => (
-              <button key={n} type="button" className={cn(chips, archDiskMonths === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setArchDiskMonths(n)}>{label}</button>
-            ))}
+            <BtnCluster tone="sky">
+              {withHint(
+                <button type="button" className={cn(BTN_BLUE, runMode === "step7-recheck" && "ra-btn-blink")} disabled={busy} onClick={() => startServer("step7-recheck")}>Перепроверить архив</button>,
+                "Берёт с диска архив за окно в этой же синей рамке: 1 месяц, 3 или 6. Живые группы не входят, исключённые из групп входят. Касса этих клиентов снимается заново. В Alfa ничего не пишет.",
+              )}
+              {([[1, "1 месяц"], [3, "3 месяца"], [6, "6 месяцев"]] as const).map(([n, label]) => (
+                <button key={n} type="button" className={cn(chips, archDiskMonths === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setArchDiskMonths(n)}>{label}</button>
+              ))}
+            </BtnCluster>
             <button type="button" className={BTN_GHOST} disabled={busy} onClick={() => setClearAsk(true)}>Очистить архив</button>
           </>
         ) : null}
