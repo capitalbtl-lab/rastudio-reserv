@@ -77,7 +77,7 @@ export function alfaLinkedNow() {
   return alfaLinked(loadAlfaLink().mode);
 }
 
-/** «Обновить» и fresh — режим «Фон с AlfaCRM». */
+/** «Обновить» и fresh — режим «Фоновая загрузка». */
 export function wantAlfaPull(fresh?: unknown) {
   return pullFreshAllowed(loadAlfaLink(), fresh);
 }

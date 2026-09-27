@@ -368,7 +368,7 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 
 const CRM_SET_TABS = [
   { id: "people", label: "Люди и роли" },
-  { id: "alfa", label: "Фон с AlfaCRM" },
+  { id: "sync", label: "Центр синхронизации" },
   { id: "queue", label: "Очередь" },
   { id: "funnel", label: "Воронка" },
   { id: "cache", label: "Кэш сайта" },
@@ -3344,7 +3344,7 @@ function ProgressBar({ done, total, run, loading, cur, stopped, detail }: { done
   );
 }
 
-export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" | "sync" } = {}) {
+export function AdminCrmSettings() {
   const [stages, setStages] = useState<LeadStage[]>(LEAD_STAGES);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -3501,7 +3501,7 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
   const [archNeedFio, setArchNeedFio] = useState(false);
   const [archNeedGroups, setArchNeedGroups] = useState(false);
   const [archAttendYears, setArchAttendYears] = useState<0 | 1 | 2>(1);
-  const [crmTab, setCrmTab] = useState<CrmSetTab>("people");
+  const [crmTab, setCrmTab] = useState<CrmSetTab>("sync");
   const [syncPolicy, setSyncPolicy] = useState<CrmSyncPolicy>(POLICY_FACTORY);
   const [histTab, setHistTab] = useState<HistTab>("roster");
   const [loadGuide, setLoadGuide] = useState<HistLoadTab | null>(null);
@@ -3541,7 +3541,7 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
       const h = localStorage.getItem("crm-history-tab") || "";
       if (s) setJournalSchool(s);
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
-      const tab = t === "historyAuto" || t === "history" ? "people" : t;
+      const tab = t === "historyAuto" || t === "history" || t === "alfa" ? "sync" : t;
       if (CRM_SET_TABS.some((x) => x.id === tab)) setCrmTab(tab as CrmSetTab);
       if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit" || h === "step6" || h === "step7") setHistTab(h);
     } catch {
@@ -3632,7 +3632,7 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
   }, []);
 
   useEffect(() => {
-    if (screen !== "sync") return;
+    if (crmTab !== "sync") return;
     let on = true;
     let wasRun = Boolean(journal?.job?.running) && !journal?.job?.stop;
     let beats = 0;
@@ -3667,7 +3667,7 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
       on = false;
       clearInterval(t);
     };
-  }, [screen]);
+  }, [crmTab]);
 
   async function loadAuto() {
     try {
@@ -3785,7 +3785,7 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
         return;
       }
       if (res.alfaLink) applyLink(res.alfaLink);
-      setMsg(mode === "offline" ? "Без AlfaCRM: очередь копит, в CRM не уходит. Ольга пишет на диск." : "Фон с AlfaCRM: очередь выгружает по включённым каналам. Запуск пакетов — вкладка «Очередь».");
+      setMsg(mode === "offline" ? "Без AlfaCRM: очередь копит, в CRM не уходит. Ольга пишет на диск." : "Фоновая загрузка: очередь выгружает по включённым каналам. Запуск пакетов — вкладка «Очередь».");
       await loadCache();
     } finally {
       setBusy(false);
@@ -4675,12 +4675,11 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
   return (
     <div className="space-y-4 pb-8 [overflow-anchor:none]">
       <div>
-        <h2 className="font-display text-3xl">{screen === "sync" ? "Центр синхронизации" : "Настройка CRM"}</h2>
+        <h2 className="font-display text-3xl">Настройка CRM</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          {screen === "sync" ? "История из Alfa: шаги, пульт и журнал." : "Этапы, журнал и связь с Alfa — по вкладкам, не одной простынёй."}
+          Этапы, журнал и связь с Alfa — по вкладкам, не одной простынёй.
         </p>
       </div>
-      {screen === "sync" ? null : (
       <div ref={crmTabsRef} className="sticky top-0 z-20 -mx-1 flex flex-wrap gap-1 bg-[var(--color-bg)] px-1 py-2">
         {CRM_SET_TABS.map((t) => (
           <button
@@ -4693,10 +4692,9 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
           </button>
         ))}
       </div>
-      )}
 
-      <div className="min-h-[70vh]">
-      {screen !== "sync" && crmTab === "people" ? (
+      <div className="flex min-h-[70vh] flex-col gap-4">
+      {crmTab === "people" ? (
       <Card
         title="Люди и роли"
         hint="Кто пишет на диск. Alfa догоняет очередью и не меняет автора. Пароль кабинета один — сотрудник. Два ИИ без пароля: ассистент в админке, консультант на сайте. Очередь — пакеты cgi и выгрузка."
@@ -4730,10 +4728,10 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
       </Card>
       ) : null}
 
-      {screen !== "sync" && crmTab === "alfa" ? (
-      <>
+      {crmTab === "sync" ? (
+      <div className="order-2">
       <Card
-        title="Фон с AlfaCRM"
+        title="Фоновая загрузка"
         hint="Диск сайта — правда. Ольга и формы пишут сюда сразу. Ниже — что подгружать из Alfa, что выгружать обратно, и предохранители трубы (лимит, токен, повтор создания)."
       >
         <div className="grid gap-2 sm:grid-cols-2">
@@ -4896,10 +4894,11 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
           <li>Касса пока в Alfa: платёж у нас сразу на диск и в очередь.</li>
         </ul>
       </Card>
-      </>
+      </div>
       ) : null}
 
-      {screen === "sync" ? (
+      {crmTab === "sync" ? (
+      <div className="order-1">
       <Card
         title="История из Alfa"
       >
@@ -5833,9 +5832,10 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
           );
         })()}
       </Card>
+      </div>
       ) : null}
 
-      {screen !== "sync" && crmTab === "queue" ? (
+      {crmTab === "queue" ? (
       <Card
         title="Очередь в Alfa"
         hint={
@@ -5873,7 +5873,7 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
       </Card>
       ) : null}
 
-      {screen !== "sync" && crmTab === "funnel" ? (
+      {crmTab === "funnel" ? (
       <>
       <Card
         title="Воронка продаж"
@@ -6095,7 +6095,7 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
       </>
       ) : null}
 
-      {screen !== "sync" && crmTab === "cache" ? (
+      {crmTab === "cache" ? (
       <Card
         title="Кэш сайта"
         hint="Что читать из хранилища админки, а что каждый раз из AlfaCRM. Оперативные данные — на лету. Абонементы учеников: счётчик сразу с диска сайта, без пакетов. Сверка CRM — фоном по филиалам."
@@ -6186,7 +6186,7 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
       </Card>
       ) : null}
 
-      {screen !== "sync" && crmTab === "branches" ? (
+      {crmTab === "branches" ? (
       <Card title="Филиалы" hint="Лиды и клиенты в AlfaCRM привязаны к филиалу. На сайте тот же список.">
         <ul className="divide-y divide-black/6">
           {([1, 2, 3, 4] as const).map((id) => (
@@ -6202,7 +6202,7 @@ export function AdminCrmSettings({ screen = "settings" }: { screen?: "settings" 
       </Card>
       ) : null}
 
-      {screen !== "sync" && crmTab === "funnel" ? (
+      {crmTab === "funnel" ? (
       <Card title="Какие карточки попадают в воронку">
         <dl className="grid gap-3 text-sm md:grid-cols-2">
           <div className="rounded-xl bg-surface-2 p-3">

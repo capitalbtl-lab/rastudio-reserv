@@ -134,7 +134,7 @@ describe("режим фона с AlfaCRM", () => {
     assert.match(sched, /wantAlfaPull\(data.fresh\)/);
     assert.match(sched, /alfaLinkSave/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
-    assert.match(ui, /Фон с AlfaCRM/);
+    assert.match(ui, /Фоновая загрузка/);
     assert.match(ui, /Загрузить историю из Alfa/);
     assert.match(ui, /ALFA_PUSH_CH/);
     assert.match(ui, /ALFA_PIPE_CH/);

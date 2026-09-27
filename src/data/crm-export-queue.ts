@@ -514,7 +514,7 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
 export async function flushExportJobs(match: (j: CrmExportJob) => boolean, max = 16) {
   const { alfaLinkedNow } = await import("./crm-alfa-link");
   if (!alfaLinkedNow()) {
-    return { flushed: 0, left: loadExport().jobs.filter(match).length, error: "Фон с AlfaCRM выключен — в очередь записали, в АСРМ не ушло." };
+    return { flushed: 0, left: loadExport().jobs.filter(match).length, error: "Фоновая загрузка выключена — в очередь записали, в АСРМ не ушло." };
   }
   let flushed = 0;
   for (let i = 0; i < max; i += 1) {

@@ -404,7 +404,7 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(rules, /schedule-map/);
     const settings = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(settings, /ALFA_LINK_MODES/);
-    assert.match(settings, /Фон с AlfaCRM/);
+    assert.match(settings, /Фоновая загрузка/);
     const map = readFileSync(new URL("./schedule-map.ts", import.meta.url), "utf8");
     assert.match(map, /joinCourseSubject/);
     assert.match(map, /courseSubjectGapText/);
