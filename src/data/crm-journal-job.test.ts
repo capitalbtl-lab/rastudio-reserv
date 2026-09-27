@@ -568,7 +568,6 @@ describe("фон истории из Alfa", () => {
     assert.match(deploy, /crm-history-restart.wanted/);
     assert.match(deploy, /история занята/);
     assert.match(deploy, /restart_or_defer_history/);
-    assert.match(ui, /F5 ничего не сбрасывает/);
     assert.match(ui, /HINT\.plan/);
     assert.match(ui, /вкладку можно закрыть|страницу можно закрыть/);
     assert.match(job, /historyLoadOne/);

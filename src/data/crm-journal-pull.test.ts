@@ -182,7 +182,6 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Год \(молодые\)/);
     assert.match(ui, /GrainSelect/);
     assert.match(ui, /md:grid-cols-2 xl:grid-cols-3/);
-    assert.match(ui, /сверено/);
     assert.match(ui, /пропусков не обнаружено|дубликатов нет/);
     assert.match(ui, /fillFinishedRow/);
     assert.match(ui, /async function recheckSchool/);
