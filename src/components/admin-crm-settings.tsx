@@ -2809,6 +2809,12 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
             {b.label} · {b.id ? byBranch(b.id) : picked.length}
           </button>
         ))}
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[0.78rem]">
+          <span className="text-muted">На странице</span>
+          {([10, 20, 30, 100] as const).map((n) => (
+            <button key={n} type="button" className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setPageSize(n); setPageLeft(0); setPageRight(0); }}>{n}</button>
+          ))}
+        </span>
       </div>
       {archive ? null : (
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -2821,8 +2827,9 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         ))}
       </div>
       )}
+      {archive ? null : (
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {archive ? null : ([
+        {([
           ["all", "Вся касса"],
           ["wait", "не снята"],
           ["new", "новый"],
@@ -2836,13 +2843,8 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
             {label}
           </button>
         ))}
-        <span className={cn("flex shrink-0 items-center gap-1.5 text-[0.78rem]", archive ? "" : "ml-auto")}>
-          <span className="text-muted">На странице</span>
-          {([10, 20, 30, 100] as const).map((n) => (
-            <button key={n} type="button" className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setPageSize(n); setPageLeft(0); setPageRight(0); }}>{n}</button>
-          ))}
-        </span>
       </div>
+      )}
       {!items.length ? <p className="mt-3 text-sm text-muted">{archive ? "Архив ещё не читали. Список появится после «Прочитать архив»." : "Колонки ещё не читали. Список появится после «Прочитать колонки»."}</p> : null}
       <div className="mt-3 grid items-stretch gap-3 lg:grid-cols-2">
         <section className="flex h-[32rem] flex-col rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
