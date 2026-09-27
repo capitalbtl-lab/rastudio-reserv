@@ -315,6 +315,14 @@ describe("снимок кабинета AlfaCRM /company/2/lead/index", () => {
     const onlyLukh = mergeBranchLeadCards(merged, [{ id: 99, branchId: 3, name: "Лаклин 2" }], 3);
     assert.equal(onlyLukh.filter((x) => x.branchId === 3).length, 1);
     assert.equal(onlyLukh.filter((x) => x.branchId === 2).length, 2);
+    const both = mergeBranchLeadCards(
+      [{ id: 5, branchId: 2, name: "ЦМИТ" }],
+      [{ id: 5, branchId: 3, name: "Луховицы" }],
+      3,
+    );
+    assert.equal(both.length, 2);
+    assert.equal(both.filter((x) => x.id === 5 && x.branchId === 2).length, 1);
+    assert.equal(both.filter((x) => x.id === 5 && x.branchId === 3).length, 1);
   });
 
   it("колонки board берут data-url с resource_id, как initBoard", () => {
@@ -510,6 +518,6 @@ describe("воронка: F5 не тянет полную Alfa", () => {
     assert.match(ui, /loadFunnel\(branch, false, false, true\)/);
     assert.match(ui, /60_000/);
     assert.match(src, /syncLeadColumnsFromApi/);
-    assert.match(ui, /Загрузить «Лидов»/);
+    assert.doesNotMatch(ui, /Загрузить «Лидов»/);
   });
 });

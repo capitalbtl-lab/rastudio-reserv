@@ -121,6 +121,7 @@ export function CrmLeadBoard({
   onRenameStage,
   onDeleteStage,
   onReorderStages,
+  orderEpoch = 0,
 }: {
   stages: LeadStage[];
   items: LeadCard[];
@@ -132,6 +133,7 @@ export function CrmLeadBoard({
   onRenameStage?: (id: number, name: string) => void;
   onDeleteStage?: (id: number) => void;
   onReorderStages?: (ids: number[]) => void;
+  orderEpoch?: number;
 }) {
   const base = stages.length ? stages : LEAD_STAGES;
   const ids = base.map((s) => s.id);
@@ -166,6 +168,21 @@ export function CrmLeadBoard({
   onReorderRef.current = onReorderStages;
 
   useEffect(() => setColOrder(ids), [ids.join(",")]);
+  useEffect(() => {
+    if (!orderEpoch) return;
+    const next: Record<number, string[]> = {};
+    const seen = new Set<number>();
+    for (const it of itemsRef.current) {
+      if (seen.has(it.statusId)) continue;
+      seen.add(it.statusId);
+      next[it.statusId] = itemsRef.current
+        .filter((x) => x.statusId === it.statusId)
+        .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || a.id - b.id)
+        .map(leadKey);
+    }
+    orderRef.current = next;
+    setOrder(next);
+  }, [orderEpoch]);
   useEffect(() => {
     if (drag) paintGhost();
   }, [drag]);

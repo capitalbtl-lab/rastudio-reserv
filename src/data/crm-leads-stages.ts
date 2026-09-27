@@ -341,12 +341,11 @@ export function applyLeadDelta<T extends { id: number }>(
   return { items: [...by.values()], added, updated, removed };
 }
 
-/** Догрузка филиала не затирает карточки других филиалов. */
+/** Догрузка филиала заменяет только карточки этого филиала. Тот же id в другом филиале остаётся. */
 export function mergeBranchLeadCards<T extends { id: number; branchId: number }>(prev: T[], incoming: T[], branchId: number): T[] {
   const bid = Number(branchId) || 0;
   if (!bid) return incoming.slice();
-  const incomingIds = new Set(incoming.map((x) => x.id));
-  const rest = prev.filter((x) => x.branchId !== bid && !incomingIds.has(x.id));
+  const rest = prev.filter((x) => x.branchId !== bid);
   return [...rest, ...incoming];
 }
 

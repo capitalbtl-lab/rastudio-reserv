@@ -13,7 +13,7 @@ import { logAdmin } from "./admin-settings";
 import { customerPullCandidate, diskIsArchive, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
 import { customerSyncOf } from "./crm-customer-sync";
-import { archivePersonFrom, archiveWorkingSet, archiveTabRow, dossierCardArchive, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, archiveFioOk, archiveAgeYears, archiveWasClient, type ArchivePerson } from "./crm-archive-policy";
+import { archivePersonFrom, archiveWorkingSet, dossierCardArchive, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, archiveFioOk, archiveAgeYears, archiveWasClient, type ArchivePerson } from "./crm-archive-policy";
 
 export type PersonName = {
   fio: string;
@@ -2474,17 +2474,17 @@ export function groupRoster(branchId: number, groupId: number) {
   return { active, archive };
 }
 
-function inLiveGroup(d: ClientView, keys: Set<string>) {
-  if (d.liveGroupMark) return true;
+function currentBranchHit(d: ClientView, branch: number, keys: Set<string>) {
   for (const g of d.groupLinks || []) {
     const id = Number(g.id) || 0;
     const bid = Number(g.branchId) || Number(d.branchId) || 0;
-    if (id && bid && keys.has(`${bid}:${id}`)) return true;
+    if (id && bid === branch && keys.has(`${bid}:${id}`)) return true;
   }
   return false;
 }
 
 export function searchClientViews(q = "", limit = 2500, status = "", branchId = 0, ageBand = "", archiveAll = false) {
+  void archiveAll;
   const store = loadStore();
   const needle = String(q || "")
     .toLowerCase()
@@ -2500,52 +2500,47 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
   const hidden = (d: ClientView) => d.status === "удалён";
   const policy = loadArchivePolicy();
   const liveKeys = liveGroupKeySet();
-  const onArchive = (d: ClientView, showHidden: boolean) =>
-    archiveTabRow({
-      archived: listedArchive(d),
-      working: isArchiveWorking(Number(d.crmId) || 0, policy),
-      liveGroup: inLiveGroup(d, liveKeys),
-      showHidden,
-      pinned: d.recheckArchive === "1",
-    });
   const onTab = (d: ClientView) => {
     if (want === "все") return true;
-    if (want === "архив") return onArchive(d, archiveAll);
+    if (want === "архив") return d.status === "архив";
     if (want === "лид") return listedLead(d);
     if (want === "учится" || !want) return listedCurrent(d, liveKeys);
     return d.status === want;
   };
-  let archiveDisk = 0;
-  let archiveShown = 0;
+  const legacyBranches = (d: ClientView) => (d.branchIds && d.branchIds.length ? d.branchIds : [Number(d.branchId) || 0]);
+  const passesBranch = (d: ClientView) => {
+    if (!branchId) return true;
+    if (want === "архив") return Number(d.branchId) === branchId;
+    if (want === "учится" || !want) return currentBranchHit(d, branchId, liveKeys);
+    return legacyBranches(d).includes(branchId);
+  };
   for (const d of views) {
     if (hidden(d)) continue;
     counts.все += 1;
-    if (listedArchive(d) || isArchiveWorking(Number(d.crmId) || 0, policy)) {
-      archiveDisk += 1;
-      if (onArchive(d, false)) {
-        archiveShown += 1;
-        counts.архив += 1;
-      }
-    } else if (listedLead(d)) counts.лид += 1;
+    if (d.status === "архив") counts.архив += 1;
+    else if (listedLead(d)) counts.лид += 1;
     else if (listedCurrent(d, liveKeys)) counts.учится += 1;
     if (!onTab(d)) continue;
+    if (want === "архив") {
+      const b = Number(d.branchId) || 0;
+      if (branchCounts[b] != null) branchCounts[b] += 1;
+    } else if (want === "учится" || !want) {
+      for (const b of [1, 2, 3, 4] as const) if (currentBranchHit(d, b, liveKeys)) branchCounts[b] += 1;
+    } else {
+      for (const b of legacyBranches(d)) if (branchCounts[b] != null) branchCounts[b] += 1;
+    }
+    if (!passesBranch(d)) continue;
+    if (ageBand && d.ageBand !== ageBand) continue;
     tariffCounts.all += 1;
     if (d.hasLiveTariff) tariffCounts.with += 1;
     else tariffCounts.without += 1;
-    const ids = d.branchIds && d.branchIds.length ? d.branchIds : [Number(d.branchId) || 0];
-    for (const b of ids) if (branchCounts[b] != null) branchCounts[b] += 1;
   }
   const items = views.filter((d) => {
     if (d.status === "удалён") return false;
     if (!needle) {
-      if (want === "архив" && !onArchive(d, archiveAll)) return false;
-      else if (want === "лид" && !listedLead(d)) return false;
-      else if ((want === "учится" || !want) && want !== "все" && !listedCurrent(d, liveKeys)) return false;
+      if (!onTab(d)) return false;
     }
-    if (branchId) {
-      const ids = d.branchIds && d.branchIds.length ? d.branchIds : [Number(d.branchId) || 0];
-      if (!ids.includes(branchId)) return false;
-    }
+    if (!passesBranch(d)) return false;
     if (ageBand && d.ageBand !== ageBand) return false;
     if (!needle) return true;
     const hay = `${d.displayName} ${d.child} ${d.parent} ${d.phone} ${d.city} ${d.branch} ${d.courses.join(" ")} ${d.schools.join(" ")} ${d.gender} ${d.crmId || ""} ${d.cardId || ""}`
@@ -2564,9 +2559,9 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
     tariffCounts,
     lastCrmSync: store.lastCrmSync || "",
     archive: {
-      disk: archiveDisk,
+      disk: counts.архив,
       working: counts.архив,
-      hidden: Math.max(0, archiveDisk - archiveShown),
+      hidden: 0,
       ready: Boolean(policy.ready),
       at: policy.at || "",
     },

@@ -2,11 +2,10 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { RefreshCw, Search, Plus } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CrmClientCard, type CardAction } from "@/components/crm-client-card";
-import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
-import { loadFromDisk, pullFromCrm } from "@/lib/crm-pull";
+import { loadFromDisk } from "@/lib/crm-pull";
 import { retryFetch } from "@/lib/retry-fetch";
 import { adminSchedule } from "@/data/admin-schedule";
 import { clientCardId, groupCardId, CABINET_ID, CRM_BRANCH } from "@/data/ids";
@@ -22,7 +21,6 @@ import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, mergeBranchLea
 import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
 import { GROUP_STATUSES, isAdminGroup } from "@/data/group-status";
 import { keepByLiveTariff, type TariffHave } from "@/data/pupil-tariffs";
-import { tidyHttpError } from "@/data/http-error";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -308,15 +306,11 @@ export function AdminClients({
   const [rows, setRows] = useState<ClientRow[]>(() => clientsSnap?.items || []);
   const [total, setTotal] = useState(() => clientsSnap?.total || 0);
   const [counts, setCounts] = useState(() => clientsSnap?.counts || { все: 0, учится: 0, лид: 0, архив: 0 });
-  const [archiveInfo, setArchiveInfo] = useState({ disk: 0, working: 0, hidden: 0, ready: false });
-  const [showHiddenArchive, setShowHiddenArchive] = useState(false);
-  const showHiddenRef = useRef(false);
   const [branchCounts, setBranchCounts] = useState<Record<number, number>>(() => clientsSnap?.branchCounts || { 1: 0, 2: 0, 3: 0, 4: 0 });
   const [busy, setBusy] = useState(() => !clientsSnap?.items.length);
   const [card, setCard] = useState<CustomerCard | null>(null);
   const [cardLoading, setCardLoading] = useState(false);
   const [activeId, setActiveId] = useState(0);
-  const [pull, setPull] = useState<CrmPullState>(emptyPull("clients"));
   const [synced, setSynced] = useState(() => clientsSnap?.synced || "");
   const [cap, setCap] = useState(120);
   const [groupOpen, setGroupOpen] = useState(false);
@@ -334,6 +328,7 @@ export function AdminClients({
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
   const [groupLoading, setGroupLoading] = useState(false);
   const [funnelItems, setFunnelItems] = useState<LeadCard[]>(() => funnelSnapGet(0)?.items || funnelSnapGet(clientsSnap?.branch || 0)?.items || []);
+  const [funnelOrderEpoch, setFunnelOrderEpoch] = useState(0);
   const [funnelStages, setFunnelStages] = useState<LeadStage[]>(() => funnelSnapGet(clientsSnap?.branch || 0)?.stages || LEAD_STAGES);
   const [funnelLoading, setFunnelLoading] = useState(false);
   const [reloading, setReloading] = useState(false);
@@ -445,7 +440,6 @@ export function AdminClients({
         branchId: nextBranch,
         ageBand: nextAge,
         take: Math.max(240, capRef.current + 120, String(nextQ || "").trim() ? 400 : 0),
-        archiveAll: nextStatus === "архив" && showHiddenRef.current,
       }), 2, 20000)) as {
         ok?: boolean;
         items?: ClientRow[];
@@ -463,7 +457,6 @@ export function AdminClients({
         rowsRef.current = res.items;
         setTotal(Number(res.total) || res.items.length);
         if (res.counts) setCounts(res.counts);
-        if (res.archive) setArchiveInfo(res.archive);
         if (res.branchCounts) setBranchCounts(res.branchCounts);
         if (res.tariffCounts) setDiskTariffCounts(res.tariffCounts);
         if (res.lastCrmSync) setSynced(res.lastCrmSync);
@@ -491,52 +484,6 @@ export function AdminClients({
       /* keep cache on screen */
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function pullKind(kind: "clients" | "clientsArchive" | "clientsLeads") {
-    const title = kind === "clientsArchive" ? "архив" : kind === "clientsLeads" ? "лиды" : "текущих";
-    setPull({ ...emptyPull("clients"), open: true, step: `AlfaCRM · ${title}…`, kind: "clients" });
-    try {
-      const res = (await pullFromCrm(kind, (step, lines, done, totalN) => {
-        setPull((u) => (u.done ? u : { ...u, step: step || u.step, lines, added: done, total: totalN, kind: "clients" }));
-      })) as { ok?: boolean; error?: string; lines?: { ok: boolean; text: string }[]; added?: number; total?: number };
-      if (!res.ok || res.error) {
-        setPull((u) => ({
-          ...u,
-          done: true,
-          error: tidyHttpError(res.error, "AlfaCRM не ответила."),
-          lines: res.lines || u.lines,
-          kind: "clients",
-        }));
-        return;
-      }
-      setPull({
-        open: true,
-        kind: "clients",
-        step: "",
-        done: true,
-        error: "",
-        lines: res.lines || [],
-        added: Number(res.added || 0),
-        updated: 0,
-        total: Number(res.total || 0),
-      });
-      const nextStatus: Status = kind === "clientsArchive" ? "архив" : kind === "clientsLeads" ? "лид" : "учится";
-      if (kind === "clientsLeads") {
-        leadKeysRef.current = null;
-        setLeadKeys(null);
-      }
-      setStatus(nextStatus);
-      await load(qRef.current, nextStatus, branchRef.current, ageRef.current);
-      if (viewRef.current === "группы") void openFirstGroup(nextStatus);
-    } catch (e) {
-      setPull((u) => ({
-        ...u,
-        done: true,
-        error: tidyHttpError(e, "Не удалось загрузить клиентов."),
-        kind: "clients",
-      }));
     }
   }
 
@@ -578,6 +525,7 @@ export function AdminClients({
         funnelSnapPut(bid, nextStages, packed);
         setFunnelStages(nextStages);
         setFunnelItems(nextItems);
+        setFunnelOrderEpoch((n) => n + 1);
         if (watching()) {
           const note = res.note || (packed.length ? `${packed.length} лидов` : "Пустая воронка.");
           if (force || !have || !/изменений в CRM нет/i.test(note)) setFunnelNote(note);
@@ -713,7 +661,7 @@ export function AdminClients({
   }
 
   async function reloadScreen() {
-    if (reloading || pull.open) return;
+    if (reloading) return;
     setReloading(true);
     try {
       if (statusRef.current === "лид" && viewRef.current === "дети") {
@@ -896,29 +844,31 @@ export function AdminClients({
     return keepByLiveTariff(rows, tariffHave, liveSet, (r) => Number(r.crmId) || 0).slice(0, cap);
   }, [rows, cap, tariffHave, liveSet]);
   const funnelOn = status === "лид" && view === "дети";
+  const leadPool = useMemo(
+    () => funnelItems.filter((it) => it.id && !funnelGone.current.has(`${it.branchId}:${it.id}`)),
+    [funnelItems],
+  );
+  const leadsBadge = funnelItems.length > 0 ? leadPool.length : counts.лид;
   const tariffCounts = useMemo(() => {
-    if (funnelOn) {
-      const pool = funnelItems.map((it) => Number(it.customerId || it.id) || 0);
+    if (funnelOn && funnelItems.length) {
+      const pool = filterLeadCards(funnelItems, { branch, age, gone: funnelGone.current });
       let withN = 0;
-      for (const id of pool) if (id && liveSet.has(id)) withN += 1;
+      for (const it of pool) {
+        const id = Number(it.customerId || it.id) || 0;
+        if (id && liveSet.has(id)) withN += 1;
+      }
       return { all: pool.length, with: withN, without: Math.max(0, pool.length - withN), ready: true };
     }
-    if (diskTariffCounts.all > 0) return { ...diskTariffCounts, ready: true };
-    const n = status === "лид" ? counts.лид : status === "архив" ? counts.архив : counts.учится;
-    return { all: n, with: 0, without: n, ready: true };
-  }, [funnelOn, funnelItems, liveSet, diskTariffCounts, status, counts]);
+    return { ...diskTariffCounts, ready: true };
+  }, [funnelOn, funnelItems, liveSet, diskTariffCounts, branch, age]);
   const chipCounts = useMemo(() => {
-    const next = { ...branchCounts };
-    if (!funnelOn || !funnelItems.length) return next;
+    if (!(status === "лид" && funnelItems.length > 0)) return branchCounts;
     const tally: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    for (const it of funnelItems) {
+    for (const it of leadPool) {
       if (tally[it.branchId] != null) tally[it.branchId] += 1;
     }
-    for (const id of [1, 2, 3, 4] as const) {
-      if (tally[id] > 0 || branch === 0 || branch === id) next[id] = tally[id];
-    }
-    return next;
-  }, [branchCounts, funnelOn, funnelItems]);
+    return tally;
+  }, [branchCounts, status, funnelItems.length, leadPool]);
   const branchSum = (chipCounts[1] || 0) + (chipCounts[2] || 0) + (chipCounts[3] || 0) + (chipCounts[4] || 0);
   const funnelWas = useRef(false);
   useEffect(() => {
@@ -1239,7 +1189,7 @@ export function AdminClients({
           <div className="flex h-10 items-center rounded-full bg-surface-2 p-1" data-sort-group="status" role="tablist" aria-label="Текущие, лиды или архив">
             {([
               ["учится", "Текущие", counts.учится],
-              ["лид", "Лиды", counts.лид],
+              ["лид", "Лиды", leadsBadge],
               ["архив", "Архив", counts.архив],
             ] as const).map(([id, label, n]) => {
               const on = status === id;
@@ -1279,7 +1229,7 @@ export function AdminClients({
           <div className="flex h-10 items-center rounded-full bg-surface-2 p-1" data-sort-group="entity" role="tablist" aria-label="Группы или дети">
             {([
               ["группы", "Группы", status === "лид" ? (leadKeys ? shownGroups.length : "…") : groupOpts.length],
-              ["дети", "Дети", status === "лид" ? counts.лид : status === "архив" ? counts.архив : counts.учится],
+              ["дети", "Дети", status === "лид" ? leadsBadge : status === "архив" ? counts.архив : counts.учится],
             ] as const).map(([id, label, n]) => {
               const on = id === "группы" ? view === "группы" : view === "дети";
               return (
@@ -1346,28 +1296,6 @@ export function AdminClients({
             <p className="px-1 py-1 text-[0.72rem] text-muted">{tariffProgress.extra || "Обновляю абонементы…"}</p>
           ) : null}
         </div>
-        <div className="mt-1 flex flex-wrap items-center justify-end gap-1">
-            <button
-              type="button"
-              className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
-              title="Загрузить из Alfa текущих учеников (is_study=1). На диск сайта, в Alfa не пишет."
-              disabled={busy || pull.open}
-              onClick={() => void pullKind("clients")}
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} aria-hidden />
-              Загрузить «Клиентов»
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-10 items-center rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
-              title="Загрузить из Alfa лидов и живую доску воронки. На диск сайта, в Alfa не пишет."
-              disabled={busy || pull.open}
-              onClick={() => void pullKind("clientsLeads")}
-            >
-              Загрузить «Лидов»
-            </button>
-            <span className="px-2 text-[0.72rem] text-muted">Архив — все архивные клиенты и лиды. Загрузка — Настройка CRM → История из Alfa</span>
-        </div>
         {hint ? <p className="mt-2 rounded-xl bg-primary/10 px-3 py-1.5 text-sm font-medium text-fg">{hint}</p> : null}
 
         <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -1385,7 +1313,7 @@ export function AdminClients({
               className={cn("rounded-full px-2.5 py-1 text-[0.75rem] font-semibold transition-colors duration-[var(--motion-quick)]", branch === 0 ? "bg-fg text-white" : "text-muted hover:bg-surface-2 hover:text-fg")}
             >
               Все
-              <span className="ml-1 tabular-nums opacity-70">{status === "лид" ? counts.лид : status === "архив" ? counts.архив : counts.учится}</span>
+              <span className="ml-1 tabular-nums opacity-70">{status === "лид" ? leadsBadge : status === "архив" ? counts.архив : counts.учится}</span>
             </button>
             {([1, 2, 3, 4] as const).map((id) => (
               <button
@@ -1500,26 +1428,6 @@ export function AdminClients({
             Архивных клиентов и лидов на сайте нет.
           </p>
         ) : null}
-        {status === "архив" && archiveInfo.hidden ? (
-          <p className="mt-2 text-[0.78rem] text-muted">
-            Ещё {archiveInfo.hidden} скрыты, ищутся по телефону и номеру.{" "}
-            <button
-              type="button"
-              className="underline decoration-dotted"
-              onClick={() => {
-                const next = !showHiddenRef.current;
-                showHiddenRef.current = next;
-                setShowHiddenArchive(next);
-                void load(q, "архив", branch, age);
-              }}
-            >
-              {showHiddenArchive ? "Скрыть лишних" : "Показать скрытых"}
-            </button>
-          </p>
-        ) : null}
-        {status === "лид" && !counts.лид ? (
-          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Лидов на сайте нет. Нажмите «Загрузить „Лидов“».</p>
-        ) : null}
       </div>
 
       <div
@@ -1545,6 +1453,7 @@ export function AdminClients({
             <CrmLeadBoard
               stages={funnelStages}
               items={funnelShown}
+              orderEpoch={funnelOrderEpoch}
               activeId={activeId}
               hideBranch={Boolean(branch)}
               onOpen={(lead) => void openById(lead.customerId || lead.id, lead.branchId || 1)}
@@ -1758,7 +1667,7 @@ export function AdminClients({
           ) : null}
           {view === "дети" && !busy && !shown.length ? (
             <p className="rounded-[1.2rem] bg-white px-4 py-10 text-center text-sm text-muted ring-1 ring-black/6">
-              {status === "архив" ? "Архивных клиентов и лидов нет." : status === "лид" ? "В этой выборке лидов нет." : "В этой выборке никого нет. Смените фильтр или нажмите «Загрузить „Клиентов“»."}
+              {status === "архив" ? "Архивных клиентов и лидов нет." : status === "лид" ? "В этой выборке лидов нет." : "В этой выборке никого нет."}
             </p>
           ) : null}
         </div>
@@ -1998,7 +1907,6 @@ export function AdminClients({
           onAction={mutateCard}
         />
       ) : null}
-      {pull.open ? <CrmPullDialog pull={pull} onClose={() => setPull((u) => ({ ...u, open: false }))} /> : null}
       {funnelNote && typeof document !== "undefined"
         ? createPortal(
             <div className="pointer-events-none fixed bottom-4 left-1/2 z-[400] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-full bg-slate-100/95 px-3 py-1 text-center text-[0.7rem] leading-snug text-slate-500 shadow-sm ring-1 ring-black/[0.06]">

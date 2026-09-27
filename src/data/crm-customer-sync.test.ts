@@ -295,7 +295,7 @@ describe("карточка не ждёт Alfa", () => {
     const clientsUi = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(clientsUi, /void pullKind\("clientsArchive"\)/);
     assert.doesNotMatch(clientsUi, /if \(!counts.архив\) void pullKind\("clientsArchive"\)/);
-    assert.match(clientsUi, /История из Alfa/);
+    assert.doesNotMatch(clientsUi, /История из Alfa/);
     assert.match(clientsUi, /\["архив", "Архив", counts.архив\]/);
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     assert.match(cards, /slice\(0, 2500\)/);

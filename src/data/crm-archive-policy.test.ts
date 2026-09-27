@@ -237,7 +237,7 @@ describe("рабочий архив", () => {
     assert.doesNotMatch(run, /Читаю архив AlfaCRM — иначе явка/);
     const clientsUi = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(clientsUi, /void pullKind\("clientsArchive"\)/);
-    assert.match(clientsUi, /История из Alfa/);
+    assert.doesNotMatch(clientsUi, /История из Alfa/);
     const views = readFileSync(new URL("./dossiers.ts", import.meta.url), "utf8");
     assert.match(views, /counts\.архив/);
     assert.match(views, /isArchiveWorking|archiveWorkingSet/);
