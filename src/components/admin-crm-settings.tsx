@@ -2785,7 +2785,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         <button type="button" className={cn(BTN_GHOST, runMode === cashMode && !oneId && "ra-btn-blink")} disabled={busy || !items.length} onClick={() => startServer(cashMode)}>Перепроверить кассу</button>
         {archive ? (
           <>
-            {([1, "1 месяц"], [3, "3 месяца"], [6, "6 месяцев"] as const).map(([n, label]) => (
+            {([[1, "1 месяц"], [3, "3 месяца"], [6, "6 месяцев"]] as const).map(([n, label]) => (
               <button key={n} type="button" className={cn(chips, archDiskMonths === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => setArchDiskMonths(n)}>{label}</button>
             ))}
             <button type="button" className={cn(BTN_GHOST, runMode === "step7-recheck" && "ra-btn-blink")} disabled={busy} onClick={() => startServer("step7-recheck")}>Перепроверить архив</button>
