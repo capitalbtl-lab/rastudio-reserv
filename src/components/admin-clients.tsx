@@ -329,6 +329,7 @@ export function AdminClients({
   const [groupLoading, setGroupLoading] = useState(false);
   const [funnelItems, setFunnelItems] = useState<LeadCard[]>(() => funnelSnapGet(0)?.items || funnelSnapGet(clientsSnap?.branch || 0)?.items || []);
   const [funnelOrderEpoch, setFunnelOrderEpoch] = useState(0);
+  const [funnelScope, setFunnelScope] = useState<{ full: boolean; branches: number[] }>({ full: false, branches: [] });
   const [funnelStages, setFunnelStages] = useState<LeadStage[]>(() => funnelSnapGet(clientsSnap?.branch || 0)?.stages || LEAD_STAGES);
   const [funnelLoading, setFunnelLoading] = useState(false);
   const [reloading, setReloading] = useState(false);
@@ -431,7 +432,10 @@ export function AdminClients({
     writeLiveIds(ids);
   }, [rows, liveTariffIds.size]);
 
+  const loadSeq = useRef(0);
+  const rowsFilter = useRef(clientsSnap?.items.length ? `${clientsSnap.status || "учится"}|${clientsSnap.branch || 0}|${clientsSnap.age || ""}` : "");
   async function load(nextQ = q, nextStatus = status, nextBranch = branch, nextAge = age) {
+    const seq = ++loadSeq.current;
     if (!rowsRef.current.length) setBusy(true);
     try {
       const res = (await retryFetch(() => loadFromDisk("clients", {
@@ -452,7 +456,9 @@ export function AdminClients({
         error?: string;
         archive?: { disk: number; working: number; hidden: number; ready: boolean };
       };
+      if (seq !== loadSeq.current) return;
       if (res.ok && Array.isArray(res.items)) {
+        rowsFilter.current = `${nextStatus}|${nextBranch}|${nextAge}`;
         setRows(res.items);
         rowsRef.current = res.items;
         setTotal(Number(res.total) || res.items.length);
@@ -483,7 +489,7 @@ export function AdminClients({
     } catch {
       /* keep cache on screen */
     } finally {
-      setBusy(false);
+      if (seq === loadSeq.current) setBusy(false);
     }
   }
 
@@ -526,6 +532,11 @@ export function AdminClients({
         setFunnelStages(nextStages);
         setFunnelItems(nextItems);
         setFunnelOrderEpoch((n) => n + 1);
+        setFunnelScope((prev) => {
+          if (!bid) return { full: true, branches: [1, 2, 3, 4] };
+          if (prev.full) return prev;
+          return { full: false, branches: prev.branches.includes(bid) ? prev.branches : [...prev.branches, bid] };
+        });
         if (watching()) {
           const note = res.note || (packed.length ? `${packed.length} лидов` : "Пустая воронка.");
           if (force || !have || !/изменений в CRM нет/i.test(note)) setFunnelNote(note);
@@ -843,14 +854,34 @@ export function AdminClients({
   const shown = useMemo(() => {
     return keepByLiveTariff(rows, tariffHave, liveSet, (r) => Number(r.crmId) || 0).slice(0, cap);
   }, [rows, cap, tariffHave, liveSet]);
+  const listPill = useRef("");
+  useEffect(() => {
+    if (!desktop || view !== "дети" || status === "лид") return;
+    if (rowsFilter.current !== `${status}|${branch}|${age}`) return;
+    const pill = `${status}|${branch}|${age}|${tariffHave}`;
+    if (!shown.length) {
+      listPill.current = pill;
+      if (!activeIdRef.current) return;
+      setCard(null);
+      setActiveId(0);
+      activeIdRef.current = 0;
+      return;
+    }
+    const changed = listPill.current !== pill;
+    listPill.current = pill;
+    const openId = activeIdRef.current;
+    if (!changed && openId && shown.some((r) => Number(r.crmId) === openId)) return;
+    void openRow(shown[0]);
+  }, [desktop, shown, view, status, branch, age, tariffHave]);
   const funnelOn = status === "лид" && view === "дети";
   const leadPool = useMemo(
     () => funnelItems.filter((it) => it.id && !funnelGone.current.has(`${it.branchId}:${it.id}`)),
     [funnelItems],
   );
-  const leadsBadge = funnelItems.length > 0 ? leadPool.length : counts.лид;
+  const leadsBadge = funnelScope.full ? leadPool.length : counts.лид;
   const tariffCounts = useMemo(() => {
-    if (funnelOn && funnelItems.length) {
+    const branchLoaded = funnelScope.full || (branch > 0 && funnelScope.branches.includes(branch));
+    if (funnelOn && branchLoaded) {
       const pool = filterLeadCards(funnelItems, { branch, age, gone: funnelGone.current });
       let withN = 0;
       for (const it of pool) {
@@ -860,15 +891,19 @@ export function AdminClients({
       return { all: pool.length, with: withN, without: Math.max(0, pool.length - withN), ready: true };
     }
     return { ...diskTariffCounts, ready: true };
-  }, [funnelOn, funnelItems, liveSet, diskTariffCounts, branch, age]);
+  }, [funnelOn, funnelItems, liveSet, diskTariffCounts, branch, age, funnelScope]);
   const chipCounts = useMemo(() => {
-    if (!(status === "лид" && funnelItems.length > 0)) return branchCounts;
+    if (status !== "лид") return branchCounts;
     const tally: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
     for (const it of leadPool) {
       if (tally[it.branchId] != null) tally[it.branchId] += 1;
     }
-    return tally;
-  }, [branchCounts, status, funnelItems.length, leadPool]);
+    if (funnelScope.full) return tally;
+    if (!funnelScope.branches.length) return branchCounts;
+    const next = { ...branchCounts };
+    for (const id of funnelScope.branches) next[id] = tally[id] || 0;
+    return next;
+  }, [branchCounts, status, leadPool, funnelScope]);
   const branchSum = (chipCounts[1] || 0) + (chipCounts[2] || 0) + (chipCounts[3] || 0) + (chipCounts[4] || 0);
   const funnelWas = useRef(false);
   useEffect(() => {

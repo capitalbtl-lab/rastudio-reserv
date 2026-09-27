@@ -837,8 +837,8 @@ export function AdminSchedule() {
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("groups"));
-  const [pane, setPane] = useState<"groups" | "clients" | "cash" | "subjects" | "teachers" | "prices" | "tariffs" | "map" | "crm" | "public">("groups");
-  const [seen, setSeen] = useState({ groups: true, clients: false, cash: false, subjects: false, teachers: false, prices: false, tariffs: false, map: false, crm: false, public: false });
+  const [pane, setPane] = useState<"groups" | "clients" | "cash" | "subjects" | "teachers" | "prices" | "tariffs" | "map" | "crm" | "sync" | "public">("groups");
+  const [seen, setSeen] = useState({ groups: true, clients: false, cash: false, subjects: false, teachers: false, prices: false, tariffs: false, map: false, crm: false, sync: false, public: false });
   function showPane(id: typeof pane) {
     setPane(id);
     setSeen((s) => (s[id] ? s : { ...s, [id]: true }));
@@ -2791,7 +2791,7 @@ export function AdminSchedule() {
         className={cn(groupsWide && "fixed inset-0 z-[60] flex flex-col overflow-hidden bg-bg p-4 md:px-8 md:py-5")}
         data-screen={groupsWide ? "wide" : "normal"}
       >
-      <div className="flex shrink-0 flex-nowrap items-center gap-1 border-b border-black/10">
+      <div className="flex shrink-0 flex-nowrap items-center gap-1 overflow-x-auto border-b border-black/10">
         {([
           ["groups", "Группы"],
           ["clients", "Клиенты"],
@@ -2802,6 +2802,7 @@ export function AdminSchedule() {
           ["tariffs", "Абонементы"],
           ["map", "Соответствия"],
           ["public", "Сайт"],
+          ["sync", "Центр синхронизации"],
           ["crm", "Настройка CRM"],
         ] as const).map(([id, label]) => (
           <button
@@ -2857,9 +2858,9 @@ export function AdminSchedule() {
           <AdminPublicSite />
         </div>
       ) : null}
-      {seen.crm ? (
-        <div className={cn(groupsWide && pane === "crm" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "crm" ? undefined : { display: "none" }} hidden={pane !== "crm"}>
-          <AdminCrmSettings />
+      {(seen.crm || seen.sync) ? (
+        <div className={cn(groupsWide && (pane === "crm" || pane === "sync") && "min-h-0 flex-1 overflow-y-auto")} style={pane === "crm" || pane === "sync" ? undefined : { display: "none" }} hidden={pane !== "crm" && pane !== "sync"}>
+          <AdminCrmSettings screen={pane === "sync" ? "sync" : "settings"} />
         </div>
       ) : null}
       {seen.clients ? (

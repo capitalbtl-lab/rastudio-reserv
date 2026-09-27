@@ -170,18 +170,8 @@ export function CrmLeadBoard({
   useEffect(() => setColOrder(ids), [ids.join(",")]);
   useEffect(() => {
     if (!orderEpoch) return;
-    const next: Record<number, string[]> = {};
-    const seen = new Set<number>();
-    for (const it of itemsRef.current) {
-      if (seen.has(it.statusId)) continue;
-      seen.add(it.statusId);
-      next[it.statusId] = itemsRef.current
-        .filter((x) => x.statusId === it.statusId)
-        .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || a.id - b.id)
-        .map(leadKey);
-    }
-    orderRef.current = next;
-    setOrder(next);
+    orderRef.current = {};
+    setOrder({});
   }, [orderEpoch]);
   useEffect(() => {
     if (drag) paintGhost();
