@@ -2393,7 +2393,7 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
   const [query, setQuery] = useState("");
   const [branch, setBranch] = useState(0);
   const [col, setCol] = useState<"all" | number>("all");
-  const [sort, setSort] = useState<"all" | "wait" | "new" | "paid" | "back" | "gap" | "no-balance" | "aside">("all");
+  const [sort] = useState<"all" | "wait" | "new" | "paid" | "back" | "gap" | "no-balance" | "aside">("all");
   const [archClients, setArchClients] = useState(true);
   const [archLeads, setArchLeads] = useState(false);
   const [archAgeFrom, setArchAgeFrom] = useState(archive ? "1" : "");
@@ -2842,24 +2842,6 @@ function Step6Panel({ archive = false }: { archive?: boolean } = {}) {
         {stageCols.map((s) => (
           <button key={s.id} type="button" className={cn(chips, col === s.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setCol(s.id); setPageLeft(0); setPageRight(0); }}>
             {s.name} · {inBranch.filter((x) => x.statusId === s.id).length}
-          </button>
-        ))}
-      </div>
-      )}
-      {archive ? null : (
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {([
-          ["all", "Вся касса"],
-          ["wait", "не снята"],
-          ["new", "новый"],
-          ["paid", "новый с деньгами"],
-          ["back", "вернувшийся"],
-          ["gap", "не сошлось"],
-          ["no-balance", "нет balance"],
-          ["aside", "не в колонке"],
-        ] as const).map(([id, label]) => (
-          <button key={id} type="button" className={cn(chips, sort === id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => { setSort(id); setPageLeft(0); setPageRight(0); }}>
-            {label}
           </button>
         ))}
       </div>
