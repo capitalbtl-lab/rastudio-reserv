@@ -240,6 +240,12 @@ function ymdOf(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Один человек, шаги 2, 4 и 5: строго с 1 января 2015. Конец далеко вперёд, чтобы список «± месяц» это окно не обрезал. */
+export function since2015Window(now = new Date()): { from: string; to: string } {
+  const end = new Date(now.getFullYear() + 10, now.getMonth(), now.getDate());
+  return { from: "2015-01-01", to: ymdOf(end) };
+}
+
 /** Синяя. Короткое окно — обе стороны. Год и длиннее — назад + 32 дня вперёд. */
 export function recheckWindowYmd(days: unknown, now = new Date()): { from: string; to: string } {
   const n = clampRecheckDays(days);

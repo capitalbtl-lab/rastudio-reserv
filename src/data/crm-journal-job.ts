@@ -3,7 +3,7 @@
 import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } from "./crm-journal-pull.ts";
 import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
-import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd, groupJournalGreen } from "./crm-inbound-core.ts";
+import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd, since2015Window, groupJournalGreen } from "./crm-inbound-core.ts";
 import { loadSyncPolicy, saveSyncPolicyRun } from "./crm-sync-policy.ts";
 import { appendPlanLog, loadPlanLog } from "./crm-sync-plan-log.ts";
 import { observeJobClose, observeJobStart } from "./crm-step-run-log.ts";
@@ -713,14 +713,16 @@ export function startOnePersonStep(p: {
     startOnePersonStep({ ...p, step: Number(rest[i].slice(4)), pipe: rest.slice(i + 1) });
     return;
   }
+  const since = since2015Window();
   const common = {
     study: p.study === "2" ? ("2" as const) : ("1" as const),
     customerId: cid,
     branchId: Number(p.branchId) || 1,
     name,
     oneName: name,
-    dateFrom: p.dateFrom || "",
-    recheckDays: p.recheckDays,
+    dateFrom: since.from,
+    dateTo: since.to,
+    recheckDays: 4000,
     recheck: p.recheck !== false,
     pipe: p.pipe || [],
     src: "hands" as const,
@@ -733,7 +735,7 @@ export function startOnePersonStep(p: {
     return;
   }
   if (p.step === 4) {
-    startJournalJob({ ...common, mode: "person", kind: "balance", dateFrom: "2015-01-01" });
+    startJournalJob({ ...common, mode: "person", kind: "balance" });
     return;
   }
   startJournalJob({ ...common, mode: "audit", kind: "audit", recheck: false });

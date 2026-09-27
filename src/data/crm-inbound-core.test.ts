@@ -19,6 +19,7 @@ import {
   foldLessonAmount,
   clampRecheckDays,
   recheckWindowYmd,
+  since2015Window,
   iceWindowOrNow,
   windowNewLessonIds,
   windowStaleLessonIds,
@@ -347,6 +348,12 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.equal(recheckWindowYmd(32, now).to, "2026-10-16");
     assert.equal(recheckWindowYmd(62, now).from, "2026-07-14");
     assert.equal(recheckWindowYmd(122, now).from, "2026-05-15");
+    const since = since2015Window(now);
+    assert.equal(since.from, "2015-01-01");
+    assert.equal(since.to, "2036-09-14");
+    const kept = iceWindowOrNow(true, since.from, since.to, 32, now);
+    assert.equal(kept.from, "2015-01-01");
+    assert.equal(kept.to, "2036-09-14");
     const later = new Date(2026, 8, 15);
     const ice = iceWindowOrNow(true, "2026-08-13", "2026-10-16", 32, later);
     assert.equal(ice.from, "2026-08-13");

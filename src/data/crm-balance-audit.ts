@@ -34,6 +34,7 @@ import {
   step5PickWriteoff,
   step5ReviveEmptySkip,
 } from "./crm-step5-canon";
+import { since2015Window } from "./crm-inbound-core";
 import { step5CompleteAdd, step5SessionStopped, step5WaitOrStop } from "./crm-step5-session";
 
 export type { AuditCode } from "./crm-balance-audit-core";
@@ -305,8 +306,9 @@ async function peekAlfaPaySplit(
 ) {
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const { kindFromAlfaPay, payNum, alfaPayIndexDate } = await import("./crm-pay-core");
-  const from = alfaPayIndexDate("2015-01-01");
-  const to = alfaPayIndexDate(new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10));
+  const since = since2015Window();
+  const from = alfaPayIndexDate(since.from);
+  const to = alfaPayIndexDate(since.to);
   let paysN = 0, corrN = 0, goodsN = 0;
   let paysSum = 0, corrSum = 0, goodsSum = 0;
   let pages = 0;
@@ -363,6 +365,7 @@ async function peekAlfaLessonCommission(
   cid: number,
 ) {
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  const since = since2015Window();
   let n = 0;
   let k = 0;
   const seen = new Set<number>();
@@ -373,6 +376,8 @@ async function peekAlfaLessonCommission(
         customer_id: cid,
         page,
         pageSize: 500,
+        date_from: since.from,
+        date_to: since.to,
       }, token);
       const pack = crmUnwrapIndex(json);
       const items = pack.items || [];
