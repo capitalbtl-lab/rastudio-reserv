@@ -411,6 +411,13 @@ export function recountArchivePolicy(
   };
 }
 
+/** Вкладка «Архив» в Клиентах: рабочий набор и архивный, который ещё в живой группе. Остальные скрыты. */
+export function archiveTabRow(row: { archived: boolean; working: boolean; liveGroup: boolean; showHidden: boolean; pinned: boolean }) {
+  if (row.showHidden) return row.archived;
+  if (row.working || row.pinned) return true;
+  return row.archived && row.liveGroup;
+}
+
 export function archiveWorkingSet(pol?: ArchivePolicy): Set<number> | null {
   const p = pol || loadArchivePolicy();
   if (!p.ready) return null;

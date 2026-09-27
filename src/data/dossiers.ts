@@ -13,7 +13,7 @@ import { logAdmin } from "./admin-settings";
 import { customerPullCandidate, diskIsArchive, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
 import { customerSyncOf } from "./crm-customer-sync";
-import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, archiveFioOk, archiveAgeYears, archiveWasClient, type ArchivePerson } from "./crm-archive-policy";
+import { archivePersonFrom, archiveWorkingSet, archiveTabRow, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, archiveFioOk, archiveAgeYears, archiveWasClient, type ArchivePerson } from "./crm-archive-policy";
 
 export type PersonName = {
   fio: string;
@@ -2201,10 +2201,11 @@ export async function reclassifyRolesFromCrm() {
     if (!id) continue;
     d.extras = d.extras || {};
     const was = String(d.status || "");
-    if (current.has(id)) {
+    if (current.has(id) && !archive.has(id)) {
       d.extras.is_study = "1";
       d.extras.removed = "0";
       d.extras.crm_current_branches = [...(currentBranches.get(id) || [])].join(",");
+      d.extras.crm_live_group = "";
       d.status = "учится";
       const first = [...(currentBranches.get(id) || [])][0];
       if (first) {
@@ -2214,10 +2215,12 @@ export async function reclassifyRolesFromCrm() {
     } else if (leads.has(id) && !archive.has(id)) {
       d.extras.is_study = "0";
       d.extras.removed = "0";
+      d.extras.crm_live_group = "";
       d.status = "лид";
     } else if (archive.has(id)) {
-      if (was === "учится") left.push(id);
+      if (was === "учится" && !current.has(id)) left.push(id);
       d.extras.removed = "2";
+      d.extras.crm_live_group = current.has(id) ? "1" : "";
       d.status = "архив";
     } else {
       d.extras.removed = "1";
@@ -2314,6 +2317,7 @@ function viewOf(d: Dossier) {
     was: String(ex.was || ""),
     recheckArchive: String(ex.recheckArchive || ""),
     removed: String(ex.removed || ""),
+    liveGroupMark: String(ex.crm_live_group || "") === "1",
     auditRecheckAt: String(ex.auditRecheckAt || ""),
   };
 }
@@ -2433,6 +2437,16 @@ export function groupRoster(branchId: number, groupId: number) {
   return { active, archive };
 }
 
+function inLiveGroup(d: ClientView, keys: Set<string>) {
+  if (d.liveGroupMark) return true;
+  for (const g of d.groupLinks || []) {
+    const id = Number(g.id) || 0;
+    const bid = Number(g.branchId) || Number(d.branchId) || 0;
+    if (id && bid && keys.has(`${bid}:${id}`)) return true;
+  }
+  return false;
+}
+
 export function searchClientViews(q = "", limit = 2500, status = "", branchId = 0, ageBand = "", archiveAll = false) {
   const store = loadStore();
   const needle = String(q || "")
@@ -2449,21 +2463,32 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
   const hidden = (d: ClientView) => d.status === "удалён";
   const policy = loadArchivePolicy();
   const liveKeys = liveGroupKeySet();
-  void archiveAll;
+  const onArchive = (d: ClientView, showHidden: boolean) =>
+    archiveTabRow({
+      archived: listedArchive(d),
+      working: isArchiveWorking(Number(d.crmId) || 0, policy),
+      liveGroup: inLiveGroup(d, liveKeys),
+      showHidden,
+      pinned: d.recheckArchive === "1",
+    });
   const onTab = (d: ClientView) => {
     if (want === "все") return true;
-    if (want === "архив") return listedArchive(d);
+    if (want === "архив") return onArchive(d, archiveAll);
     if (want === "лид") return listedLead(d);
     if (want === "учится" || !want) return listedCurrent(d, liveKeys);
     return d.status === want;
   };
   let archiveDisk = 0;
+  let archiveShown = 0;
   for (const d of views) {
     if (hidden(d)) continue;
     counts.все += 1;
-    if (listedArchive(d)) {
+    if (listedArchive(d) || isArchiveWorking(Number(d.crmId) || 0, policy)) {
       archiveDisk += 1;
-      counts.архив += 1;
+      if (onArchive(d, false)) {
+        archiveShown += 1;
+        counts.архив += 1;
+      }
     } else if (listedLead(d)) counts.лид += 1;
     else if (listedCurrent(d, liveKeys)) counts.учится += 1;
     if (!onTab(d)) continue;
@@ -2476,7 +2501,7 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
   const items = views.filter((d) => {
     if (d.status === "удалён") return false;
     if (!needle) {
-      if (want === "архив" && !listedArchive(d)) return false;
+      if (want === "архив" && !onArchive(d, archiveAll)) return false;
       else if (want === "лид" && !listedLead(d)) return false;
       else if ((want === "учится" || !want) && want !== "все" && !listedCurrent(d, liveKeys)) return false;
     }
@@ -2504,7 +2529,7 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
     archive: {
       disk: archiveDisk,
       working: counts.архив,
-      hidden: Math.max(0, archiveDisk - counts.архив),
+      hidden: Math.max(0, archiveDisk - archiveShown),
       ready: Boolean(policy.ready),
       at: policy.at || "",
     },

@@ -15,6 +15,7 @@ import {
   recountArchivePolicy,
   archivePersonFrom,
   archiveWasClient,
+  archiveTabRow,
   type ArchivePerson,
   type ArchivePolicy,
 } from "./crm-archive-policy.ts";
@@ -176,6 +177,15 @@ describe("рабочий архив", () => {
     const next = addArchiveWorkingMany([8], "left", empty);
     assert.equal(next.ready, false);
     assert.equal(next.working.includes(8), false);
+  });
+
+  it("вкладка архива: рабочий набор и живая группа, остальные скрыты", () => {
+    const row = { archived: true, working: false, liveGroup: false, showHidden: false, pinned: false };
+    assert.equal(archiveTabRow(row), false);
+    assert.equal(archiveTabRow({ ...row, working: true }), true);
+    assert.equal(archiveTabRow({ ...row, liveGroup: true }), true);
+    assert.equal(archiveTabRow({ ...row, showHidden: true }), true);
+    assert.equal(archiveTabRow({ ...row, archived: false, liveGroup: true }), false);
   });
 
   it("загрузка справочника сразу кладёт в рабочий набор", () => {
