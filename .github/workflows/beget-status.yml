@@ -52,50 +52,40 @@ jobs:
             cd /var/www/rastudio
             python3 - <<'PY'
             import json
-            pol=json.load(open("storage/crm-archive-policy.json"))
-            print("policy", pol.get("ready"), "working", len(pol.get("working") or []))
             ver=json.load(open("storage/crm-schedule-versions.json"))
+            versions=ver.get("versions") if isinstance(ver, dict) else []
+            print("versions", len(versions), "keys0", list((versions[0] or {}).keys())[:8] if versions else None)
+            slots=(versions[0] or {}).get("slots") or []
+            print("slots", len(slots))
             live=set()
-            rows=ver if isinstance(ver, list) else ver.get("versions") or ver.get("items") or []
-            if isinstance(ver, dict) and not rows:
-                print("ver keys", list(ver.keys())[:12])
-            slots=[]
-            if isinstance(ver, list) and ver:
-                slots=(ver[0].get("slots") or []) if isinstance(ver[0], dict) else []
-            elif isinstance(ver, dict):
-                slots=ver.get("slots") or []
-            print("slots", len(slots) if isinstance(slots, list) else type(slots))
-            if isinstance(slots, list):
-                for s in slots:
-                    if not isinstance(s, dict):
-                        continue
-                    gid=int(s.get("groupId") or 0); bid=int(s.get("branchId") or 0)
-                    if gid and bid: live.add((bid, gid))
-            print("live_pairs", len(live))
+            for s in slots:
+                if not isinstance(s, dict):
+                    continue
+                gid=int(s.get("groupId") or 0); bid=int(s.get("branchId") or 0)
+                if gid and bid: live.add((bid,gid))
+            print("live", len(live), "sample", list(live)[:3])
             d=json.load(open("storage/dossiers.json"))
-            hit=0
-            samples=[]
+            hit_pair=hit_gid=0
+            kind={}
             for x in d.get("items") or []:
-                s=str(x.get("status") or "")
                 ex=x.get("extras") or {}
-                if s!="архив" and str(ex.get("removed") or "")!="2":
+                if str(x.get("status") or "")!="архив" and str(ex.get("removed") or "")!="2":
                     continue
                 for g in x.get("groupLinks") or []:
                     if not isinstance(g, dict):
                         continue
                     gid=int(g.get("id") or g.get("groupId") or 0)
-                    bid=int(g.get("branchId") or x.get("branchId") or 0)
-                    if (bid, gid) in live or any(p[1]==gid for p in live):
-                        hit+=1
-                        if len(samples)<8:
-                            samples.append((x.get("crmId"), x.get("child",{}).get("fio") if isinstance(x.get("child"), dict) else "", bid, gid, g.get("active"), g.get("name")))
+                    bid=int(g.get("branchId") or 0) or int(x.get("branchId") or 0)
+                    if not gid:
+                        kind["nolinkid"]=kind.get("nolinkid",0)+1
+                        continue
+                    if (bid,gid) in live:
+                        hit_pair+=1
                         break
-            print("archive_in_live_group", hit)
-            print("samples", samples)
-            b=json.load(open("storage/crm-leads-board.json"))
-            rows7=((b.get("keys") or {}).get("7") or {}).get("items") or []
-            oks=[(r.get("id"), r.get("name"), r.get("cashState"), r.get("study")) for r in rows7 if r.get("cashState")=="ok"]
-            print("cash_ok", oks[:10], "n", len(oks))
+                    if any(p[1]==gid for p in live):
+                        hit_gid+=1
+                        break
+            print("pair", hit_pair, "gid_only", hit_gid)
             PY
             echo "=== out log ==="
             ls /root/.pm2/logs/ | head
