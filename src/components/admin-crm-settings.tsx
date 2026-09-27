@@ -368,7 +368,9 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 
 const CRM_SET_TABS = [
   { id: "sync", label: "Центр синхронизации" },
-  { id: "people", label: "Люди, роли, дети" },
+  { id: "people", label: "Люди" },
+  { id: "roles", label: "Роли" },
+  { id: "kids", label: "Дети" },
   { id: "funnel", label: "Воронка" },
   { id: "branches", label: "Филиалы" },
 ] as const;
@@ -4701,20 +4703,31 @@ export function AdminCrmSettings() {
         <h2 className="font-display text-3xl">Настройка CRM</h2>
       </div>
       <div ref={crmTabsRef} className="sticky top-0 z-20 bg-[var(--color-bg)]">
-        <div className="grid grid-cols-2 border-b border-black/10 sm:grid-cols-4">
-          {CRM_SET_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={cn(
-                "-mb-px border-b-2 px-2 py-3 text-center text-sm font-semibold",
-                crmTab === t.id ? "border-primary text-fg" : "border-transparent text-muted hover:text-fg",
-              )}
-              onClick={() => pickCrmTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="grid grid-cols-3 border-b border-black/15 sm:grid-cols-6">
+          {CRM_SET_TABS.map((t) => {
+            const on = crmTab === t.id;
+            const lead = on && t.id === "sync";
+            return (
+              <button
+                key={t.id}
+                type="button"
+                className={cn(
+                  "relative px-1 py-3 text-center font-semibold leading-tight text-fg transition-all duration-300",
+                  lead ? "text-base font-bold text-primary sm:text-lg" : on ? "text-sm font-bold" : "text-sm text-fg/75 hover:text-fg",
+                )}
+                onClick={() => pickCrmTab(t.id)}
+              >
+                {t.label}
+                <span
+                  className={cn(
+                    "absolute inset-x-3 bottom-0 h-[3px] origin-center rounded-full bg-primary transition-transform duration-300",
+                    on ? "scale-x-100" : "scale-x-0",
+                    lead && "h-1 shadow-[0_0_14px] shadow-primary/70",
+                  )}
+                />
+              </button>
+            );
+          })}
         </div>
         {crmTab === "sync" ? (
           <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-surface-2 p-1 sm:grid-cols-5">
@@ -4724,7 +4737,7 @@ export function AdminCrmSettings() {
                 type="button"
                 className={cn(
                   "rounded-xl px-2 py-2 text-center text-[0.82rem] font-semibold leading-tight",
-                  syncPane === t.id ? "bg-white text-fg shadow-sm" : "text-muted hover:text-fg",
+                  syncPane === t.id ? "bg-white text-fg shadow-sm" : "text-fg/75 hover:bg-white/70 hover:text-fg",
                 )}
                 onClick={() => pickSyncPane(t.id)}
               >
@@ -4736,13 +4749,13 @@ export function AdminCrmSettings() {
       </div>
 
       <div className="flex min-h-[70vh] flex-col gap-4">
-      {crmTab === "people" ? (
+      {crmTab === "people" || crmTab === "roles" ? (
       <Card
-        title="Люди, роли, дети"
-        hint="Кто пишет на диск. Alfa догоняет очередью и не меняет автора. Пароль кабинета один — сотрудник. Два ИИ без пароля: ассистент в админке, консультант на сайте. Очередь — пакеты cgi и выгрузка."
+        title={crmTab === "people" ? "Люди" : "Роли"}
+        hint={crmTab === "people" ? "Кто входит в кабинет и пишет на диск от своего имени." : "Кто ещё пишет на диск: человек, ИИ или очередь. Alfa автора не меняет."}
       >
         <ul className="space-y-2">
-          {(actors?.actors || CRM_ACTORS).map((a) => (
+          {(actors?.actors || CRM_ACTORS).filter((a) => crmTab === "roles" || a.id === "human").map((a) => (
             <li key={a.id} className="flex flex-wrap items-start gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
               <span className="mt-1 rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
                 {a.kind === "human" ? "человек" : a.kind === "ai" ? "ИИ" : "система"}
@@ -4766,7 +4779,16 @@ export function AdminCrmSettings() {
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-[0.75rem] text-muted">Пароль входа тот же. Несколько сотрудников — следующим шагом, не смешивать с ИИ.</p>
+        {crmTab === "people" ? <p className="mt-3 text-[0.75rem] text-muted">Пароль входа тот же. Несколько сотрудников — следующим шагом, не смешивать с ИИ.</p> : null}
+      </Card>
+      ) : null}
+
+      {crmTab === "kids" ? (
+      <Card
+        title="Дети"
+        hint="Ученики студии. Их карточки лежат в разделе «Клиенты», не в этой настройке."
+      >
+        <p className="text-sm text-fg">Отдельного списка детей здесь нет. Откройте «Клиенты»: там текущие, лиды и архив.</p>
       </Card>
       ) : null}
 
