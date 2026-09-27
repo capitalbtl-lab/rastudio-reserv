@@ -18,3 +18,15 @@ export function publishStep7Working(card: { id: number; name?: string; dob?: str
     quiet: true,
   });
 }
+
+export async function ensureStep7WorkingOnDisk() {
+  const { peekStep7Board } = await import("./crm-leads");
+  const { step6DiskAgrees } = await import("./crm-step5-canon");
+  const { isArchiveWorking } = await import("./crm-archive-policy");
+  const items = peekStep7Board()?.items || [];
+  for (const card of items) {
+    if (card.cashState !== "ok" || !step6DiskAgrees(card)) continue;
+    if (isArchiveWorking(card.id)) continue;
+    publishStep7Working(card);
+  }
+}

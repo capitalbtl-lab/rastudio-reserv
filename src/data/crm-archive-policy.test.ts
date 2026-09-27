@@ -16,6 +16,7 @@ import {
   archivePersonFrom,
   archiveWasClient,
   archiveTabRow,
+  dossierCardArchive,
   type ArchivePerson,
   type ArchivePolicy,
 } from "./crm-archive-policy.ts";
@@ -186,6 +187,8 @@ describe("рабочий архив", () => {
     assert.equal(archiveTabRow({ ...row, liveGroup: true }), true);
     assert.equal(archiveTabRow({ ...row, showHidden: true }), true);
     assert.equal(archiveTabRow({ ...row, archived: false, liveGroup: true }), false);
+    assert.equal(dossierCardArchive("архив", "0", "учится"), true);
+    assert.equal(dossierCardArchive("учится", "0", "учится"), false);
   });
 
   it("загрузка справочника сразу кладёт в рабочий набор", () => {

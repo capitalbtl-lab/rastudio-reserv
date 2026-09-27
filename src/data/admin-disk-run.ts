@@ -264,6 +264,8 @@ export async function handleAdminDisk(data: DiskReq) {
       const ageBand = String(data.ageBand || "");
       const take = Math.min(2500, Math.max(80, Number(data.take) || (q ? 400 : 240)));
       const archiveAll = Boolean((data as { archiveAll?: boolean }).archiveAll);
+      const { ensureStep7WorkingOnDisk } = await import("./crm-step7-publish");
+      await ensureStep7WorkingOnDisk();
       const res = searchClientViews(q, take, status, branchId, ageBand, archiveAll);
       return { ok: true as const, ...res, items: res.items.map(toClientListRow) };
     }

@@ -411,6 +411,12 @@ export function recountArchivePolicy(
   };
 }
 
+/** Карточка архивная, даже если в extras остался is_study 1 из действующей группы. */
+export function dossierCardArchive(cardStatus: string, removed: string, role: string) {
+  if (removed === "1" || role === "удалён") return false;
+  return role === "архив" || cardStatus === "архив" || removed === "2";
+}
+
 /** Вкладка «Архив» в Клиентах: рабочий набор и архивный, который ещё в живой группе. Остальные скрыты. */
 export function archiveTabRow(row: { archived: boolean; working: boolean; liveGroup: boolean; showHidden: boolean; pinned: boolean }) {
   if (row.showHidden) return row.archived;

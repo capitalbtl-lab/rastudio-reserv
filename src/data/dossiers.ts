@@ -13,7 +13,7 @@ import { logAdmin } from "./admin-settings";
 import { customerPullCandidate, diskIsArchive, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
 import { customerSyncOf } from "./crm-customer-sync";
-import { archivePersonFrom, archiveWorkingSet, archiveTabRow, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, archiveFioOk, archiveAgeYears, archiveWasClient, type ArchivePerson } from "./crm-archive-policy";
+import { archivePersonFrom, archiveWorkingSet, archiveTabRow, dossierCardArchive, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, archiveFioOk, archiveAgeYears, archiveWasClient, type ArchivePerson } from "./crm-archive-policy";
 
 export type PersonName = {
   fio: string;
@@ -2307,6 +2307,7 @@ function viewOf(d: Dossier) {
     teachers,
     tariff: d.tariff || "",
     status,
+    diskArchive: dossierCardArchive(String(d.status || ""), String(ex.removed || ""), status),
     studyStatus,
     groupLinks: links,
     archived: status === "архив",
@@ -2332,7 +2333,7 @@ function liveGroupKeySet() {
 
 function listedArchive(d: ClientView) {
   if (d.status === "удалён" || d.removed === "1") return false;
-  return d.status === "архив" || d.recheckArchive === "1" || d.removed === "2";
+  return d.diskArchive || d.status === "архив" || d.recheckArchive === "1" || d.removed === "2";
 }
 
 function listedLead(d: ClientView) {
