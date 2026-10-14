@@ -31,7 +31,7 @@ const GROUPS: { kind: ApiKind; title: string; tip: string }[] = [
   { kind: "other", title: "Другие сервисы", tip: "Telegram, почта и любой ключ, который потом подхватит интеграция." },
 ];
 
-type Row = ApiConn & { hint?: string; note?: string; fields: (ApiConn["fields"][number] & { set?: boolean })[] };
+type Row = Omit<ApiConn, "fields"> & { hint?: string; note?: string; fields: (ApiConn["fields"][number] & { set?: boolean; length?: number })[] };
 
 export function AdminIntegrations() {
   const [conns, setConns] = useState<Row[]>([]);
@@ -46,7 +46,7 @@ export function AdminIntegrations() {
       const list = res.conns as Row[];
       setConns(list);
       const d: Record<string, Row> = {};
-      for (const c of list) d[c.id] = { ...c, fields: c.fields.map((f) => ({ ...f })) };
+      for (const c of list) d[c.id] = { ...c, fields: c.fields.map((f) => ({ ...f, value: f.secret ? "" : f.value })) };
       setDraft(d);
     }
   }
@@ -68,7 +68,7 @@ export function AdminIntegrations() {
       const list = res.conns as Row[];
       setConns(list);
       const d: Record<string, Row> = {};
-      for (const c of list) d[c.id] = { ...c, fields: c.fields.map((f) => ({ ...f })) };
+      for (const c of list) d[c.id] = { ...c, fields: c.fields.map((f) => ({ ...f, value: f.secret ? "" : f.value })) };
       setDraft(d);
     }
   }
@@ -83,10 +83,10 @@ export function AdminIntegrations() {
     if (res.ok) setMsg(`Сохранено: ${conn.name}`);
   }
 
-  function Card({ c }: { c: Row }) {
+  function renderCard(c: Row) {
     const d = draft[c.id] || c;
     return (
-      <article className="flex flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
+      <article key={c.id} className="flex flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="font-display text-lg">{d.name}</p>
@@ -115,20 +115,34 @@ export function AdminIntegrations() {
           {d.fields.map((f, i) => (
             <label key={f.key} className="block text-sm">
               {f.label}
-              {f.set ? <span className="ml-2 text-xs text-muted">задан</span> : null}
+              {f.set ? (
+                <span className="ml-2 text-xs text-muted">
+                  {f.secret && f.length != null ? `сохранён: ${f.length} симв.` : "задан"}
+                </span>
+              ) : null}
               <input
                 type={f.secret ? "password" : "text"}
+                name={`${c.id}-${f.key}`}
                 value={f.value}
-                placeholder={f.secret && f.set ? "оставьте •••• чтобы не менять" : ""}
-                onChange={(e) =>
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                disabled={busy}
+                placeholder={f.secret && f.set ? "Оставьте пустым, чтобы не менять" : ""}
+                onChange={(e) => {
+                  const value = e.target.value;
                   setDraft((prev) => {
                     const cur = prev[c.id] || c;
-                    const fields = cur.fields.map((x, j) => (j === i ? { ...x, value: e.target.value } : x));
+                    const fields = cur.fields.map((x, j) => (j === i ? { ...x, value } : x));
                     return { ...prev, [c.id]: { ...cur, fields } };
-                  })
-                }
+                  });
+                }}
                 className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
               />
+              {f.secret && f.value ? (
+                <span className="mt-1 block text-xs text-muted">Новый ключ: {f.value.length} симв.</span>
+              ) : null}
             </label>
           ))}
         </div>
@@ -155,21 +169,19 @@ export function AdminIntegrations() {
     );
   }
 
-  function KindCol({ kind }: { kind: ApiKind }) {
+  function renderKindCol(kind: ApiKind) {
     const g = GROUPS.find((x) => x.kind === kind);
     const list = conns.filter((c) => c.kind === kind);
     if (!g) return null;
     return (
-      <div className="space-y-3">
+      <div key={kind} className="space-y-3">
         <div className="flex items-center gap-2">
           <h3 className="font-display text-xl">{g.title}</h3>
           <InfoTip text={g.tip} />
         </div>
         {list.length ? (
           <div className={list.length > 1 ? "grid gap-4 md:grid-cols-2" : ""}>
-            {list.map((c) => (
-              <Card key={c.id} c={c} />
-            ))}
+            {list.map(renderCard)}
           </div>
         ) : (
           <p className="rounded-3xl bg-surface px-5 py-8 text-sm text-muted shadow-[var(--shadow-border)]">Пока пусто</p>
@@ -183,7 +195,7 @@ export function AdminIntegrations() {
       <AdminSectionHead
         section="apis"
         title="API и интеграции"
-        tip="Ключи лежат на сервере в storage/api-keys.json, не в git. Поля с точками — секрет уже есть, впишите новый только если меняете. Пустое поле при сохранении старый ключ не стирает. Процессные переменные .env имеют приоритет, если заданы."
+        tip="Ключи и настройки подключений задаются здесь. Сохранённые секреты не показываются; рядом указана их длина. Для замены вставьте новый ключ целиком. Пустое поле при сохранении сохраняет текущий ключ."
       >
         <p className="mt-2 max-w-2xl text-sm text-muted">Yandex, DeepSeek, Novofon, ВК, MAX, AlfaCRM — ключи здесь. Webhook консультанта: Ассистент ИИ → Каналы.</p>
       </AdminSectionHead>
@@ -194,18 +206,16 @@ export function AdminIntegrations() {
           <InfoTip text={GROUPS[0].tip} />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          {conns.filter((c) => c.kind === "llm").map((c) => (
-            <Card key={c.id} c={c} />
-          ))}
+          {conns.filter((c) => c.kind === "llm").map(renderCard)}
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <KindCol kind="telephony" />
-        <KindCol kind="crm" />
+        {renderKindCol("telephony")}
+        {renderKindCol("crm")}
       </div>
 
-      <KindCol kind="messenger" />
+      {renderKindCol("messenger")}
 
       {conns.some((c) => c.kind === "other") ? (
         <div className="space-y-3">
@@ -214,9 +224,7 @@ export function AdminIntegrations() {
             <InfoTip text={GROUPS.find((g) => g.kind === "other")?.tip || ""} />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {conns.filter((c) => c.kind === "other").map((c) => (
-              <Card key={c.id} c={c} />
-            ))}
+            {conns.filter((c) => c.kind === "other").map(renderCard)}
           </div>
         </div>
       ) : null}

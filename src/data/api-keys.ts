@@ -167,7 +167,7 @@ function mask(value: string, secret?: boolean) {
 function publicConns() {
   return loadApiConns().map((c) => ({
     ...c,
-    fields: c.fields.map((f) => ({ ...f, value: mask(f.value, f.secret), set: Boolean(f.value) })),
+    fields: c.fields.map((f) => ({ ...f, value: mask(f.value, f.secret), set: Boolean(f.value), length: f.value.length })),
     hint: API_CATALOG.find((x) => x.id === c.id)?.hint || "",
     note: API_CATALOG.find((x) => x.id === c.id)?.note || "",
   }));
