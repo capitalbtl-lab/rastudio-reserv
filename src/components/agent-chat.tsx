@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { X, Send, Mic, Volume2, RotateCcw, Repeat2, AudioLines } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { publicAgentUi } from "@/data/agent-config-fn";
+import { publicPageAgent } from "@/data/page-agents-fn";
 import type { AgentUiFlags } from "@/data/agent-config";
 import { debugSession } from "@/data/debug-fn";
 import { speakAgent } from "@/data/agent-voice";
@@ -326,9 +327,16 @@ export function AgentChat() {
 
   useEffect(() => {
     tickBehavior();
-    void publicPageAgent({ data: { path } }).then((res) => {
-      if (res.ok) setPageAgent(res.agent || null);
-    });
+    let active = true;
+    void publicPageAgent({ data: { path } })
+      .then((res) => {
+        if (active && res.ok) setPageAgent(res.agent || null);
+      })
+      .catch((error: unknown) => {
+        if (active) setPageAgent(null);
+        console.warn("Не удалось загрузить настройки агента для страницы.", error);
+      });
+    return () => { active = false; };
   }, [path]);
 
   useEffect(() => {
@@ -379,6 +387,8 @@ export function AgentChat() {
         setBargeOn(false);
         bargeRef.current = false;
       }
+    }).catch((error: unknown) => {
+      console.warn("Не удалось загрузить настройки окна ИИ-агента.", error);
     });
   }, []);
 
