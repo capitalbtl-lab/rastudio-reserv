@@ -1821,7 +1821,7 @@ export async function journalPull(opts: {
         .split(",")
         .map((x) => Number(x))
         .filter((n) => n === 2 || n === 4 || n === 5);
-      const order = [2, 4, 5].filter((n) => want.includes(n));
+      const order = ([2, 4, 5] as const).filter((n) => want.includes(n));
       const cid = Number(opts.customerId) || 0;
       const rawEarly = String(opts.name || "");
       const tailEarly = (rawEarly.match(/(?:^|&)also=([^&]*)/)?.[1] || "")

@@ -140,7 +140,7 @@ export function classifyAudit(p: {
       if (p.cash < p.alfa - 1) codes.push("pays");
       return [...new Set(codes.filter((c) => c !== "ok"))];
     }
-    return [...new Set(["ok", ...codes.filter((c) => c !== "pays" && c !== "wo")])];
+    return [...new Set<AuditCode>(["ok", ...codes.filter((c) => c !== "pays" && c !== "wo")])];
   }
   if (!p.paysComplete) codes.push("snap");
   if (goodsNet) codes.push("goods");

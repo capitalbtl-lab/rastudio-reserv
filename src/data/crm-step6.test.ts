@@ -108,9 +108,9 @@ describe("шаг 6", () => {
       { lessonId: 2, status: 3, amount: 50, date: "b" },
     ];
     const merged = mergeMissingLessons(prev, [
-      { lessonId: 1, status: 3, amount: 0 },
-      { lessonId: 2, status: 3, amount: 999 },
-      { lessonId: 3, status: 3, amount: 0 },
+      { lessonId: 1, status: 3, amount: 0, date: "a" },
+      { lessonId: 2, status: 3, amount: 999, date: "b" },
+      { lessonId: 3, status: 3, amount: 0, date: "c" },
     ], 7);
     assert.equal(merged.opened, 1);
     assert.equal(merged.wrote, 1);

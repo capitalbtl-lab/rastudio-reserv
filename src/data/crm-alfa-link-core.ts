@@ -97,7 +97,13 @@ function flagMap<T extends string>(src: unknown, keys: readonly T[], fallback: R
   return out;
 }
 
-export function alfaSyncOf(raw?: Partial<AlfaSyncFlags> | null, base: AlfaSyncFlags = ALFA_SYNC_DEFAULT): AlfaSyncFlags {
+type AlfaSyncPatch = Partial<Omit<AlfaSyncFlags, "pull" | "push" | "pipe">> & {
+  pull?: Partial<AlfaSyncFlags["pull"]>;
+  push?: Partial<AlfaSyncFlags["push"]>;
+  pipe?: Partial<AlfaSyncFlags["pipe"]>;
+};
+
+export function alfaSyncOf(raw?: AlfaSyncPatch | null, base: AlfaSyncFlags = ALFA_SYNC_DEFAULT): AlfaSyncFlags {
   const minutes = Number(raw?.minutes ?? base.minutes);
   const payDays = Number(raw?.payDays ?? base.payDays);
   return {
@@ -109,7 +115,7 @@ export function alfaSyncOf(raw?: Partial<AlfaSyncFlags> | null, base: AlfaSyncFl
   };
 }
 
-export type AlfaGate = { mode?: string | null } & Partial<AlfaSyncFlags>;
+export type AlfaGate = { mode?: string | null } & AlfaSyncPatch;
 
 export function pullAllowed(state: AlfaGate, ch: AlfaPullCh) {
   if (!alfaLinked(state.mode)) return false;

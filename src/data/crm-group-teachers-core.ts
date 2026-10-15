@@ -80,7 +80,7 @@ export function pickLessonTeacherIds(lessonIds: unknown, beatIds: unknown) {
  * Раскладка диска: если двух полей ещё нет — копируем текущий массив слота
  * целиком в биты и в ответственных. Уже разведённое не склеивать.
  */
-export function hydrateGroupTeachers<T extends SlotTeachers>(slot: T): T {
+export function hydrateGroupTeachers<T extends SlotTeachers>(slot: T): T & { ownerTeacherIds: number[] } {
   const hadOwner = Array.isArray(slot.ownerTeacherIds);
   const slotIds = teacherIdSet(slot.teacherIds?.length ? slot.teacherIds : slot.teacherId);
   const owner = hadOwner ? teacherIdSet(slot.ownerTeacherIds) : slotIds;

@@ -15,7 +15,7 @@ type PupilGroup = {
   branchId: number;
   name: string;
   school: string;
-  schoolId?: string;
+  schoolId: string;
   course: string;
   age: string;
   teacher: string;

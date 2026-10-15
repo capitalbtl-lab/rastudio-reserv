@@ -38,7 +38,7 @@ export function inboundFillClosed(disk: number, alfaKeep: number, cursorDone: bo
 }
 
 export function pendingEntityIds(
-  jobs: { op: string; entityId?: number; body?: { localId?: number } }[],
+  jobs: { op: string; entityId?: number; body?: Record<string, unknown> }[],
   ops?: string[],
 ) {
   const hold = new Set<number>();
@@ -317,9 +317,9 @@ export function windowStaleLessonIds(
 }
 
 /** Id переписи, которые уже на диске — любое status. Синяя перепроверка перечитывает тело. */
-export function windowSeatedLessonIds(
+export function windowSeatedLessonIds<T extends { lessonId?: unknown }>(
   censusIds: Iterable<number>,
-  cal: { lessonId?: unknown }[],
+  cal: T[],
 ): number[] {
   const have = new Set<number>();
   for (const l of cal || []) {

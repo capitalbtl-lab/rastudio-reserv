@@ -109,7 +109,7 @@ export function loadCallSettings(): CallSettings {
   return loadCallStore().settings || defaultCallSettings();
 }
 
-export function saveCallSettings(patch: Partial<CallSettings>) {
+export function saveCallSettings(patch: Partial<Omit<CallSettings, "inject">> & { inject?: Partial<CallSettings["inject"]> }) {
   const next = {
     ...loadCallSettings(),
     ...patch,
@@ -209,8 +209,8 @@ export function toggleKnowledge(kind: string, index: number, on: boolean) {
   if (kind === "faq") kb.faq = mark(kb.faq) || [];
   if (kind === "objections") kb.objections = mark(kb.objections) || [];
   if (kind === "scripts") kb.scripts = mark(kb.scripts);
-  if (kind === "phrases") kb.phrases = mark(asLines(kb.phrases));
-  if (kind === "rules") kb.rules = mark(asLines(kb.rules));
+  if (kind === "phrases") kb.phrases = mark(asLines(kb.phrases)) || [];
+  if (kind === "rules") kb.rules = mark(asLines(kb.rules)) || [];
   if (kind === "instructions") kb.instructions = mark(asLines(kb.instructions));
   if (kind === "siteRecommendations") kb.siteRecommendations = mark(asLines(kb.siteRecommendations));
   store.knowledge = kb;

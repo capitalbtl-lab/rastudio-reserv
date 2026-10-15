@@ -132,7 +132,7 @@ export function AdminSubjects() {
         mutate ? 120000 : 30000,
       );
       if (!res.ok) {
-        setMsg(res.error || "Ошибка");
+        setMsg(("error" in res && res.error) || "Ошибка");
         return res;
       }
       if ("subjects" in res && Array.isArray(res.subjects)) setItems(res.subjects as Row[]);

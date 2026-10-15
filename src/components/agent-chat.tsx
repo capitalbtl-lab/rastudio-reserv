@@ -10,7 +10,7 @@ import { debugSession } from "@/data/debug-fn";
 import { speakAgent } from "@/data/agent-voice";
 import { saveChatLog } from "@/data/chat-logs-fn";
 import { factsFromMessages, talkFallback } from "@/data/agent-facts";
-import { nextChips, needTypedText, typedPrompt } from "@/data/agent-chips";
+import { nextChips, needTypedText, typedPrompt, type AgentChip } from "@/data/agent-chips";
 import { debugEmit } from "@/data/debug-client";
 import { readBehavior, tickBehavior } from "@/data/page-behavior";
 import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
@@ -283,9 +283,9 @@ export function AgentChat() {
   const inAdminUi = awaitingCode || adminMs > 0;
   const messages = inAdminUi ? (adminMsgs.length ? adminMsgs : [{ role: "assistant" as const, content: awaitingCode ? ADMIN_ASK : ADMIN_HELLO }]) : clientMsgs;
   const mood = moodOf(messages, busy);
-  const offer =
+  const offer: { hint: string; chips: AgentChip[]; after?: string } =
     awaitingCode
-      ? { hint: "Назовите кодовое слово", chips: [] as { label: string; send?: string; href?: string; primary?: boolean }[] }
+      ? { hint: "Назовите кодовое слово", chips: [] }
       : adminMs > 0
       ? {
           hint: "Что меняем",
@@ -581,7 +581,7 @@ export function AgentChat() {
     if (!el) {
       el = new Audio();
       el.preload = "auto";
-      el.playsInline = true;
+      el.setAttribute("playsinline", "");
       audioElRef.current = el;
     }
     let objectUrl = "";
@@ -632,7 +632,7 @@ export function AgentChat() {
       let el = audioElRef.current;
       if (!el) {
         el = new Audio();
-        el.playsInline = true;
+        el.setAttribute("playsinline", "");
         audioElRef.current = el;
       }
       el.src = SILENCE;

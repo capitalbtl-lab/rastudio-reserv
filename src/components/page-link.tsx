@@ -11,8 +11,8 @@ type Props = {
 };
 
 function searchFrom(query?: string) {
-  if (!query) return undefined;
-  return Object.fromEntries(new URLSearchParams(query));
+  const params = new URLSearchParams(query);
+  return { ...Object.fromEntries(params), age: params.get("age") ?? undefined, city: params.get("city") ?? undefined };
 }
 
 export const PageLink = forwardRef<HTMLAnchorElement, Props>(function PageLink(

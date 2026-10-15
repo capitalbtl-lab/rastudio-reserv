@@ -145,15 +145,18 @@ export function packLessonPupils(item: Record<string, unknown>): LessonPupil[] {
   return out;
 }
 
-export function pupilOf(pupils: LessonPupil[] | undefined, customerId: number) {
+export function pupilOf<T extends { customerId: number }>(pupils: T[] | undefined, customerId: number) {
   const cid = Number(customerId) || 0;
   if (!cid) return undefined;
   return (pupils || []).find((p) => Number(p.customerId) === cid);
 }
 
+type ChargePupil = Omit<LessonPupil, "attend"> & { attend?: boolean };
+type ChargeLesson = { pupils?: ChargePupil[]; amount?: unknown; cttId?: number };
+
 /** Явная сумма списания этого ученика, включая 0. Нет поля — дырка, не 0. */
 export function chargeAmountGiven(
-  lesson: { pupils?: LessonPupil[]; amount?: number },
+  lesson: ChargeLesson,
   customerId: number,
 ): number | undefined {
   const p = pupilOf(lesson.pupils, customerId);
@@ -164,7 +167,7 @@ export function chargeAmountGiven(
 
 /** Списание этого ученика с занятия: сначала его строка в журнале педагога. */
 export function chargeFromPupils(
-  lesson: { pupils?: LessonPupil[]; amount?: number; cttId?: number },
+  lesson: ChargeLesson,
   customerId: number,
 ) {
   const p = pupilOf(lesson.pupils, customerId);
@@ -321,7 +324,7 @@ export function writeoffSumOf(
 }
 
 export function writeoffSumForCtt(
-  lessons: { status?: number; amount?: number; cttId?: number; pupils?: LessonPupil[] }[],
+  lessons: (ChargeLesson & { status?: number })[],
   cttId: number,
 ) {
   const want = Number(cttId) || 0;

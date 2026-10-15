@@ -147,7 +147,7 @@ export async function listRecordedCalls(start: string, end: string, keys: Novofo
 
 export async function recordLink(call: NovofonCall, keys: NovofonKeys) {
   if (call.file) return call.file;
-  const tries = [
+  const tries: Record<string, string>[] = [
     { call_id: call.call_id, lifetime: "3600" },
     { pbx_call_id: call.pbx_call_id || call.call_id, lifetime: "3600" },
   ];

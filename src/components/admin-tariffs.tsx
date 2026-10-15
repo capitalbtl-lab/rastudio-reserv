@@ -571,7 +571,7 @@ export function AdminTariffs({ embedId, embedName, onEmbedClose }: { embedId?: n
       mutate ? 180000 : 12000,
     );
     if (!res.ok) {
-      setMsg(res.error || "Ошибка");
+      setMsg(("error" in res && res.error) || "Ошибка");
       return res;
     }
     if ("tariffs" in res && Array.isArray(res.tariffs)) {

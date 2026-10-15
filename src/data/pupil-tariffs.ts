@@ -5,6 +5,7 @@ import { guessTariffLinks } from "./tariff-map";
 import { UNMAPPED_SCHOOL } from "./group-status";
 import { tariffRowLive, tariffRowCustomerId, tariffTodayIso, isGenericTariffName } from "./crm-tariff-row";
 import { uniqueBranches } from "./crm-ledger-core";
+import { cgiRecordLive } from "./crm-membership";
 
 export { cgiCustomerId, cgiRecordLive } from "./crm-membership";
 export { tariffDateToIso, tariffRowLive, tariffRowHasTemplate, tariffRowCustomerId, cttSelectLabel, isGenericTariffName } from "./crm-tariff-row";

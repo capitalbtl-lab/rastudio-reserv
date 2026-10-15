@@ -199,6 +199,7 @@ describe("мастер абонементов учеников", () => {
       name: "Роботы",
       school: "Школа робототехники",
       schoolId: "robots",
+      course: "Робототехника",
       age: "7-9",
       teacher: "",
       taken: 8,

@@ -6,7 +6,7 @@ import { LESSON_TYPES } from "@/data/alfacrm";
 import { serverEnv } from "./server-env";
 import { type SessionFacts, nextStepOf, talkFallback } from "./agent-facts";
 import { programPitch } from "./agent-playbook";
-import { allowedLessonType, BOOK_TYPE_FLAGS } from "./agent-book-kinds";
+import { allowedLessonType, BOOK_TYPE_FLAGS, emptyBookFlags } from "./agent-book-kinds";
 import type { AgentSettings } from "./agent-config";
 
 function clientSystem(who: "oleg" | "olga", facts?: SessionFacts, stepOverride?: string) {
@@ -712,9 +712,11 @@ export const chatAgent = createServerFn({ method: "POST" })
         try {
           const desk = await import("./agent-client-desk");
           const s = loadBrain().settings;
+          const bookFlags = emptyBookFlags();
+          for (const f of BOOK_TYPE_FLAGS) bookFlags[f.id] = s[f.id] !== false;
           const rights = {
             consultantCanBook: s.consultantCanBook !== false,
-            ...Object.fromEntries(BOOK_TYPE_FLAGS.map((f) => [f.id, s[f.id] !== false])),
+            ...bookFlags,
             consultantCanSkip: s.consultantCanSkip !== false,
             consultantCanPause: s.consultantCanPause !== false,
             consultantCanTariff: s.consultantCanTariff === true,
