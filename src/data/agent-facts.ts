@@ -1,4 +1,6 @@
-import { CLIENT_SERVICE_ASK } from "./agent-identify.ts";
+import { CLIENT_SERVICE_ASK, rejectIdentify } from "./agent-identify.ts";
+import { ageFromText as takeAge, slotsFromMessages } from "./funnel-state.ts";
+import { identityHistory } from "./agent-phone.ts";
 import {
   isMakeupMore,
   isMakeupOtherTeacher,
@@ -21,6 +23,7 @@ export type SessionFacts = {
   course?: string;
   child?: string;
   secondChild?: string;
+  secondTrial?: "group" | "free";
   parent?: string;
   phone?: string;
   intent?: string;
@@ -34,83 +37,12 @@ export type SessionFacts = {
   briefed?: boolean;
 };
 
-const AGE_WORDS: Record<string, number> = {
-  три: 3,
-  четыре: 4,
-  пять: 5,
-  шесть: 6,
-  семь: 7,
-  восемь: 8,
-  девять: 9,
-  десять: 10,
-  одиннадцать: 11,
-  двенадцать: 12,
-  тринадцать: 13,
-  четырнадцать: 14,
-  пятнадцать: 15,
-  шестнадцать: 16,
-  семнадцать: 17,
-};
-
 function bandOf(y: number) {
   if (y <= 4) return "3–4";
   if (y <= 6) return "5–6";
   if (y <= 9) return "7–9";
   if (y <= 14) return "10–14";
   return "15+";
-}
-
-function takeAge(text: string) {
-  const word = text.match(
-    /(?:ребёнк\w*|сын\w*|дочк\w*|дочер\w*|возраст[^\n]{0,12})[^\n]{0,24}(три|четыре|пять|шесть|семь|восемь|девять|десять|одиннадцать|двенадцать|тринадцать|четырнадцать|пятнадцать)|(?:мне|ему|ей)\s+(три|четыре|пять|шесть|семь|восемь|девять|десять)/i,
-  );
-  if (word) {
-    const y = AGE_WORDS[(word[1] || word[2] || "").toLowerCase()];
-    if (y) return y;
-  }
-  const nums = [
-    /(\d{1,2})\s*(?:лет|года|год)/i,
-    /ребёнк\w*[^\d]{0,18}(\d{1,2})/i,
-    /возраст[^\d]{0,10}(\d{1,2})/i,
-    /для\s+(\d{1,2})\s*лет/i,
-  ];
-  for (const re of nums) {
-    const m = text.match(re);
-    if (!m) continue;
-    const y = Number(m[1]);
-    if (y >= 3 && y <= 18) return y;
-  }
-  const bareWord = text.match(
-    /^\s*(три|четыре|пять|шесть|семь|восемь|девять|десять|одиннадцать|двенадцать|тринадцать|четырнадцать|пятнадцать|шестнадцать|семнадцать)\s*(?:лет|года|год)?\s*[.!?]*\s*$/i,
-  );
-  if (bareWord) {
-    const y = AGE_WORDS[bareWord[1].toLowerCase()];
-    if (y) return y;
-  }
-  const bareNum = text.match(/^\s*(\d{1,2})\s*(?:лет|года|год)?\s*[.!?]*\s*$/i);
-  if (bareNum) {
-    const y = Number(bareNum[1]);
-    if (y >= 3 && y <= 18) return y;
-  }
-  return 0;
-}
-
-function takeCity(text: string) {
-  if (/луховиц|луховец|лухавиц|луговиц|луховниц/i.test(text)) return "Луховицы";
-  if (/коломн|коломен|каломн|колумн|калумн|колонн[аеуы]/i.test(text)) return "Коломна";
-  return "";
-}
-
-function takeBranch(text: string): { branch: string; branchId: number } | null {
-  if (/гражданск|олимп/i.test(text)) return { branch: "Коломна, Гражданская, 2", branchId: 1 };
-  if (/октябрьск|цмит|революц/i.test(text)) return { branch: "Коломна, ЦМИТ, Октябрьской революции, 340", branchId: 2 };
-  if (/луховиц|луховец|лухавиц|пушкин/i.test(text) && /филиал|пушкин|хорош|202/i.test(text)) {
-    return { branch: "Луховицы, Пушкина, 202А", branchId: 3 };
-  }
-  if (/луховиц|луховец|лухавиц/i.test(text) && !/коломн|коломен/i.test(text)) {
-    return { branch: "Луховицы, Пушкина, 202А", branchId: 3 };
-  }
-  return null;
 }
 
 function takeSchool(text: string) {
@@ -124,17 +56,6 @@ function takeSchool(text: string) {
   if (/мастер-класс|мастер класс/i.test(text)) return "мастер-классы";
   if (/летн(ий|яя|ие)|лагер/i.test(text)) return "летние программы";
   return "";
-}
-
-function takePhone(text: string) {
-  const m =
-    text.match(/(?:\+7|8|7)[\s(.-]*\d{3}[\s).-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}/) ||
-    text.match(/(?:^|[^\d])(9\d{2}[\s.-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2})(?:[^\d]|$)/);
-  if (!m) return "";
-  let d = (m[1] && m[1][0] === "9" ? m[1] : m[0]).replace(/\D/g, "");
-  if (d.length === 10 && d.startsWith("9")) d = `7${d}`;
-  if (d.length === 11 && d.startsWith("8")) d = `7${d.slice(1)}`;
-  return d ? `+${d}` : "";
 }
 
 function takeSecondName(text: string) {
@@ -164,7 +85,7 @@ export function modeFromMessages(messages: { role: string; content: string }[]):
   const userMsgs = messages.filter((m) => m.role === "user").map((m) => m.content);
   if (identifiedFromMessages(messages)) {
     const last = [...userMsgs].reverse()[0] || "";
-    if (NEW_RE.test(last) && !ENROLL_RE.test(last)) return "new";
+    if (NEW_RE.test(last) && !ENROLL_RE.test(last) && takeClientIntent(messages) !== "второй") return "new";
     return "client";
   }
   for (const u of [...userMsgs].reverse()) {
@@ -178,13 +99,13 @@ export function modeFromMessages(messages: { role: string; content: string }[]):
 
 export function identifiedFromMessages(messages: { role: string; content: string }[]) {
   const yes = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это|конечно|именно|она|он)(?=$|[\s,.!?…])/i;
-  const deny = /другой ребёнок|это не (наш|он|она)|не наш ребёнок|подбираем впервые|подбираем курс впервые/i;
+  messages = identityHistory(messages).messages;
   let ok = false;
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
     if (m.role !== "user") continue;
     const u = m.content.trim();
-    if (deny.test(u)) {
+    if (rejectIdentify(u)) {
       ok = false;
       continue;
     }
@@ -268,34 +189,21 @@ export function factsFromMessages(messages: { role: string; content: string }[])
     .map((m) => m.content)
     .join("\n");
   const facts: SessionFacts = { mode: modeFromMessages(messages) };
-  const age = takeAge(user) || (facts.mode === "new" ? takeAge(assistant) : 0);
-  if (age) {
-    facts.age = age;
-    facts.band = bandOf(age);
-  }
-  const city = takeCity(user);
-  if (city) facts.city = city;
-  const br = takeBranch(user);
-  if (br) {
-    facts.branch = br.branch;
-    facts.branchId = br.branchId;
-    if (!facts.city) facts.city = br.branchId === 3 ? "Луховицы" : "Коломна";
-  }
-  if (facts.city === "Луховицы" && !facts.branchId) {
-    facts.branch = "Луховицы, Пушкина, 202А";
-    facts.branchId = 3;
-  }
-  const school = takeSchool(user);
+  const slots = slotsFromMessages(messages);
+  Object.assign(facts, slots);
+  if (slots.age) facts.band = bandOf(slots.age);
+  const userTexts = messages.filter((m) => m.role === "user").map((m) => m.content);
+  const school = [...userTexts].reverse().map(takeSchool).find(Boolean);
   if (school) facts.school = school;
-  const phone = takePhone(user);
+  const phone = identityHistory(messages).phone;
   if (phone) facts.phone = phone;
-  const course = takeCourse(user);
+  const course = [...userTexts].reverse().map(takeCourse).find(Boolean);
   if (course) facts.course = course;
   const child = user.match(
-    /(?:ребёнк\w*|сына?|дочку?|дочь)\s+(?:зовут\s+)?([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){0,2})/,
+    /(?:ребёнк\w*|сына?|дочку?|дочь)\s+(?:зовут\s+)?([А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё]+){0,2})/,
   );
   if (child) facts.child = child[1];
-  const parent = user.match(/(?:меня зовут|я\s+)\s*([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){0,2})/);
+  const parent = user.match(/(?:^|[\s,.!?])(?:меня зовут|я)[ \t]+([А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё]+){0,2})/);
   if (parent) facts.parent = parent[1];
   if (/свободн\w+ день|согласуем|пустую дату/i.test(user)) facts.intent = "пробное-свободный-день";
   else if (/пробн/i.test(user)) facts.intent = "пробное";
@@ -319,16 +227,21 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   if (facts.mode === "client") {
     facts.identified = identifiedFromMessages(messages);
     const want = takeClientIntent(messages);
+    let intentStart = 0;
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].role === "user" && takeClientIntent([messages[i]])) intentStart = i;
+    }
+    const request = messages.slice(intentStart);
     if (want) facts.intent = want;
-    const day = [...messages]
+    const day = [...request]
       .filter((m) => m.role === "user")
       .map((m) => takeWeekday(m.content))
       .reverse()
       .find(Boolean);
     if (day) facts.day = day;
     if (facts.intent === "отработка") {
-      const users = messages.map((m, i) => ({ i, ...m }));
-      const week = [...messages]
+      const users = request.map((m, i) => ({ i, ...m }));
+      const week = [...request]
         .filter((m) => m.role === "user")
         .map((m) => takeMakeupWeek(m.content))
         .reverse()
@@ -341,7 +254,7 @@ export function factsFromMessages(messages: { role: string; content: string }[])
       if (moreHits) facts.makeupSkip = moreHits * 3;
       if (lastOtherAt >= 0) facts.makeupOtherTeacher = true;
     }
-    const pause = [...messages]
+    const pause = [...request]
       .filter((m) => m.role === "user")
       .map((m) => m.content)
       .reverse()
@@ -357,20 +270,36 @@ export function factsFromMessages(messages: { role: string; content: string }[])
     if (/gid=\d/i.test(lastUser) || /поставьте отработку|запишите на пробное gid=/i.test(lastUser)) facts.wantsBook = true;
     if (/отметьте пропуск|да, отметить/i.test(lastUser)) facts.wantsSkip = true;
     if (facts.identified && !facts.child) {
-      const named = messages
+      const named = identityHistory(messages).messages
         .filter((m) => m.role === "user")
+        .reverse()
         .map((m) => m.content.match(/да,\s*это\s+([А-ЯЁа-яё]+)/i))
         .find(Boolean);
       if (named?.[1]) facts.child = named[1];
     }
     if (facts.intent === "второй") {
-      const secondAge = takeAge(lastUser);
-      if (secondAge) {
-        facts.age = secondAge;
-        facts.band = bandOf(secondAge);
+      const second = request;
+      const secondSlots = slotsFromMessages(second);
+      delete facts.age;
+      delete facts.band;
+      if (secondSlots.age) {
+        facts.age = secondSlots.age;
+        facts.band = bandOf(secondSlots.age);
       }
-      const sn = takeSecondName(lastUser);
-      if (sn) facts.secondChild = sn;
+      const secondUsers = second.filter((m) => m.role === "user").map((m) => m.content);
+      facts.school = [...secondUsers].reverse().map(takeSchool).find(Boolean) || undefined;
+      facts.course = [...secondUsers].reverse().map(takeCourse).find(Boolean) || undefined;
+      for (let i = 0; i < second.length; i++) {
+        if (second[i].role !== "user") continue;
+        const prev = second.slice(0, i).reverse().find((m) => m.role === "assistant")?.content || "";
+        if (!/зовут/i.test(second[i].content) && !/как зовут|имя второго|назовите имя/i.test(prev)) continue;
+        const name = takeSecondName(second[i].content);
+        if (name) facts.secondChild = name;
+      }
+      for (const u of secondUsers) {
+        if (/пробн.*(?:свободн|согласуем)/i.test(u)) facts.secondTrial = "free";
+        else if (/пробн.*(?:групп|ближайш)/i.test(u)) facts.secondTrial = "group";
+      }
     }
   }
   return facts;
@@ -410,6 +339,8 @@ export function nextStepOf(facts: SessionFacts) {
     if (facts.intent === "второй") {
       if (!facts.age) return "это второй ребёнок той же семьи. Не открывать карточку первого. Спросить возраст второго. Не воронка с нуля без телефона.";
       if (!facts.secondChild) return "возраст второго уже есть. Спросить ТОЛЬКО имя второго. Не переспрашивать возраст и не трогать карточку первого.";
+      if (facts.secondTrial === "group") return "подобрать list_groups по возрасту и направлению ВТОРОГО ребёнка. После выбора слота — submit_trial на имя второго и телефон родителя. Карточку первого не менять.";
+      if (facts.secondTrial === "free") return "пробное ВТОРОГО ребёнка в свободный день: submit_trial без gid, дату согласуем по телефону. Имя и возраст первого не использовать.";
       return "имя и возраст второго есть. Пробное на телефон родителя, submit_trial. Не путать с customerId первого.";
     }
     if (facts.intent === "индивидуальное" || facts.intent === "сверхурочное" || facts.intent === "дополнительное") {
@@ -447,6 +378,7 @@ export function factsPrompt(facts: SessionFacts) {
   if (facts.briefed) lines.push("программу направления уже рассказали");
   if (facts.child) lines.push(`ребёнок: ${facts.child}`);
   if (facts.secondChild) lines.push(`второй ребёнок: ${facts.secondChild}`);
+  if (facts.secondTrial) lines.push(`пробное второго: ${facts.secondTrial === "group" ? "в группе" : "в свободный день"}`);
   if (facts.parent) lines.push(`родитель: ${facts.parent}`);
   if (facts.phone) lines.push(`телефон: ${facts.phone}`);
   if (facts.intent) lines.push(`намерение: ${facts.intent}`);

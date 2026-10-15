@@ -68,14 +68,17 @@ export function AdminAgent() {
   const [pane, setPane] = useState<Pane>("window");
 
   async function load() {
-    const res = await adminAgentBrain({ data: { token: token(), action: "getSettings" } });
-    if (res.ok && "settings" in res) {
-      setSettings(res.settings);
-      return;
+    try {
+      const res = await adminAgentBrain({ data: { token: token(), action: "getSettings" } });
+      if (res.ok && "settings" in res) {
+        setSettings(res.settings);
+        setMsg("");
+        return;
+      }
+      setMsg(res.ok ? "Не удалось загрузить настройки окна." : res.error || "Не удалось загрузить настройки окна.");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Не удалось загрузить настройки окна. Повторите загрузку.");
     }
-    const full = await adminAgentBrain({ data: { token: token(), action: "get" } });
-    if (full.ok && "settings" in full) setSettings(full.settings);
-    else setMsg(full.ok ? "" : full.error || "Не удалось загрузить настройки окна.");
   }
 
   useEffect(() => {
@@ -87,11 +90,19 @@ export function AdminAgent() {
   });
 
   async function save() {
-    if (!settings) return;
+    if (!settings || busy) return;
     setBusy(true);
-    const res = await adminAgentBrain({ data: { token: token(), action: "saveSettings", settings } });
-    setBusy(false);
-    setMsg(res.ok ? "Сохранено. На сайте — после обновления страницы." : res.error || "Ошибка");
+    try {
+      const res = await adminAgentBrain({ data: { token: token(), action: "saveSettings", settings } });
+      if (res.ok && "settings" in res) {
+        setSettings((current) => current === settings ? res.settings : current);
+        setMsg("Сохранено. На сайте — после обновления страницы.");
+      } else setMsg(res.ok ? "Не удалось сохранить настройки." : res.error || "Ошибка");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Не удалось сохранить настройки. Повторите попытку.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!settings && pane !== "train" && pane !== "guides" && pane !== "voices" && pane !== "edits" && pane !== "chats" && pane !== "access" && pane !== "debug" && pane !== "channels") {
