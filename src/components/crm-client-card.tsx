@@ -311,7 +311,7 @@ function lessonsForCard(
       amount: l.amount,
       cttId: l.cttId,
       customerIds: l.customerIds,
-      pupils: l.pupils,
+      pupils: l.pupils?.map((p) => ({ ...p, attend: p.attend !== false })),
       attend: l.attend,
       total: l.total,
     });

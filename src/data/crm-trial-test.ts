@@ -161,7 +161,8 @@ export async function maybeBookChudnovaTrial() {
     const date = formatRuDob(plan.date) || plan.date;
     const dateIso = isoFromRu(date);
     const to = addMins(plan.time, plan.duration);
-    const localId = Number(existing?.lessonId) < 0 ? Number(existing.lessonId) : nextLocalLessonId();
+    const existingId = Number(existing?.lessonId);
+    const localId = existingId < 0 ? existingId : nextLocalLessonId();
     const lessonRow = stampJournal(
       {
         date: dateIso,

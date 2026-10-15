@@ -38,15 +38,15 @@ export function journalIds(lesson: { customerIds?: number[] }) {
 }
 
 /** Список на занятии — источник явки. attend/total считаются с него. */
-export function stampJournal<T extends JournalLesson>(lesson: T, customerIds?: number[]): T {
+export function stampJournal<T extends JournalLesson>(lesson: T, customerIds?: number[]): T & { customerIds: number[]; attend: number; total: number } {
   const pupils = lesson.pupils || [];
   if (pupils.length) {
     const ids = pupils.map((p) => Number(p.customerId) || 0).filter((n) => n);
     const attend = pupils.filter((p) => p.attend !== false).length;
-    return { ...lesson, customerIds: ids, attend, total: pupils.length } as T;
+    return { ...lesson, customerIds: ids, attend, total: pupils.length };
   }
   const ids = (customerIds ?? lesson.customerIds ?? []).map(Number).filter((n) => n);
-  return { ...lesson, customerIds: ids, attend: ids.length, total: ids.length } as T;
+  return { ...lesson, customerIds: ids, attend: ids.length, total: ids.length };
 }
 
 export function journalAttend(lesson: JournalLesson) {
@@ -58,7 +58,7 @@ export function journalAttend(lesson: JournalLesson) {
 }
 
 /** Пустой список = занятие ещё не размечено, видно всей группе. */
-export function lessonHasCustomer(lesson: { customerIds?: number[] }, customerId: number) {
+export function lessonHasCustomer(lesson: Partial<JournalLesson>, customerId: number) {
   const id = Number(customerId) || 0;
   if (!id) return false;
   const ids = journalIds(lesson);

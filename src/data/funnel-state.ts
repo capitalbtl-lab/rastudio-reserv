@@ -1,4 +1,5 @@
 /** Единственный источник воронки. LLM сюда не пишет и не спрашивает. */
+import { withoutPhones } from "./agent-phone.ts";
 
 export type City = "Коломна" | "Луховицы";
 
@@ -27,56 +28,60 @@ const AGE_WORDS: Record<string, number> = {
   пятнадцать: 15,
   шестнадцать: 16,
   семнадцать: 17,
+  восемнадцать: 18,
 };
 
-function takeAge(text: string) {
-  const range = text.match(/(\d{1,2})\s*[–—-]\s*(\d{1,2})/);
-  if (range) {
-    const hi = Number(range[2]);
-    if (hi >= 3 && hi <= 18) return hi;
-  }
-  const word = text.match(
-    /(?:ребёнк\w*|возраст|ему|ей|мне)[^\n]{0,20}(три|четыре|пять|шесть|семь|восемь|девять|десять|одиннадцать|двенадцать|тринадцать|четырнадцать|пятнадцать)/i,
-  );
-  if (word) return AGE_WORDS[word[1].toLowerCase()] || 0;
-  const num = text.match(/(\d{1,2})\s*(?:лет|года|год)/i) || text.match(/ребёнк\w*[^\d]{0,18}(\d{1,2})/i);
-  if (num) {
-    const y = Number(num[1]);
-    if (y >= 3 && y <= 18) return y;
-  }
-  const bare = text.match(/^\s*(три|четыре|пять|шесть|семь|восемь|девять|десять|одиннадцать|двенадцать|тринадцать|четырнадцать|пятнадцать)\s*(?:лет|года|год)?\s*$/i);
-  if (bare) return AGE_WORDS[bare[1].toLowerCase()] || 0;
-  const bareN = text.match(/^\s*(\d{1,2})\s*(?:лет|года|год)?\s*$/i);
-  if (bareN) {
-    const y = Number(bareN[1]);
-    if (y >= 3 && y <= 18) return y;
-  }
-  return 0;
+export function ageFromText(text: string) {
+  text = withoutPhones(text);
+  const valid = (raw: string | undefined) => {
+    const y = Number(raw) || AGE_WORDS[String(raw || "").toLowerCase()] || 0;
+    return y >= 3 && y <= 18 ? y : 0;
+  };
+  const words = Object.keys(AGE_WORDS).sort((a, b) => b.length - a.length).join("|");
+  const range = text.match(/(?<!\d)(\d{1,2})\s*[–—-]\s*(\d{1,2})(?!\d)/);
+  if (range && valid(range[2])) return valid(range[2]);
+  const explicit = text.match(/(?<!\d)(\d{1,2})\s*(?:лет|года|год)(?![а-яё])/i);
+  if (explicit && valid(explicit[1])) return valid(explicit[1]);
+  const context = text.match(new RegExp(`(?:реб[её]н[а-яё]*|сын[а-яё]*|доч[а-яё]*|возраст|ему|ей|мне|второму)[^\\n\\d]{0,24}(?<![а-яё])(${words}|\\d{1,2})(?![а-яё\\d])`, "i"));
+  if (context && valid(context[1])) return valid(context[1]);
+  const bare = text.trim().match(new RegExp(`^(${words}|\\d{1,2})\\s*(?:лет|года|год)?[.!?,]*$`, "i"));
+  return bare ? valid(bare[1]) : 0;
+}
+
+function lastChoice(text: string, choices: { re: RegExp; value: number }[]) {
+  const hits = choices.flatMap((c) => [...text.matchAll(c.re)].filter((m) => !/(?:^|[\s,])не\s*$/i.test(text.slice(0, m.index))).map((m) => ({ index: m.index!, value: c.value })));
+  return hits.sort((a, b) => b.index - a.index)[0]?.value || 0;
 }
 
 function takeCity(text: string): City | "" {
-  if (/луховиц|луховец|лухавиц|луговиц/i.test(text)) return "Луховицы";
-  if (/коломн|коломен|каломн|колумн|колонн[аеуы]/i.test(text)) return "Коломна";
-  return "";
+  const choice = lastChoice(text, [
+    { re: /луховиц[а-яё]*|луховец[а-яё]*|лухавиц[а-яё]*|луговиц[а-яё]*|луховниц[а-яё]*/gi, value: 3 },
+    { re: /коломн[а-яё]*|коломен[а-яё]*|каломн[а-яё]*|колумн[а-яё]*|калумн[а-яё]*|колонн[аеуы]/gi, value: 2 },
+  ]);
+  return choice === 3 ? "Луховицы" : choice === 2 ? "Коломна" : "";
 }
 
 function takeBranch(text: string): { branch: string; branchId: number } | null {
-  if (/гражданск|олимп/i.test(text)) return { branch: "Коломна, Гражданская, 2", branchId: 1 };
-  if (/октябрьск|цмит|революц/i.test(text)) return { branch: "Коломна, ЦМИТ, Октябрьской революции, 340", branchId: 2 };
-  if (/луховиц|пушкин/i.test(text) && /филиал|пушкин|хорош|202/i.test(text)) {
-    return { branch: "Луховицы, Пушкина, 202А", branchId: 3 };
-  }
+  const choice = lastChoice(text, [
+    { re: /гражданск[а-яё]*|олимп[а-яё]*/gi, value: 1 },
+    { re: /октябрьск[а-яё]*|цмит|революц[а-яё]*/gi, value: 2 },
+    { re: /пушкин[а-яё]*|202[аa]?/gi, value: 3 },
+  ]);
+  if (choice === 1) return { branch: "Коломна, Гражданская, 2", branchId: 1 };
+  if (choice === 2) return { branch: "Коломна, ЦМИТ, Октябрьской революции, 340", branchId: 2 };
+  if (choice === 3) return { branch: "Луховицы, Пушкина, 202А", branchId: 3 };
   return null;
 }
 
 export function slotsFromText(text: string): Slots {
+  text = withoutPhones(text);
   const out: Slots = {};
-  const age = takeAge(text);
+  const age = ageFromText(text);
   if (age) out.age = age;
   const city = takeCity(text);
   if (city) out.city = city;
   const br = takeBranch(text);
-  if (br) {
+  if (br && (!city || city === (br.branchId === 3 ? "Луховицы" : "Коломна"))) {
     out.branch = br.branch;
     out.branchId = br.branchId;
     if (!out.city) out.city = br.branchId === 3 ? "Луховицы" : "Коломна";
@@ -90,11 +95,16 @@ export function slotsFromText(text: string): Slots {
 
 export function mergeSlots(prev: Slots, add: Slots): Slots {
   const next: Slots = { ...prev };
-  if (add.age && !next.age) next.age = add.age;
-  if (add.city && !next.city) next.city = add.city;
-  if (add.branchId && !next.branchId) {
+  if (add.age) next.age = add.age;
+  if (add.city && add.city !== next.city) {
+    delete next.branchId;
+    delete next.branch;
+  }
+  if (add.city) next.city = add.city;
+  if (add.branchId) {
     next.branchId = add.branchId;
     next.branch = add.branch;
+    next.city = add.branchId === 3 ? "Луховицы" : "Коломна";
   }
   if (next.city === "Луховицы" && !next.branchId) {
     next.branch = "Луховицы, Пушкина, 202А";

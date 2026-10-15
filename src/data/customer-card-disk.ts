@@ -186,7 +186,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const cat = catalogBase();
   const catalogGroups = cat.groups.slice().sort((a, b) => Number(b.branchId === useBranch) - Number(a.branchId === useBranch) || a.name.localeCompare(b.name, "ru"));
   const catalogTariffs = loadTariffs().items;
-  let tariffs = withCatalogCtt(parseDossierCtt(d.extras), catalogTariffs, cat.subjects);
+  let tariffs: NonNullable<CustomerCard["tariffs"]> = withCatalogCtt(parseDossierCtt(d.extras), catalogTariffs, cat.subjects);
   if (!tariffs.length && String(d.extras?.live_tariff) === "1") {
     const tariffId = Number(d.extras?.tariff_id || 0);
     const fromCat = catalogTariffs.find((t) => t.id === tariffId);

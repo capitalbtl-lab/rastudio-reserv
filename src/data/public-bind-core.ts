@@ -47,8 +47,8 @@ export function publicCourseIdOf(
   return resolveGroupCourseId(s, tree, mapCourses);
 }
 
-export function publicGroupsOfCourse(
-  slots: { id?: string; groupId?: number; branchId?: number; courseId?: string; subjectId?: number }[],
+export function publicGroupsOfCourse<T extends { id?: string; groupId?: number; branchId?: number; courseId?: string; subjectId?: number }>(
+  slots: T[],
   courseId: string,
   tree: SiteTree,
   mapCourses?: IdMapCourse[],

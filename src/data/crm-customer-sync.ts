@@ -99,12 +99,12 @@ export function customerSyncOf(customerId: number): CustomerSyncStamp {
   return load().byId[String(id)] || {};
 }
 
-export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) {
+export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp & { paysRows?: number }) {
   const id = Number(customerId) || 0;
   if (!id) return customerSyncOf(0);
   const store = load();
   const prev = store.byId[String(id)] || {};
-  const next: CustomerSyncStamp = { ...prev, ...patch };
+  const next = { ...prev, ...patch };
   if (patch.lessonsResetAt) {
     delete next.loadLessonsDisk;
     delete next.loadLessonsAlfa;
@@ -123,7 +123,7 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
   const diskN = patch.lessonsDisk != null ? Number(patch.lessonsDisk) : undefined;
   const alfaN = patch.lessonsAlfa != null ? Number(patch.lessonsAlfa) : undefined;
   const extraN = patch.lessonsExtraN != null ? Number(patch.lessonsExtraN) : undefined;
-  const payN = (patch as CustomerSyncStamp & { paysRows?: number }).paysRows;
+  const payN = patch.paysRows;
   if (diskN != null && Number.isFinite(diskN) && !patch.lessonsRecheckAt) {
     if (next.loadLessonsDisk == null) next.loadLessonsDisk = diskN;
     if (alfaN != null && Number.isFinite(alfaN) && next.loadLessonsAlfa == null) next.loadLessonsAlfa = alfaN;

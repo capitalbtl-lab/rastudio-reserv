@@ -136,7 +136,7 @@ export function listEditorPages(): EditorPageItem[] {
       path: item.path,
       title: item.title,
       kind: item.kind || pageKindOf(item.path, tree.schools, tree.courses),
-      parent: "parent" in item ? item.parent : undefined,
+      parent: "parent" in item && typeof item.parent === "string" ? item.parent : undefined,
     });
   }
   return out;

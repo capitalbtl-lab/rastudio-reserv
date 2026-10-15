@@ -252,7 +252,7 @@ export function lessonTileMark(tone: LessonTileTone): LessonTileMark {
 }
 
 export function lessonTileTone(
-  l: Pick<GroupCalLesson, "date" | "status" | "pupils" | "amount" | "cttId" | "type" | "typeId">,
+  l: Pick<GroupCalLesson, "date" | "status" | "pupils" | "amount" | "cttId" | "typeId"> & { type?: string },
   today: string,
   customerId?: number,
 ): LessonTileTone {

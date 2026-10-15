@@ -1,4 +1,5 @@
 /** Вход действующего родителя: телефон с диска + подтверждение имени. Без OTP и без Alfa. */
+import { identityHistory } from "./agent-phone.ts";
 
 export type IdentifyHit = {
   customerId: number;
@@ -31,7 +32,7 @@ export function asIdentifyHits(
 }
 
 const YES = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это|конечно|именно|она|он)(?=$|[\s,.!?…])/i;
-const DENY = /другой ребёнок|это не (наш|он|она)|не наш ребёнок|подбираем впервые|подбираем курс впервые/i;
+const DENY = /другой реб[её]нок|это не\s+|^нет(?:[\s,.!?]|$)|^неверно(?:[\s,.!?]|$)|не наш реб[её]нок|подбираем впервые|подбираем курс впервые/i;
 
 /** Запрос услуги после показа имени = подтверждение единственного ребёнка. Не переспрашивать. */
 export const CLIENT_SERVICE_ASK =
@@ -45,19 +46,25 @@ export function confirmedHit(
   hits: IdentifyHit[],
   user: string,
   assistant: string,
+  allowImplied = true,
 ): IdentifyHit | null {
   if (!hits.length) return null;
   const text = String(user || "").trim();
   if (!text || rejectIdentify(text)) return null;
-  const byName = hits.find((h) => text.toLowerCase().includes(h.first.toLowerCase()));
-  if (byName) return byName;
+  const normalized = ` ${text.toLowerCase().replace(/[^а-яёa-z\s-]/gi, " ").replace(/\s+/g, " ")} `;
+  const hasName = (name: string) => normalized.includes(` ${name.toLowerCase().trim().replace(/\s+/g, " ")} `);
+  const full = hits.filter((h) => h.child.trim() !== h.first.trim() && hasName(h.child));
+  if (full.length === 1) return full[0];
+  const byName = hits.filter((h) => hasName(h.first));
+  if (byName.length === 1) return byName[0];
   if (hits.length === 1 && /это ваш|нашл|ваш ребёнок|несколько детей/i.test(assistant) && YES.test(text)) return hits[0];
-  if (hits.length === 1 && CLIENT_SERVICE_ASK.test(text) && !rejectIdentify(text)) return hits[0];
+  if (allowImplied && hits.length === 1 && CLIENT_SERVICE_ASK.test(text)) return hits[0];
   return null;
 }
 
-export function impliedIdentify(hits: IdentifyHit[], lastUser: string, already?: boolean): IdentifyHit | null {
+export function impliedIdentify(hits: IdentifyHit[], lastUser: string, already?: boolean, messages?: { role: string; content: string }[]): IdentifyHit | null {
   if (!hits.length) return null;
+  if (messages && identityHistory(messages).messages.some((m) => m.role === "user" && rejectIdentify(m.content))) return null;
   if (already && hits.length === 1) return hits[0];
   const u = String(lastUser || "").trim();
   if (!u || rejectIdentify(u)) return null;
@@ -70,16 +77,19 @@ export function confirmedFromHistory(
   messages: { role: string; content: string }[],
 ): IdentifyHit | null {
   if (!hits.length) return null;
+  messages = identityHistory(messages).messages;
   let last: IdentifyHit | null = null;
+  let allowImplied = true;
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
     if (m.role !== "user") continue;
     if (rejectIdentify(m.content)) {
       last = null;
+      allowImplied = false;
       continue;
     }
     const prev = [...messages.slice(0, i)].reverse().find((x) => x.role === "assistant")?.content || "";
-    const hit = confirmedHit(hits, m.content, prev);
+    const hit = confirmedHit(hits, m.content, prev, allowImplied);
     if (hit) last = hit;
   }
   return last;
@@ -130,10 +140,9 @@ export function identifyLocked(
   }
   return {
     reply: `${n}: На этом телефоне несколько детей. Нажмите имя или напишите, кого открыть.`,
-    chips: opts.hits.slice(0, 6).map((h, i) => ({
-      label: h.first,
-      send: `Откройте карточку ${h.first}`,
-      primary: i === 0,
-    })),
+    chips: opts.hits.slice(0, 6).map((h, i) => {
+      const name = opts.hits.filter((other) => other.first.toLowerCase() === h.first.toLowerCase()).length > 1 ? h.child : h.first;
+      return { label: name, send: `Откройте карточку ${name}`, primary: i === 0 };
+    }),
   };
 }

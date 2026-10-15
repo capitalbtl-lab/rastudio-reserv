@@ -688,18 +688,30 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
   return finishDepth(rule, planRuleBody(now, rule));
 }
 
-function finishDepth<T extends { mode: string; recheck: boolean; pipe: readonly string[] }>(rule: HistorySchedule, job: T): T {
+type HistoryPlanJob = {
+  mode: string;
+  kind: string;
+  study: "1" | "2";
+  recheck: boolean;
+  recheckDays: number;
+  dateFrom: string;
+  archived: boolean;
+  pipe: string[];
+  skipLeads?: boolean;
+};
+
+function finishDepth(rule: HistorySchedule, job: HistoryPlanJob): HistoryPlanJob {
   if (rule.depth !== "full") return job;
   const pipe = job.pipe.filter((id) => id !== DEPTH_PIPE);
   return {
     ...job,
-    mode: redModeOf(job.mode) as T["mode"],
+    mode: redModeOf(job.mode),
     recheck: false,
-    pipe: [...pipe, DEPTH_PIPE] as unknown as T["pipe"],
+    pipe: [...pipe, DEPTH_PIPE],
   };
 }
 
-function planRuleBody(now: Date, rule: HistorySchedule) {
+function planRuleBody(now: Date, rule: HistorySchedule): HistoryPlanJob {
   const fromId = planFromIdOf(rule.study, rule.dateFromId);
   if (rule.mode === "auto") {
     const custom = Array.isArray(rule.steps);

@@ -930,7 +930,9 @@ export const CORE_ID_HINT: Record<string, string> = {
   lessonId: "Урок журнала. Новое — id < 0, очередь lesson.create.",
 };
 
-export const CORE_ID_EDGES: Array<[string, string]> = [
+type CoreId = (typeof CORE_ID_NODES)[number]["id"];
+
+export const CORE_ID_EDGES: Array<[CoreId, CoreId]> = [
   ["schoolId", "courseId"],
   ["courseId", "subjectId"],
   ["branchId", "groupId"],

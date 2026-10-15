@@ -100,7 +100,7 @@ export function sameExportJob(
 
 const CREATE_OPS: CrmExportOp[] = ["customer.create", "group.create", "lead-status.create", "subject.create", "lesson.create", "pay.create"];
 
-export function canRunExportJob(job: { op: CrmExportOp; entityId: number; body?: Record<string, unknown> }) {
+export function canRunExportJob<T extends { op: CrmExportOp; entityId: number; body?: Record<string, unknown> }>(job: T) {
   if (job.op === "lesson.create") {
     const raw = Array.isArray(job.body?.customer_ids) ? job.body.customer_ids : [job.entityId];
     const ids = (raw as unknown[]).map(Number).filter((n) => n);

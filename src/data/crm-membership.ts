@@ -4,11 +4,11 @@
  * taken = живые cgi, не quantity и не group_ids.
  */
 
-export type CrmRequest = <T = { success?: boolean; errors?: unknown }>(
+export type CrmRequest = (
   path: string,
   body?: unknown,
   t?: string,
-) => Promise<T>;
+) => Promise<{ success?: boolean; errors?: unknown; [key: string]: unknown }>;
 
 export type CgiRow = {
   id: number;

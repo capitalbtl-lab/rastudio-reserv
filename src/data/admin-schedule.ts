@@ -1374,6 +1374,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         runId?: string;
         rowId?: string;
         otherId?: string;
+        days?: number;
         format?: string;
         step?: number;
         customers?: {

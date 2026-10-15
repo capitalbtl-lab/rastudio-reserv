@@ -1393,7 +1393,7 @@ function PlaceOn({ id }: { id: string }) {
   if (!others.length) return null;
   async function go() {
     const token = debugToken();
-    if (!token || !to) return;
+    if (!token || !to || !ctx) return;
     const res = await placeBlockFn({ data: { token, path: to, fromPath: ctx.path, fromId: id } });
     setMsg(res.ok ? `Скопирован на ${to}. Откройте страницу и смените контент.` : "error" in res ? res.error : "Ошибка");
   }

@@ -203,7 +203,7 @@ export async function diskAudit(cid: number, branchId: number) {
   }));
   const cal = loadCustomerCalendar(id);
   const journal = collectCustomerJournal(id, groups);
-  const payRows = paysOf(id) as PayLike[];
+  const payRows = paysOf(id);
   const live = livePayRows(payRows);
   const typed = live.map((x) => {
     const t = payTypeOf(x);
@@ -228,7 +228,7 @@ export async function diskAudit(cid: number, branchId: number) {
   const sync = customerSyncOf(id);
   const jready = lessonsJournalReady(sync);
   const ctts = parseDossierCtt(d?.extras);
-  const goodsNet = goodsNetOf(payRows as { kind?: string; income?: number; expenditure?: number }[]);
+  const goodsNet = goodsNetOf(payRows);
   const goodsAmounts = productRows.map((x) => Math.abs(x.sum.n)).filter((n) => n > 0);
   const headerGuess = (() => {
     const raw = d?.extras?.header;
@@ -279,8 +279,8 @@ export async function diskAudit(cid: number, branchId: number) {
     goodsFitted: fitted.goods,
     refundN,
     corrN,
-    refundGoodsSum: refundGoodsSumOf(payRows as { kind?: string; income?: number; expenditure?: number }[]),
-    corrLooksGoods: payRows.some((r) => corrLooksGoods(r as { kind?: string; note?: string })),
+    refundGoodsSum: refundGoodsSumOf(payRows),
+    corrLooksGoods: payRows.some((r) => corrLooksGoods(r)),
     study: step5StudyNum(d?.extras?.is_study),
     removed: step5RemovedNum(d?.extras?.removed),
     hasDossier: Boolean(d),
@@ -1106,7 +1106,7 @@ export async function auditOne(cid: number, branchId: number) {
           ? "нет balance"
           : shown.miss === "id"
             ? "id не найден"
-            : skip || "нет ответа Alfa";
+            : "нет ответа Alfa";
   if (judged.c && judged.dCash > 1 && step5UnitScale(Number(formulaSite) || 0, shown.ok ? shown.alfa : 0) === 1) extra += "; приход больше шапки на списания, так бывает";
   let showSite = formulaSite;
   const unitScale = shown.ok && shown.headerOk ? step5UnitScale(Number(formulaSite) || 0, shown.alfa) : 1;

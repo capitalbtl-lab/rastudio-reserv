@@ -158,7 +158,7 @@ export function isGoodsArticle(item: Record<string, unknown>) {
 }
 
 /** Товар: набор / продажа. На диске держим, в остаток входит как списание с карточки (как в сверке АльфаСРМ). */
-export function isGoodsPayRow(row: Pick<PayRow, "kind" | "payTypeId" | "refundOfGoods">) {
+export function isGoodsPayRow<T extends Pick<PayRow, "kind" | "payTypeId" | "refundOfGoods">>(row: T) {
   if (row.kind === "product") return true;
   if (row.kind === "refund" && row.refundOfGoods) return true;
   const t = Number(row.payTypeId) || 0;
@@ -166,7 +166,7 @@ export function isGoodsPayRow(row: Pick<PayRow, "kind" | "payTypeId" | "refundOf
 }
 
 /** Сумма продажи товара в строке АльфаСРМ (поле income или expenditure). */
-export function goodsAbs(row: Pick<PayRow, "income" | "expenditure">) {
+export function goodsAbs(row: Partial<Pick<PayRow, "income" | "expenditure">>) {
   return Math.abs(payNum(row.expenditure) || payNum(row.income));
 }
 
@@ -201,7 +201,7 @@ export function payEffect(kind: PayKind, sum: number, prev: number) {
   return { income: n, expenditure: 0, next: prev + n };
 }
 
-export function rowDelta(row: Pick<PayRow, "kind" | "income" | "expenditure" | "deleted" | "refundOfGoods">) {
+export function rowDelta(row: { kind?: string; income?: number; expenditure?: number; deleted?: boolean; refundOfGoods?: boolean }) {
   if (row.deleted) return 0;
   if (row.kind === "product") return -goodsAbs(row);
   if (row.kind === "refund" && row.refundOfGoods) return refundAbs(row);
@@ -210,7 +210,7 @@ export function rowDelta(row: Pick<PayRow, "kind" | "income" | "expenditure" | "
   return n;
 }
 
-export function refundAbs(row: Pick<PayRow, "income" | "expenditure">) {
+export function refundAbs(row: Partial<Pick<PayRow, "income" | "expenditure">>) {
   return Math.abs(payNum(row.expenditure) || payNum(row.income));
 }
 

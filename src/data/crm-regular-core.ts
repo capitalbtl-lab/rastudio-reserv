@@ -92,7 +92,7 @@ export function parseDossierRegular(extras?: Record<string, string> | null): Dis
     const raw = JSON.parse(String(extras?.regular || "[]")) as unknown;
     if (!Array.isArray(raw)) return [];
     return raw
-      .map((row) => {
+      .map((row): DiskRegular | null => {
         const it = row as Record<string, unknown>;
         const id = Number(it.id || 0);
         const from = String(it.from || "");

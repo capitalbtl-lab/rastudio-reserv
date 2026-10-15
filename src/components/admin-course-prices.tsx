@@ -278,6 +278,19 @@ export function AdminCoursePrices() {
     if (res.ok) setAddName("");
   }
 
+  async function removeClient(id: string, name: string) {
+    if (!confirm(`Удалить корпоративного клиента «${name}» и его колонку цен?`)) return;
+    setBusy(true);
+    try {
+      const res = await adminPriceFormulas({ data: { token: token(), action: "remove", id } });
+      takePack(res, `Клиент «${name}» удалён.`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Не удалось удалить клиента.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function addSchool() {
     const label = newSchool.trim();
     if (label.length < 2) {
@@ -416,7 +429,7 @@ export function AdminCoursePrices() {
         <Button type="button" variant="secondary" className="h-10" disabled={busy} onClick={() => void addClient()}>
           Добавить корп.клиента
         </Button>
-        <Button type="button" variant={editing ? "default" : "secondary"} className="ml-auto h-10 px-5" disabled={busy} onClick={() => setEditing((v) => !v)}>
+        <Button type="button" variant={editing ? "primary" : "secondary"} className="ml-auto h-10 px-5" disabled={busy} onClick={() => setEditing((v) => !v)}>
           {editing ? "Готово" : "Редактировать"}
         </Button>
         <Button type="button" className="h-10 px-5" disabled={busy || !rows.length} onClick={() => void saveAll()}>

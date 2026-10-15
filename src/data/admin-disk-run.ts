@@ -5,7 +5,7 @@ import { logAdmin } from "./admin-settings";
 import type { DiskReq, PullKind, PullLine } from "./admin-disk";
 import { loadSiteTree } from "./site-tree";
 import { guessTariffLinks, readTariffMap, saveTariffMap } from "./tariff-map";
-import { subjectsWithHref, courseSubjectIndex } from "./crm-tariffs";
+import { subjectsWithHref, courseSubjectIndex, loadTariffs } from "./crm-tariffs";
 import { packSubjectRows } from "./subject-admin";
 import { searchClientViews, toClientListRow } from "./dossiers";
 
@@ -230,8 +230,8 @@ export async function handleAdminDisk(data: DiskReq) {
       return { ...packed, ok: true as const, total: packed.subjects.length };
     }
     if (kind === "tariffs") {
-      const raw = readJson("crm-tariffs.json") || {};
-      const items = Array.isArray(raw.items) ? raw.items : [];
+      const raw = loadTariffs();
+      const items = raw.items;
       let tariffMap = guessTariffLinks(items as { id: number; subjectIds: number[]; archive?: boolean }[]);
       try {
         if (!readTariffMap().length && tariffMap.some((x) => x.courseId)) tariffMap = saveTariffMap(tariffMap);
@@ -247,7 +247,7 @@ export async function handleAdminDisk(data: DiskReq) {
       return {
         ok: true as const,
         at: String(raw.at || ""),
-        tariffs: items.map((t) => ({ ...(t as object), groups: [] })),
+        tariffs: items.map((t) => ({ ...t, groups: [] })),
         lessonTypes: Array.isArray(raw.lessonTypes) ? raw.lessonTypes : [],
         branches: Array.isArray(raw.branches) && raw.branches.length ? raw.branches : BRANCHES,
         subjects: subjectsWithHref(),

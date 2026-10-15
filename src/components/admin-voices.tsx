@@ -22,8 +22,13 @@ export function AdminVoices() {
   const [playing, setPlaying] = useState("");
   const [msg, setMsg] = useState("");
   const previewRef = useRef<HTMLAudioElement | null>(null);
+  const previewGeneration = useRef(0);
+  const finishPreview = useRef<(() => void) | null>(null);
 
   function stopPreview() {
+    previewGeneration.current += 1;
+    finishPreview.current?.();
+    finishPreview.current = null;
     const el = previewRef.current;
     if (el) {
       el.pause();
@@ -34,12 +39,16 @@ export function AdminVoices() {
 
   useEffect(() => {
     void (async () => {
-      const vo = await adminVoice({ data: { token: token() } });
-      if (vo.ok) {
-        setVoice({ ...DEFAULT_VOICE, ...vo.settings });
-        setMale(vo.male);
-        setFemale(vo.female);
-        setRoles(vo.roles);
+      try {
+        const vo = await adminVoice({ data: { token: token() } });
+        if (vo.ok) {
+          setVoice({ ...DEFAULT_VOICE, ...vo.settings });
+          setMale(vo.male);
+          setFemale(vo.female);
+          setRoles(vo.roles);
+        } else setMsg(vo.error || "Не удалось загрузить голоса.");
+      } catch (e) {
+        setMsg(e instanceof Error ? e.message : "Не удалось загрузить голоса.");
       }
     })();
     return () => stopPreview();
@@ -47,6 +56,7 @@ export function AdminVoices() {
 
   async function listen(who: "oleg" | "olga" | "both") {
     stopPreview();
+    const generation = previewGeneration.current;
     const el = previewRef.current || new Audio();
     previewRef.current = el;
     el.muted = false;
@@ -57,26 +67,30 @@ export function AdminVoices() {
       for (const person of people) {
         const sample = person === "olga" ? voice.sampleOlga || DEFAULT_VOICE.sampleOlga : voice.sampleOleg || DEFAULT_VOICE.sampleOleg;
         const res = await speakAgent({ data: { text: sample, who: person, preview: voice } });
+        if (generation !== previewGeneration.current) return;
         if (!res.ok || !("audio" in res)) {
-          setMsg("Не удалось проиграть голос. Проверьте баланс Yandex SpeechKit.");
+          setMsg(("message" in res && res.message) || "Не удалось проиграть голос. Проверьте ключ и настройки Yandex SpeechKit.");
           setPlaying("");
           return;
         }
         await new Promise<void>((resolve, reject) => {
-          el.onended = () => resolve();
-          el.onerror = () => reject(new Error("audio"));
+          finishPreview.current = resolve;
+          el.onended = () => { finishPreview.current = null; resolve(); };
+          el.onerror = () => { finishPreview.current = null; reject(new Error("audio")); };
           el.playbackRate = 1;
           el.volume = "volume" in res ? Number(res.volume) : 1;
           el.src = res.audio;
           const play = el.play();
           if (play && typeof play.catch === "function") play.catch(() => reject(new Error("play")));
         });
+        if (generation !== previewGeneration.current) return;
         if (who === "both") await new Promise((r) => setTimeout(r, 80 + (voice.turnGap || 0) * 1000));
+        if (generation !== previewGeneration.current) return;
       }
     } catch {
-      setMsg("Браузер не проиграл звук.");
+      if (generation === previewGeneration.current) setMsg("Браузер не проиграл звук.");
     }
-    setPlaying("");
+    if (generation === previewGeneration.current) setPlaying("");
   }
 
   return (
@@ -218,12 +232,17 @@ export function AdminVoices() {
             disabled={busy}
             onClick={async () => {
               setBusy(true);
-              const res = await adminSaveVoice({ data: { token: token(), ...voice } });
-              setBusy(false);
-              if (!res.ok) setMsg(res.error || "Ошибка");
-              else {
-                setVoice({ ...DEFAULT_VOICE, ...res.settings });
-                setMsg("Голоса сохранены");
+              try {
+                const res = await adminSaveVoice({ data: { token: token(), ...voice } });
+                if (!res.ok) setMsg(res.error || "Ошибка");
+                else {
+                  setVoice({ ...DEFAULT_VOICE, ...res.settings });
+                  setMsg("Голоса сохранены");
+                }
+              } catch (e) {
+                setMsg(e instanceof Error ? e.message : "Не удалось сохранить голоса.");
+              } finally {
+                setBusy(false);
               }
             }}
           >

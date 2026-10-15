@@ -35,7 +35,7 @@ describe("состав группы с диска", () => {
   });
 
   it("полный cgi гасит лишние группы, пустой cgi диск не трогает", () => {
-    const prev = [
+    const prev: { id: number; branchId: number; name: string; active?: boolean }[] = [
       { id: 580, branchId: 1, name: "Роботы", active: true },
       { id: 999, branchId: 1, name: "лишняя", active: true },
     ];
