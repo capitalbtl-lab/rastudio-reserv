@@ -227,9 +227,9 @@ export function mergeAgentSettings(raw?: Partial<AgentSettings> | null): AgentSe
   return s;
 }
 
-/** Все флаги видимости false — битый сейв. Сайт остаётся без чата. */
+/** Восстанавливаем старый пустой сейв, сохраняя явно выбранные администратором выключенные флаги. */
 export function salvageSettings(s: AgentSettings): { settings: AgentSettings; repaired: boolean } {
-  if (!SITE_WINDOW_IDS.every((id) => s[id] === false)) return { settings: s, repaired: false };
+  if (s.updatedAt || !SITE_WINDOW_IDS.every((id) => s[id] === false)) return { settings: s, repaired: false };
   const defaults = Object.fromEntries(SITE_WINDOW_IDS.map((id) => [id, DEFAULT_SETTINGS[id]])) as Record<
     (typeof SITE_WINDOW_IDS)[number],
     boolean
@@ -363,7 +363,7 @@ export function agentPromptAddons(facts?: SessionFacts, channel = "site") {
   }
   if (s.extra.trim()) parts.push(`Доп. инструкция администратора студии:\n${s.extra.trim().slice(0, 2500)}`);
   if (s.injectTraining && brain.examples.length) {
-    const take = brain.examples.slice(0, Math.max(4, Math.min(60, s.maxExamples || 40)));
+    const take = brain.examples.slice(0, Math.max(4, Math.min(80, s.maxExamples || 40)));
     parts.push("ОБУЧЕНИЕ (эти примеры и правила важнее общих фраз, но не ломают воронку):");
     for (const ex of take) {
       if (ex.kind === "rule") parts.push(`Правило: ${ex.output || ex.input}`);
@@ -414,12 +414,14 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
       brain.settings = mergeAgentSettings({
         ...brain.settings,
         ...next,
-        defaultPartner: next.defaultPartner === "oleg" ? "oleg" : "olga",
+        defaultPartner: next.defaultPartner === "oleg" || next.defaultPartner === "olga" ? next.defaultPartner : brain.settings.defaultPartner,
         style: next.style === "short" || next.style === "detailed" || next.style === "warm" ? next.style : brain.settings.style,
         extra: String(next.extra ?? brain.settings.extra).slice(0, 4000),
-        askOnce: next.askOnce !== false,
-        injectTraining: next.injectTraining !== false,
-        maxExamples: Math.max(4, Math.min(80, Number(next.maxExamples || brain.settings.maxExamples || 40))),
+        askOnce: flag(next.askOnce, brain.settings.askOnce),
+        injectTraining: flag(next.injectTraining, brain.settings.injectTraining),
+        maxExamples: Number.isFinite(Number(next.maxExamples ?? brain.settings.maxExamples))
+          ? Math.max(4, Math.min(80, Math.round(Number(next.maxExamples ?? brain.settings.maxExamples))))
+          : brain.settings.maxExamples,
         showChat: flag(next.showChat, brain.settings.showChat),
         allowVoice: flag(next.allowVoice, brain.settings.allowVoice),
         allowAdminMode: flag(next.allowAdminMode, brain.settings.allowAdminMode),
@@ -509,6 +511,9 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
       return { ...pack(), added: extra.length };
     }
     if (data.action === "saveScript" && data.script?.id) {
+      if ((LOCKED_SCRIPT_IDS as readonly string[]).includes(data.script.id)) {
+        return { ok: false as const, error: "Этот базовый этап диалога не редактируется. Используйте дополнительные инструкции и примеры обучения." };
+      }
       const now = new Date().toISOString();
       const idx = brain.scripts.findIndex((s) => s.id === data.script?.id);
       if (idx >= 0) {

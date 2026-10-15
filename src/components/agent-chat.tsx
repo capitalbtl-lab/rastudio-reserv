@@ -9,7 +9,6 @@ import type { AgentUiFlags } from "@/data/agent-config";
 import { debugSession } from "@/data/debug-fn";
 import { speakAgent } from "@/data/agent-voice";
 import { saveChatLog } from "@/data/chat-logs-fn";
-import { factsFromMessages, talkFallback } from "@/data/agent-facts";
 import { nextChips, needTypedText, typedPrompt, type AgentChip } from "@/data/agent-chips";
 import { debugEmit } from "@/data/debug-client";
 import { readBehavior, tickBehavior } from "@/data/page-behavior";
@@ -54,6 +53,12 @@ function speechCtor() {
 type Msg = { role: "user" | "assistant"; content: string };
 type Mood = "hello" | "think" | "happy" | "sorry";
 const SILENCE = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+
+function availablePartner(preferred: "oleg" | "olga", ui: AgentUiFlags): "oleg" | "olga" {
+  if (preferred === "oleg" && !ui.allowOleg && ui.allowOlga) return "olga";
+  if (preferred === "olga" && !ui.allowOlga && ui.allowOleg) return "oleg";
+  return preferred;
+}
 
 function greeting(who: "oleg" | "olga", page?: PageAgent | null) {
   const name = who === "olga" ? "Ольга" : "Олег";
@@ -269,6 +274,8 @@ export function AgentChat() {
   const micStreamRef = useRef<MediaStream | null>(null);
   const chatGenRef = useRef(0);
   const uiRef = useRef(ui);
+  const pageAgentRef = useRef(pageAgent);
+  pageAgentRef.current = pageAgent;
   const debugOnRef = useRef(debugOn);
   const debugWidgetRef = useRef(debugWidget);
   const vadRafRef = useRef(0);
@@ -282,6 +289,11 @@ export function AgentChat() {
   debugWidgetRef.current = debugWidget;
   const inAdminUi = awaitingCode || adminMs > 0;
   const messages = inAdminUi ? (adminMsgs.length ? adminMsgs : [{ role: "assistant" as const, content: awaitingCode ? ADMIN_ASK : ADMIN_HELLO }]) : clientMsgs;
+  const lastAssistantIndex = messages.reduce((last, m, i) => m.role === "assistant" ? i : last, -1);
+  const visibleMessages = messages.filter((m, i) =>
+    (m.role !== "user" || !noisyAdmin(m.content)) &&
+    (m.role !== "assistant" || uiOn("keepAssistantReplies") || i === lastAssistantIndex),
+  );
   const mood = moodOf(messages, busy);
   const offer: { hint: string; chips: AgentChip[]; after?: string } =
     awaitingCode
@@ -296,7 +308,9 @@ export function AgentChat() {
             { label: "Обучение", send: "Научу консультанта. Спроси, что ответил неправильно и как надо." },
           ],
         }
-      : nextChips(messages, groupChips);
+      : !uiOn("matchChipsToMessage") && groupChips.length
+        ? { hint: "Варианты", chips: groupChips }
+        : nextChips(messages, groupChips);
   const lastAsk = [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
   const needText = needTypedText(lastAsk, offer.chips);
   const typeHint = needText ? typedPrompt(lastAsk) : "Напишите или нажмите кнопку";
@@ -341,15 +355,10 @@ export function AgentChat() {
 
   useEffect(() => {
     if (!pageAgent?.on) return;
-    setClientMsgs((prev) => {
-      if (prev.some((m) => m.role === "user")) return prev;
-      const who = partnerRef.current;
-      return [{ role: "assistant", content: greeting(who, pageAgent) }];
-    });
-    if (pageAgent.who === "oleg" || pageAgent.who === "olga") {
-      setPartner(pageAgent.who);
-      writePartner(pageAgent.who);
-    }
+    const who = availablePartner(pageAgent.who, uiRef.current);
+    setPartner(who);
+    writePartner(who);
+    setClientMsgs((prev) => prev.some((m) => m.role === "user") ? prev : [{ role: "assistant", content: greeting(who, pageAgent) }]);
   }, [pageAgent]);
 
   useEffect(() => {
@@ -376,9 +385,13 @@ export function AgentChat() {
       if (!res.ok || !("ui" in res)) return;
       const next = res.ui;
       setUi(next);
-      if (!next.allowOlga && next.allowOleg) setPartner("oleg");
-      else if (!next.allowOleg && next.allowOlga) setPartner("olga");
-      else setPartner(next.defaultPartner);
+      let saved: string | null = null;
+      try { saved = sessionStorage.getItem(PARTNER_KEY); } catch { /* storage unavailable */ }
+      const page = pageAgentRef.current;
+      const preferred = page?.on ? page.who : saved === "oleg" || saved === "olga" ? saved : next.defaultPartner;
+      const who = availablePartner(preferred, next);
+      setPartner(who);
+      setClientMsgs((prev) => prev.some((m) => m.role === "user") ? prev : [{ role: "assistant", content: greeting(who, page) }]);
       if (!next.allowVoice) {
         setVoiceOn(false);
         voiceOnRef.current = false;
@@ -409,6 +422,9 @@ export function AgentChat() {
             setDebugOn(false);
             setDebugWidget({});
           }
+        }).catch(() => {
+          setDebugOn(false);
+          setDebugWidget({});
         });
       } catch {
         setDebugOn(false);
@@ -448,7 +464,7 @@ export function AgentChat() {
         admin: false,
         messages: clientMsgs,
       },
-    });
+    }).catch((error: unknown) => console.warn("Не удалось сохранить диалог ИИ-ассистента.", error));
   }, [clientMsgs, partner, voiceOn]);
 
   useEffect(() => {
@@ -499,8 +515,10 @@ export function AgentChat() {
 
   useEffect(() => {
     return () => {
-      recRef.current?.stop();
-      audioRef.current?.stop();
+      chatGenRef.current += 1;
+      voiceOnRef.current = false;
+      stopListen(false);
+      cancelSpeech();
       document.body.classList.remove("agent-open");
     };
   }, []);
@@ -552,8 +570,24 @@ export function AgentChat() {
   async function speakBrowser(text: string, who: Who) {
     const synth = window.speechSynthesis;
     if (!synth) return;
+    const gen = genRef.current;
     await new Promise<void>((resolve) => {
+      let finished = false;
+      let started = false;
+      let timer = 0;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(timer);
+        if (synth.onvoiceschanged === start) synth.onvoiceschanged = null;
+        resolve();
+      };
       const start = () => {
+        if (finished || started) return;
+        if (gen !== genRef.current || !voiceOnRef.current) { done(); return; }
+        started = true;
+        window.clearTimeout(timer);
+        if (synth.onvoiceschanged === start) synth.onvoiceschanged = null;
         const u = new SpeechSynthesisUtterance(text);
         u.lang = "ru-RU";
         u.rate = 1.05;
@@ -561,17 +595,16 @@ export function AgentChat() {
         u.volume = 1;
         const voice = pickVoice(who, synth.getVoices());
         if (voice) u.voice = voice;
-        const done = () => resolve();
         u.onend = done;
         u.onerror = done;
-        audioRef.current = { stop: () => { synth.cancel(); done(); } };
         synth.cancel();
         synth.speak(u);
       };
+      audioRef.current = { stop: () => { synth.cancel(); done(); } };
       if (synth.getVoices().length) start();
       else {
-        synth.onvoiceschanged = () => start();
-        window.setTimeout(start, 400);
+        synth.onvoiceschanged = start;
+        timer = window.setTimeout(start, 400);
       }
     });
   }
@@ -648,9 +681,14 @@ export function AgentChat() {
     if (micStreamRef.current?.active) return true;
     if (!navigator.mediaDevices?.getUserMedia) return true;
     try {
-      micStreamRef.current = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
+      if (!voiceOnRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
+      micStreamRef.current = stream;
       return true;
     } catch (e) {
       debugEmit("voice", { voiceOn: true, error: e instanceof Error ? e.message : "микрофон" });
@@ -659,25 +697,16 @@ export function AgentChat() {
   }
 
   async function yandexClip(text: string, who: Who) {
-    for (let i = 0; i < 2; i += 1) {
-      try {
-        const res = await speakAgent({
-          data: { text, who: who === "olga" ? "olga" : "oleg" },
-        });
-        if (!res.ok || !("audio" in res) || !res.audio) continue;
-        const voice = "voice" in res ? String(res.voice || "") : "";
-        if (who === "oleg" && /alena|jane|marina|oksana|omazh/i.test(voice)) continue;
-        if (who === "olga" && /zahar|filipp|ermil|madirus/i.test(voice)) continue;
-        return {
-          audio: res.audio,
-          volume: "volume" in res ? Number(res.volume) : 1,
-          gap: "turnGap" in res ? Number(res.turnGap) : 0.18,
-        };
-      } catch {
-        /* retry */
-      }
+    try {
+      const res = await speakAgent({ data: { text, who: who === "olga" ? "olga" : "oleg" } });
+      if (!res.ok || !("audio" in res) || !res.audio) return null;
+      const voice = "voice" in res ? String(res.voice || "") : "";
+      if (who === "oleg" && /alena|jane|marina|oksana|omazh/i.test(voice)) return null;
+      if (who === "olga" && /zahar|filipp|ermil|madirus/i.test(voice)) return null;
+      return { audio: res.audio, volume: "volume" in res ? Number(res.volume) : 1, gap: "turnGap" in res ? Number(res.turnGap) : 0.18 };
+    } catch {
+      return null;
     }
-    return null;
   }
 
   function startVad() {
@@ -955,6 +984,7 @@ export function AgentChat() {
       const history = adminThread ? adminMsgsRef.current : clientMsgsRef.current;
       const payload = {
         messages: history,
+        sessionId: chatSid(),
         with: adminThread ? "olga" : partnerRef.current,
         token: siteAdminToken() || undefined,
         path: typeof window !== "undefined" ? window.location.pathname : "/",
@@ -964,11 +994,7 @@ export function AgentChat() {
         channel: "site",
         behavior: readBehavior(),
       };
-      let res = await chatAgent({ data: payload });
-      if (!res.ok) {
-        await new Promise((r) => setTimeout(r, 400));
-        res = await chatAgent({ data: payload });
-      }
+      const res = await chatAgent({ data: payload });
       debugEmit("net", { ok: res.ok, ms: Date.now() - t0, error: res.ok ? "" : (res as { error?: string }).error });
       if (gen !== chatGenRef.current) return;
       if (res.ok) {
@@ -1001,25 +1027,18 @@ export function AgentChat() {
           window.setTimeout(() => goSitePath(nextPath), voiceOnRef.current ? 1400 : 700);
         }
       } else {
-        const facts = factsFromMessages(history);
-        reply = talkFallback(partnerRef.current === "oleg" ? "oleg" : "olga", facts);
+        reply = `${adminThread || partnerRef.current !== "oleg" ? "Ольга" : "Олег"}: ${res.error || "Не удалось получить ответ. Повторите сообщение."}`;
       }
     } catch (e) {
       debugEmit("net", { ok: false, ms: Date.now() - t0, error: e instanceof Error ? e.message : "сеть" });
       if (gen !== chatGenRef.current) return;
-      const history = adminThread ? adminMsgsRef.current : clientMsgsRef.current;
-      const facts = factsFromMessages(history);
-      reply = talkFallback(partnerRef.current === "oleg" ? "oleg" : "olga", facts);
+      reply = `${adminThread || partnerRef.current !== "oleg" ? "Ольга" : "Олег"}: Не удалось получить ответ. Повторите сообщение или позвоните 8 (800) 511-34-01.`;
     }
     if (gen !== chatGenRef.current) return;
     if (reply.trim() && !(gate && reply === ADMIN_HELLO && adminMsgsRef.current.some((m) => m.content === ADMIN_HELLO))) {
       const live = adminThread ? adminMsgsRef.current : clientMsgsRef.current;
-      const keep = uiOn("keepAssistantReplies");
       const assistantMsg: Msg = { role: "assistant", content: reply };
-      const nextMsgs =
-        !keep && live.length && live[live.length - 1].role === "assistant"
-          ? [...live.slice(0, -1), assistantMsg]
-          : [...live, assistantMsg];
+      const nextMsgs = [...live, assistantMsg];
       if (adminThread) {
         adminMsgsRef.current = nextMsgs;
         setAdminMsgs(nextMsgs);
@@ -1039,6 +1058,7 @@ export function AgentChat() {
   }
 
   function leaveAdmin() {
+    chatGenRef.current += 1;
     const wasIn = adminLeft() > 0;
     sendIdRef.current += 1;
     busyRef.current = false;
@@ -1067,6 +1087,7 @@ export function AgentChat() {
   }
 
   function enterAdmin() {
+    chatGenRef.current += 1;
     sendIdRef.current += 1;
     busyRef.current = false;
     setBusy(false);
@@ -1096,7 +1117,9 @@ export function AgentChat() {
     voiceOnRef.current = true;
     setVoiceOn(true);
     await unlockAudio();
+    if (!voiceOnRef.current) return;
     await ensureMic();
+    if (!voiceOnRef.current) return;
     try {
       window.speechSynthesis?.getVoices();
     } catch {
@@ -1112,13 +1135,14 @@ export function AgentChat() {
     const live = inAdminUi ? adminMsgsRef.current : clientMsgsRef.current;
     const last = phrase?.trim() || [...live].reverse().find((m) => m.role === "assistant")?.content || "";
     if (!last.trim()) return;
-    busyRef.current = false;
-    setBusy(false);
+    if (busyRef.current) return;
     if (!voiceOnRef.current) {
       voiceOnRef.current = true;
       setVoiceOn(true);
       await unlockAudio();
+      if (!voiceOnRef.current) return;
       await ensureMic();
+      if (!voiceOnRef.current) return;
     }
     await speak(last);
     if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
@@ -1254,7 +1278,7 @@ export function AgentChat() {
                         closed: true,
                         messages: messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)),
                       },
-                    });
+                    }).catch((error: unknown) => console.warn("Не удалось сохранить завершённый диалог ИИ-ассистента.", error));
                   }
                   chatSid(true);
                   awaitingCodeRef.current = false;
@@ -1284,9 +1308,10 @@ export function AgentChat() {
                 className="grid size-8 place-items-center rounded-full bg-black/15 hover:bg-black/25 sm:size-9"
                 onClick={() => {
                   setOpen(false);
+                  voiceOnRef.current = false;
                   setVoiceOn(false);
-                  stopListen();
-                  audioRef.current?.stop();
+                  stopListen(false);
+                  cancelSpeech();
                 }}
                 aria-label="Закрыть чат"
               >
@@ -1319,6 +1344,7 @@ export function AgentChat() {
                 {uiOn("allowOlga") ? (
                 <button
                   type="button"
+                  disabled={busy}
                   className={cn(
                     "h-8 rounded-full text-[0.72rem] font-semibold sm:h-9 sm:text-[0.78rem]",
                     partner === "olga" ? "bg-white text-primary" : "bg-white/15 text-white hover:bg-white/25",
@@ -1331,6 +1357,7 @@ export function AgentChat() {
                 {uiOn("allowOleg") ? (
                 <button
                   type="button"
+                  disabled={busy}
                   className={cn(
                     "h-8 rounded-full text-[0.72rem] font-semibold sm:h-9 sm:text-[0.78rem]",
                     partner === "oleg" ? "bg-white text-primary" : "bg-white/15 text-white hover:bg-white/25",
@@ -1344,7 +1371,7 @@ export function AgentChat() {
             ) : null}
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-[#eef1f7] px-3 py-2.5 sm:px-3.5 sm:py-3">
-            {messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)).map((m, i, list) => {
+            {visibleMessages.map((m, i, list) => {
               const lastAs = [...list].map((x, idx) => (x.role === "assistant" ? idx : -1)).filter((n) => n >= 0).pop();
               const mode = inAdminUi ? "olga" : partner;
               const turnsRaw = parseTurns(m.content, mode);

@@ -218,6 +218,7 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
         ],
       };
     }
+    if (facts.secondTrial) return null;
     return {
       reply: `${n}: ${facts.secondChild}, ${facts.age} лет, ${facts.school}. Пробное на ваш телефон — в группе или в свободный день?`,
       chips: [
@@ -444,6 +445,7 @@ export async function completeClientAction(
   }
 
   if (facts.wantsBook && /gid=\d/i.test(lastUser)) {
+    if (facts.intent === "второй") return null;
     const ids = parseChipIds(lastUser);
     if (!allowedLessonType(rights, ids.kind)) {
       return { reply: `${n}: Такой тип занятия ставит администратор. ${phoneHint()}`, chips: [], done: true };

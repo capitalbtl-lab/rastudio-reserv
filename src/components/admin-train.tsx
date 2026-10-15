@@ -53,6 +53,7 @@ function ScriptCard({
   onChange: (v: string) => void;
   onSave: () => void;
 }) {
+  const locked = (LOCKED_SCRIPT_IDS as readonly string[]).includes(s.id);
   return (
     <article className="flex flex-col rounded-2xl bg-surface p-4 shadow-[var(--shadow-border)]">
       <div className="mb-2 min-w-0">
@@ -63,20 +64,22 @@ function ScriptCard({
         <p className="mt-0.5 text-[0.68rem] text-muted">
           {s.step}
           {s.auto ? " · из диалогов" : ""}
-          {(LOCKED_SCRIPT_IDS as readonly string[]).includes(s.id) ? " · заводской шаг, эталон при загрузке" : ""}
+          {locked ? " · базовый этап, только чтение" : ""}
           {s.updatedAt ? ` · ${when(s.updatedAt)}` : ""}
         </p>
       </div>
       <textarea
         value={value}
+        readOnly={locked}
         onChange={(e) => onChange(e.target.value)}
         rows={rows}
         className="w-full flex-1 resize-y rounded-xl bg-surface-2 px-3 py-2.5 text-sm leading-relaxed ring-1 ring-black/10"
       />
+      {locked ? <p className="mt-2 text-xs text-muted">Для настройки используйте дополнительные инструкции и примеры обучения.</p> : null}
       <AdminSaveBar>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || locked}
           onClick={onSave}
           className="h-7 rounded-lg bg-black/[0.07] px-2.5 text-[0.7rem] font-semibold text-muted hover:bg-black/[0.12] disabled:opacity-50"
         >
@@ -100,8 +103,19 @@ export function AdminTrain() {
   const [busy, setBusy] = useState(false);
   const [lastSys, setLastSys] = useState("");
 
+  async function request(args: Parameters<typeof adminAgentBrain>[0]) {
+    try {
+      return await adminAgentBrain(args);
+    } catch (e) {
+      setBusy(false);
+      const error = e instanceof Error ? e.message : "Не удалось выполнить действие. Повторите попытку.";
+      setMsg(error);
+      return { ok: false as const, error };
+    }
+  }
+
   async function load() {
-    const res = await adminAgentBrain({ data: { token: token(), action: "get" } });
+    const res = await request({ data: { token: token(), action: "get" } });
     if (res.ok && "examples" in res) {
       setRows(res.examples);
       if ("scripts" in res && res.scripts) {
@@ -111,7 +125,7 @@ export function AdminTrain() {
         setDraft(d);
       }
       if ("lastSystematized" in res) setLastSys(String(res.lastSystematized || ""));
-    }
+    } else if (!res.ok) setMsg(res.error || "Не удалось загрузить обучение.");
   }
 
   useEffect(() => {
@@ -120,7 +134,7 @@ export function AdminTrain() {
 
   async function add() {
     setBusy(true);
-    const res = await adminAgentBrain({
+    const res = await request({
       data: { token: token(), action: "add", example: { kind, input, output, note, source: "manual" } },
     });
     setBusy(false);
@@ -135,13 +149,14 @@ export function AdminTrain() {
   }
 
   async function remove(id: string) {
-    const res = await adminAgentBrain({ data: { token: token(), action: "remove", example: { id } } });
+    const res = await request({ data: { token: token(), action: "remove", example: { id } } });
     if (res.ok && "examples" in res) setRows(res.examples);
+    else if (!res.ok) setMsg(res.error || "Не удалось удалить пример.");
   }
 
   async function saveScript(id: string) {
     setBusy(true);
-    const res = await adminAgentBrain({
+    const res = await request({
       data: { token: token(), action: "saveScript", script: { id, body: draft[id] || "" } },
     });
     setBusy(false);
@@ -154,7 +169,7 @@ export function AdminTrain() {
   async function resetScripts() {
     if (!window.confirm("Вернуть эталон воронки? Правки скриптов сотрутся.")) return;
     setBusy(true);
-    const res = await adminAgentBrain({ data: { token: token(), action: "resetScripts" } });
+    const res = await request({ data: { token: token(), action: "resetScripts" } });
     setBusy(false);
     if (res.ok && "scripts" in res && res.scripts) {
       setScripts(res.scripts);
@@ -167,7 +182,7 @@ export function AdminTrain() {
 
   async function systematize() {
     setBusy(true);
-    const res = await adminAgentBrain({ data: { token: token(), action: "systematize" } });
+    const res = await request({ data: { token: token(), action: "systematize" } });
     setBusy(false);
     if (res.ok) {
       if ("scripts" in res && res.scripts) {
@@ -236,7 +251,7 @@ export function AdminTrain() {
       return;
     }
     setBusy(true);
-    const res = await adminAgentBrain({ data: { token: token(), action: "import", examples } });
+    const res = await request({ data: { token: token(), action: "import", examples } });
     setBusy(false);
     if (res.ok && "examples" in res) {
       setRows(res.examples);

@@ -8,6 +8,8 @@ import { type SessionFacts, nextStepOf, talkFallback } from "./agent-facts";
 import { programPitch } from "./agent-playbook";
 import { allowedLessonType, BOOK_TYPE_FLAGS, emptyBookFlags } from "./agent-book-kinds";
 import type { AgentSettings } from "./agent-config";
+import { chatRateKey, createChatLimiter } from "./agent-rate-limit.ts";
+import { bookingIdentity } from "./agent-booking-identity.ts";
 
 function clientSystem(who: "oleg" | "olga", facts?: SessionFacts, stepOverride?: string) {
   const name = who === "olga" ? "Ольга" : "Олег";
@@ -461,20 +463,7 @@ function siteTools(s: AgentSettings, identified = false, steer = false) {
 
 type ChatMsg = { role: "user" | "assistant" | "system" | "tool"; content: string; tool_call_id?: string; tool_calls?: unknown };
 
-const buckets = new Map<string, number[]>();
-
-function limited(ip: string) {
-  const now = Date.now();
-  const windowMs = 60 * 60 * 1000;
-  const prev = (buckets.get(ip) || []).filter((t) => now - t < windowMs);
-  if (prev.length >= 40) {
-    buckets.set(ip, prev);
-    return true;
-  }
-  prev.push(now);
-  buckets.set(ip, prev);
-  return false;
-}
+const limited = createChatLimiter();
 
 function resolveCourse(id?: string) {
   if (!id) return "";
@@ -601,6 +590,7 @@ export const chatAgent = createServerFn({ method: "POST" })
       data as {
         messages: { role: "user" | "assistant"; content: string }[];
         ip?: string;
+        sessionId?: string;
         with?: "oleg" | "olga" | "both";
         token?: string;
         path?: string;
@@ -613,7 +603,7 @@ export const chatAgent = createServerFn({ method: "POST" })
       },
   )
   .handler(async ({ data }) => {
-    const ip = data.ip || "anon";
+    const ip = chatRateKey(data);
     if (limited(ip)) {
       return { ok: false as const, error: "Слишком много сообщений. Позвоните 8 (800) 511-34-01." };
     }
@@ -689,14 +679,12 @@ export const chatAgent = createServerFn({ method: "POST" })
       const { asIdentifyHits, confirmedFromHistory, identifyLocked, impliedIdentify } = await import("./agent-identify");
       const lastAsst = [...trimmed].reverse().find((m) => m.role === "assistant")?.content || "";
       const hits = facts.phone ? asIdentifyHits(dossiersByPhone(facts.phone)) : [];
-      const known = confirmedFromHistory(hits, all) || impliedIdentify(hits, lastUser, facts.identified);
+      const known = confirmedFromHistory(hits, all) || impliedIdentify(hits, lastUser, false, all);
+      facts.identified = Boolean(known);
       if (known) {
         facts.identified = true;
         facts.customerId = known.customerId;
-        facts.child = facts.child || known.first;
-      } else if (facts.identified && hits.length === 1) {
-        facts.customerId = hits[0].customerId;
-        facts.child = facts.child || hits[0].child;
+        facts.child = known.first;
       }
       const lockedId = identifyLocked(soloWho, {
         phone: facts.phone,
@@ -859,6 +847,14 @@ export const chatAgent = createServerFn({ method: "POST" })
               args = {};
             }
             if (call.function.name === "submit_trial" || call.function.name === "book_lesson") {
+              if (!admin) {
+                const identity = bookingIdentity(facts, args);
+                if (!identity.ok) {
+                  messages.push({ role: "tool", tool_call_id: call.id, content: identity.error });
+                  continue;
+                }
+                args = identity.args;
+              }
               if (loadBrain().settings.consultantCanBook === false) {
                 messages.push({
                   role: "tool",
