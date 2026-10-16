@@ -1,5 +1,7 @@
 "use client";
 
+import { adminRequest } from "@/lib/admin-request";
+
 import { useEffect, useMemo, useState } from "react";
 import { adminAgentLessons } from "@/data/agent-lessons";
 import { LESSON_KIND_LABEL, LESSON_KINDS, type AgentLesson, type GraphEdge, type GraphNode, type LessonKind } from "@/data/agent-lessons-core";
@@ -55,7 +57,7 @@ export function AdminLessonMap() {
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    const res = await adminAgentLessons({ data: { token: token(), action: "get" } });
+    const res = await adminRequest(() => adminAgentLessons({ data: { token: token(), action: "get" } }));
     if (res.ok && "lessons" in res) {
       setLessons(res.lessons);
       setNodes(res.graph.nodes);
@@ -74,9 +76,9 @@ export function AdminLessonMap() {
 
   async function add() {
     setBusy(true);
-    const res = await adminAgentLessons({
+    const res = await adminRequest(() => adminAgentLessons({
       data: { token: token(), action: "add", lesson: { kind, intent, wrong, right, action, source: "admin" } },
-    });
+    }));
     setBusy(false);
     if (res.ok && "lessons" in res) {
       setLessons(res.lessons);
@@ -89,21 +91,27 @@ export function AdminLessonMap() {
   }
 
   async function toggle(id: string) {
-    const res = await adminAgentLessons({ data: { token: token(), action: "toggle", lesson: { id } } });
+    if (busy) return;
+    setBusy(true);
+    const res = await adminRequest(() => adminAgentLessons({ data: { token: token(), action: "toggle", lesson: { id } } }));
+    setBusy(false);
     if (res.ok && "lessons" in res) {
       setLessons(res.lessons);
       setNodes(res.graph.nodes);
       setEdges(res.graph.edges);
-    }
+    } else if (!res.ok) setMsg(res.error || "Не удалось изменить урок.");
   }
 
   async function remove(id: string) {
-    const res = await adminAgentLessons({ data: { token: token(), action: "remove", lesson: { id } } });
+    if (busy) return;
+    setBusy(true);
+    const res = await adminRequest(() => adminAgentLessons({ data: { token: token(), action: "remove", lesson: { id } } }));
+    setBusy(false);
     if (res.ok && "lessons" in res) {
       setLessons(res.lessons);
       setNodes(res.graph.nodes);
       setEdges(res.graph.edges);
-    }
+    } else if (!res.ok) setMsg(res.error || "Не удалось снять урок с карты.");
   }
 
   return (
@@ -231,10 +239,10 @@ export function AdminLessonMap() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={() => void toggle(l.id)} className="h-8 rounded-full bg-surface-2 px-3 text-[0.72rem] font-semibold">
+                <button type="button" disabled={busy} onClick={() => void toggle(l.id)} className="h-8 rounded-full bg-surface-2 px-3 text-[0.72rem] font-semibold">
                   {l.on ? "Выключить" : "Включить"}
                 </button>
-                <button type="button" onClick={() => void remove(l.id)} className="h-8 rounded-full bg-surface-2 px-3 text-[0.72rem] font-semibold text-muted">
+                <button type="button" disabled={busy} onClick={() => void remove(l.id)} className="h-8 rounded-full bg-surface-2 px-3 text-[0.72rem] font-semibold text-muted">
                   С карты
                 </button>
               </div>

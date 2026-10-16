@@ -1,5 +1,7 @@
 "use client";
 
+import { adminRequest } from "@/lib/admin-request";
+
 import { useEffect, useState } from "react";
 import {
   adminAgentDocs,
@@ -160,6 +162,7 @@ function toB64(file: File) {
 export function AdminTrainDocs() {
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [channels, setChannels] = useState<AgentChannel[]>([]);
+  const [channelsLoaded, setChannelsLoaded] = useState(false);
   const [contradictions, setContradictions] = useState<Contradiction[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -171,12 +174,12 @@ export function AdminTrainDocs() {
   const [allOpen, setAllOpen] = useState<Record<string, boolean>>({});
 
   async function load() {
-    const res = await adminAgentDocs({ data: { token: token(), action: "list" } });
+    const res = await adminRequest(() => adminAgentDocs({ data: { token: token(), action: "list" } }));
     if (res.ok && "docs" in res) {
       setDocs(res.docs as DocRow[]);
-      if ("channels" in res && res.channels) setChannels(res.channels as AgentChannel[]);
+      if ("channels" in res && res.channels) { setChannels(res.channels as AgentChannel[]); setChannelsLoaded(true); }
       if ("contradictions" in res && res.contradictions) setContradictions(res.contradictions as Contradiction[]);
-    }
+    } else if (!res.ok) setMsg(res.error || "Не удалось загрузить документы.");
   }
 
   useEffect(() => {
@@ -189,7 +192,7 @@ export function AdminTrainDocs() {
       return;
     }
     if (res.docs) setDocs(res.docs as DocRow[]);
-    if (res.channels) setChannels(res.channels as AgentChannel[]);
+    if (res.channels) { setChannels(res.channels as AgentChannel[]); setChannelsLoaded(true); }
     if (res.contradictions) setContradictions(res.contradictions as Contradiction[]);
   }
 
@@ -198,9 +201,9 @@ export function AdminTrainDocs() {
     setMsg("Читаю файл… текст не сокращаем.");
     try {
       const base64 = await toB64(file);
-      const res = await adminAgentDocs({
+      const res = await adminRequest(() => adminAgentDocs({
         data: { token: token(), action: "upload", kind, name: file.name, mime: file.type, base64 },
-      });
+      }));
       take(res);
       if (res.ok) setMsg(`Файл «${file.name}» принят. Нажмите «Преобразовать», чтобы разложить по каналам.`);
     } catch {
@@ -211,14 +214,15 @@ export function AdminTrainDocs() {
 
   async function run(action: "remove" | "toggle" | "reparse", id: string, extra?: { on?: boolean }) {
     setBusy(true);
-    const res = await adminAgentDocs({ data: { token: token(), action, id, on: extra?.on } });
+    const res = await adminRequest(() => adminAgentDocs({ data: { token: token(), action, id, on: extra?.on } }));
     take(res);
     setBusy(false);
   }
 
   async function saveChannels() {
+    if (!channelsLoaded || busy) return;
     setBusy(true);
-    const res = await adminAgentDocs({ data: { token: token(), action: "saveChannels", channels } });
+    const res = await adminRequest(() => adminAgentDocs({ data: { token: token(), action: "saveChannels", channels } }));
     take(res);
     setBusy(false);
     if (res.ok) setMsg("Каналы сохранены. Агент на сайте сейчас работает как «Агент на сайте».");
@@ -227,7 +231,7 @@ export function AdminTrainDocs() {
   async function preview(id: string) {
     setBusy(true);
     setMsg("Раскладываю оригинал по каналам, без сжатия…");
-    const res = await adminAgentDocs({ data: { token: token(), action: "previewTransform", id, percent } });
+    const res = await adminRequest(() => adminAgentDocs({ data: { token: token(), action: "previewTransform", id, percent } }));
     take(res);
     setBusy(false);
     if (res.ok && "docs" in res) {
@@ -245,9 +249,9 @@ export function AdminTrainDocs() {
   async function apply(id: string, rows?: TransformRow[]) {
     setBusy(true);
     const list = (rows && rows.length ? rows : draftRows[id]) || [];
-    const res = await adminAgentDocs({
+    const res = await adminRequest(() => adminAgentDocs({
       data: { token: token(), action: "applyTransform", id, rows: list },
-    });
+    }));
     take(res);
     setBusy(false);
     if (res.ok) {
@@ -258,7 +262,7 @@ export function AdminTrainDocs() {
   async function findConflicts() {
     setBusy(true);
     setMsg("Читаю скрипты, документы и правила…");
-    const res = await adminAgentDocs({ data: { token: token(), action: "contradictions" } });
+    const res = await adminRequest(() => adminAgentDocs({ data: { token: token(), action: "contradictions" } }));
     take(res);
     setBusy(false);
     if (res.ok) {
@@ -274,7 +278,7 @@ export function AdminTrainDocs() {
       return;
     }
     setBusy(true);
-    const res = await adminAgentDocs({ data: { token: token(), action: "applyFixes", fixIds: ids } });
+    const res = await adminRequest(() => adminAgentDocs({ data: { token: token(), action: "applyFixes", fixIds: ids } }));
     take(res);
     setBusy(false);
     if (res.ok) setMsg(`В обучение записано ${ids.length} правил. Ручные пункты остались открытыми.`);
@@ -392,7 +396,7 @@ export function AdminTrainDocs() {
                 <div className="mt-2 flex items-center justify-end">
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || !channelsLoaded}
                     onClick={() => void saveChannels()}
                     className="h-7 rounded-lg bg-black/[0.07] px-2.5 text-[0.7rem] font-semibold text-muted hover:bg-black/[0.12] disabled:opacity-50"
                   >
@@ -435,7 +439,7 @@ export function AdminTrainDocs() {
           ) : null}
           <div className="ml-auto">
             <TipWrap text="Пишет названия и правила в storage/agent-channels.json. Без этой кнопки «Преобразовать» читает предыдущую сохранённую версию правил.">
-              <Button type="button" disabled={busy} onClick={() => void saveChannels()}>
+              <Button type="button" disabled={busy || !channelsLoaded} onClick={() => void saveChannels()}>
                 Сохранить каналы
               </Button>
             </TipWrap>
@@ -502,6 +506,7 @@ export function AdminTrainDocs() {
       </div>
 
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
+      {!channelsLoaded && msg ? <Button type="button" variant="secondary" disabled={busy} onClick={() => void load()}>Повторить загрузку документов</Button> : null}
 
       <div className="space-y-4">
         {docs.map((d) => {

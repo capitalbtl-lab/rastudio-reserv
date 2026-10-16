@@ -1,5 +1,7 @@
 "use client";
 
+import { adminRequest } from "@/lib/admin-request";
+
 import { useEffect, useMemo, useState } from "react";
 import { adminClearEdit, adminEdits } from "@/data/admin";
 import { fieldLabel } from "@/data/edits-core";
@@ -23,7 +25,7 @@ export function AdminVoiceEdits() {
   const [draft, setDraft] = useState<{ path: string; field: string; value: string } | null>(null);
 
   async function load() {
-    const ed = await adminEdits({ data: { token: token() } });
+    const ed = await adminRequest(() => adminEdits({ data: { token: token() } }));
     if (ed.ok) setEdits((ed.edits || []) as EditRow[]);
     else setMsg(ed.error || "Не удалось прочитать правки.");
   }
@@ -49,7 +51,7 @@ export function AdminVoiceEdits() {
 
   async function revert(path: string, field?: string, all = false) {
     setBusy(`${path}:${field || "all"}`);
-    const res = await adminClearEdit({ data: { token: token(), path, field, all } });
+    const res = await adminRequest(() => adminClearEdit({ data: { token: token(), path, field, all } }));
     setBusy("");
     if (res.ok && "edits" in res && Array.isArray(res.edits)) setEdits(res.edits as EditRow[]);
     else await load();
@@ -59,9 +61,9 @@ export function AdminVoiceEdits() {
   async function saveDraft() {
     if (!draft) return;
     setBusy(`${draft.path}:${draft.field}`);
-    const res = await adminClearEdit({
+    const res = await adminRequest(() => adminClearEdit({
       data: { token: token(), path: draft.path, field: draft.field, value: draft.value },
-    });
+    }));
     setBusy("");
     if (res.ok && "edits" in res && Array.isArray(res.edits)) setEdits(res.edits as EditRow[]);
     else await load();

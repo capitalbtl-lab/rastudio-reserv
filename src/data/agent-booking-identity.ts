@@ -7,7 +7,8 @@ export function bookingIdentity(facts: SessionFacts, args: Record<string, unknow
     return { ok: false as const, error: "Для записи второго ребёнка уточните его имя, возраст и телефон родителя. Данные первого ребёнка не используйте." };
   }
   const child = String(args.child || "").trim();
-  const hasSecondName = child.toLowerCase().split(/[\s,.-]+/).includes(facts.secondChild.toLowerCase());
+  const words = (value: string) => ` ${value.toLowerCase().replace(/[\s,.]+/g, " ").trim()} `;
+  const hasSecondName = words(child).includes(words(facts.secondChild));
   return {
     ok: true as const,
     args: { ...args, child: hasSecondName ? child : facts.secondChild, phone: facts.phone, age: facts.age, dob: "" },
