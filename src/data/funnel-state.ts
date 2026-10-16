@@ -31,8 +31,15 @@ const AGE_WORDS: Record<string, number> = {
   восемнадцать: 18,
 };
 
+function slotText(text: string) {
+  return withoutPhones(text)
+    .replace(/(?<!\d)(?:\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{1,2}[-./]\d{1,2}[-./]\d{2,4})(?!\d)/g, " ")
+    .replace(/(?<!\d)\d{1,2}:\d{2}(?!\d)/g, " ")
+    .replace(/(?:gid|teacher_id|subject_id|customer_id)=[^\s]+/gi, " ");
+}
+
 export function ageFromText(text: string) {
-  text = withoutPhones(text);
+  text = slotText(text);
   const valid = (raw: string | undefined) => {
     const y = Number(raw) || AGE_WORDS[String(raw || "").toLowerCase()] || 0;
     return y >= 3 && y <= 18 ? y : 0;
@@ -49,7 +56,7 @@ export function ageFromText(text: string) {
 }
 
 function lastChoice(text: string, choices: { re: RegExp; value: number }[]) {
-  const hits = choices.flatMap((c) => [...text.matchAll(c.re)].filter((m) => !/(?:^|[\s,])не\s*$/i.test(text.slice(0, m.index))).map((m) => ({ index: m.index!, value: c.value })));
+  const hits = choices.flatMap((c) => [...text.matchAll(c.re)].filter((m) => !/(?:^|[\s,])не\s+(?:(?:в|на)\s+)?$/i.test(text.slice(0, m.index))).map((m) => ({ index: m.index!, value: c.value })));
   return hits.sort((a, b) => b.index - a.index)[0]?.value || 0;
 }
 
@@ -65,7 +72,7 @@ function takeBranch(text: string): { branch: string; branchId: number } | null {
   const choice = lastChoice(text, [
     { re: /гражданск[а-яё]*|олимп[а-яё]*/gi, value: 1 },
     { re: /октябрьск[а-яё]*|цмит|революц[а-яё]*/gi, value: 2 },
-    { re: /пушкин[а-яё]*|202[аa]?/gi, value: 3 },
+    { re: /пушкин[а-яё]*|(?<![а-яёa-z\d])202[аa](?![а-яёa-z\d])/gi, value: 3 },
   ]);
   if (choice === 1) return { branch: "Коломна, Гражданская, 2", branchId: 1 };
   if (choice === 2) return { branch: "Коломна, ЦМИТ, Октябрьской революции, 340", branchId: 2 };
@@ -74,7 +81,7 @@ function takeBranch(text: string): { branch: string; branchId: number } | null {
 }
 
 export function slotsFromText(text: string): Slots {
-  text = withoutPhones(text);
+  text = slotText(text);
   const out: Slots = {};
   const age = ageFromText(text);
   if (age) out.age = age;

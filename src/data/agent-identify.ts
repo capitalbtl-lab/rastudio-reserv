@@ -32,14 +32,19 @@ export function asIdentifyHits(
 }
 
 const YES = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это|конечно|именно|она|он)(?=$|[\s,.!?…])/i;
-const DENY = /другой реб[её]нок|это не\s+|^нет(?:[\s,.!?]|$)|^неверно(?:[\s,.!?]|$)|не наш реб[её]нок|подбираем впервые|подбираем курс впервые/i;
+const DENY = /другой реб[её]нок|это не (?:наш реб[её]нок|он[а]?)(?=$|[\s,.!?])|не наш реб[её]нок|подбираем впервые|подбираем курс впервые/i;
+const CONFIRMATION_DENY = /это не\s+|^нет(?:[\s,.!?]|$)|^неверно(?:[\s,.!?]|$)/i;
 
 /** Запрос услуги после показа имени = подтверждение единственного ребёнка. Не переспрашивать. */
 export const CLIENT_SERVICE_ASK =
   /отработк|пропуск|не прид|не сможем прийти|пауз|приостанов|абонемент|остат|когда следующее|расписан|правил|оферт|второго ребёнк|ещё одн(ого|у) ребёнк|индивидуальн|сверхурочн|дополнительн занят|во сколько|какой день ходим/i;
 
-export function rejectIdentify(text: string) {
-  return DENY.test(String(text || "").trim());
+export function rejectIdentify(text: string, confirmed = false, names: string[] = []) {
+  const value = String(text || "").trim();
+  if (DENY.test(value)) return true;
+  if (!confirmed) return CONFIRMATION_DENY.test(value);
+  const words = ` ${value.toLowerCase().replace(/[^\p{L}\s-]/gu, " ").replace(/\s+/g, " ")} `;
+  return names.some((name) => words.includes(` не ${name.toLowerCase().trim().replace(/\s+/g, " ")} `));
 }
 
 export function confirmedHit(
@@ -64,7 +69,7 @@ export function confirmedHit(
 
 export function impliedIdentify(hits: IdentifyHit[], lastUser: string, already?: boolean, messages?: { role: string; content: string }[]): IdentifyHit | null {
   if (!hits.length) return null;
-  if (messages && identityHistory(messages).messages.some((m) => m.role === "user" && rejectIdentify(m.content))) return null;
+  if (messages && !scanIdentity(hits, messages).allowImplied) return null;
   if (already && hits.length === 1) return hits[0];
   const u = String(lastUser || "").trim();
   if (!u || rejectIdentify(u)) return null;
@@ -72,18 +77,17 @@ export function impliedIdentify(hits: IdentifyHit[], lastUser: string, already?:
   return null;
 }
 
-export function confirmedFromHistory(
+function scanIdentity(
   hits: IdentifyHit[],
   messages: { role: string; content: string }[],
-): IdentifyHit | null {
-  if (!hits.length) return null;
+) {
   messages = identityHistory(messages).messages;
   let last: IdentifyHit | null = null;
   let allowImplied = true;
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
     if (m.role !== "user") continue;
-    if (rejectIdentify(m.content)) {
+    if (rejectIdentify(m.content, Boolean(last), last ? [last.first, last.child] : [])) {
       last = null;
       allowImplied = false;
       continue;
@@ -92,7 +96,11 @@ export function confirmedFromHistory(
     const hit = confirmedHit(hits, m.content, prev, allowImplied);
     if (hit) last = hit;
   }
-  return last;
+  return { hit: last, allowImplied };
+}
+
+export function confirmedFromHistory(hits: IdentifyHit[], messages: { role: string; content: string }[]): IdentifyHit | null {
+  return scanIdentity(hits, messages).hit;
 }
 
 export function identifyLocked(

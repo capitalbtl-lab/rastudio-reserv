@@ -1,5 +1,7 @@
 "use client";
 
+import { adminRequest } from "@/lib/admin-request";
+
 import { useEffect, useState } from "react";
 import { adminAgentInbox } from "@/data/agent-inbox-fn";
 import { Button } from "@/components/ui/button";
@@ -65,7 +67,7 @@ export function AdminAgentChannels() {
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    const res = await adminAgentInbox({ data: { token: token(), action: "list" } });
+    const res = await adminRequest(() => adminAgentInbox({ data: { token: token(), action: "list" } }));
     if (res.ok && "hooks" in res) setData(res as unknown as Status);
     else setMsg(res.ok ? "" : res.error || "Не удалось загрузить каналы");
   }
@@ -78,7 +80,7 @@ export function AdminAgentChannels() {
 
   async function act(action: "subscribeMax" | "probeMax") {
     setBusy(true);
-    const res = await adminAgentInbox({ data: { token: token(), action } });
+    const res = await adminRequest(() => adminAgentInbox({ data: { token: token(), action } }));
     setBusy(false);
     if (res.ok && "hooks" in res) {
       setData(res as unknown as Status);

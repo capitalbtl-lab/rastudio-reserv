@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { adminRequest } from "@/lib/admin-request";
+
+import { useEffect, useRef, useState } from "react";
 import { adminChatLogs } from "@/data/chat-logs-fn";
 import { adminAgentBrain } from "@/data/agent-config";
 import { parseTurns } from "@/data/agent-turns";
@@ -45,22 +47,51 @@ export function AdminChats() {
   const [open, setOpen] = useState<string>("");
   const [full, setFull] = useState<{ role: string; content: string }[] | null>(null);
   const [q, setQ] = useState("");
+  const [msg, setMsg] = useState("");
+  const [threadError, setThreadError] = useState("");
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [learning, setLearning] = useState(false);
+  const listGeneration = useRef(0);
+  const threadGeneration = useRef(0);
 
   async function load() {
-    const res = await adminChatLogs({ data: { token: token() } });
-    if (res.ok && "sessions" in res && res.sessions) setRows(res.sessions as Row[]);
+    const generation = ++listGeneration.current;
+    const res = await adminRequest(() => adminChatLogs({ data: { token: token() } }));
+    if (generation !== listGeneration.current) return;
+    if (res.ok && "sessions" in res && res.sessions) { setRows(res.sessions as Row[]); setMsg(""); }
+    else setMsg(!res.ok ? res.error || "Не удалось загрузить диалоги." : "Не удалось загрузить диалоги.");
   }
 
   useEffect(() => {
     void load();
     const id = window.setInterval(() => void load(), 10000);
-    return () => window.clearInterval(id);
+    return () => { listGeneration.current += 1; threadGeneration.current += 1; window.clearInterval(id); };
   }, []);
 
   async function openOne(id: string) {
+    const generation = ++threadGeneration.current;
     setOpen(id);
-    const res = await adminChatLogs({ data: { token: token(), id } });
+    setFull(null);
+    setThreadError("");
+    setThreadLoading(Boolean(id));
+    if (!id) return;
+    const res = await adminRequest(() => adminChatLogs({ data: { token: token(), id } }));
+    if (generation !== threadGeneration.current) return;
+    setThreadLoading(false);
     if (res.ok && "session" in res && res.session) setFull(res.session.messages);
+    else setThreadError(!res.ok ? res.error || "Не удалось открыть диалог." : "Диалог не найден.");
+  }
+
+  async function learn(row: Row, index: number, answer: string) {
+    const input = full?.[index - 1];
+    if (learning || input?.role !== "user") return;
+    setLearning(true);
+    const res = await adminRequest(() => adminAgentBrain({ data: {
+      token: token(), action: "add",
+      example: { kind: "dialog", input: input.content, output: answer, source: `chat:${row.id}`, note: row.path },
+    } }));
+    setLearning(false);
+    setMsg(res.ok ? "Пример добавлен в обучение." : res.error || "Не удалось сохранить пример.");
   }
 
   const shown = rows.filter((r) => {
@@ -83,6 +114,7 @@ export function AdminChats() {
         className="h-11 w-full max-w-md rounded-xl bg-surface px-3 ring-1 ring-black/10"
       />
       <p className="text-sm text-muted">{shown.length} диалогов</p>
+      {msg ? <p className="text-sm text-primary">{msg}</p> : null}
       <div className="space-y-3">
         {shown.length ? (
           shown.map((r) => (
@@ -115,6 +147,8 @@ export function AdminChats() {
                   </ul>
                 ) : null}
               </button>
+              {open === r.id && threadLoading ? <p className="mt-4 text-sm text-muted">Загрузка диалога…</p> : null}
+              {open === r.id && threadError ? <p className="mt-4 text-sm text-primary">{threadError}</p> : null}
               {open === r.id && full ? (
                 <div className="mt-4 space-y-2 border-t border-black/5 pt-4">
                   {full.map((m, i) =>
@@ -134,21 +168,8 @@ export function AdminChats() {
                           <button
                             type="button"
                             className="text-[0.7rem] font-semibold text-primary"
-                            onClick={() =>
-                              void adminAgentBrain({
-                                data: {
-                                  token: token(),
-                                  action: "add",
-                                  example: {
-                                    kind: "dialog",
-                                    input: full[i - 1].content,
-                                    output: m.content,
-                                    source: `chat:${r.id}`,
-                                    note: r.path,
-                                  },
-                                },
-                              })
-                            }
+                            disabled={learning}
+                            onClick={() => void learn(r, i, m.content)}
                           >
                             В обучение
                           </button>
@@ -160,7 +181,7 @@ export function AdminChats() {
               ) : null}
             </article>
           ))
-        ) : (
+        ) : msg ? null : (
           <p className="text-sm text-muted">Пока пусто — как только родитель напишет в чат, диалог появится здесь.</p>
         )}
       </div>

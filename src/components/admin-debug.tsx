@@ -1,5 +1,7 @@
 "use client";
 
+import { adminRequest } from "@/lib/admin-request";
+
 import { useEffect, useMemo, useState } from "react";
 import { adminDebugMode } from "@/data/debug-fn";
 import { DEBUG_TOOLS } from "@/data/debug-client";
@@ -34,12 +36,16 @@ export function AdminDebug() {
   const [last, setLast] = useState<LastHit[]>([]);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   async function load() {
+    setBusy(true);
     const [dbg, win] = await Promise.all([
-      adminDebugMode({ data: { token: token(), action: "get" } }),
-      adminAgentBrain({ data: { token: token(), action: "getSettings" } }),
+      adminRequest(() => adminDebugMode({ data: { token: token(), action: "get" } })),
+      adminRequest(() => adminAgentBrain({ data: { token: token(), action: "getSettings" } })),
     ]);
+    setBusy(false);
+    setLoaded(dbg.ok && win.ok);
     if (dbg.ok && "tools" in dbg) setTools(dbg.tools);
     if (dbg.ok && "widget" in dbg) setWidget(dbg.widget || {});
     if (dbg.ok && "last" in dbg && Array.isArray((dbg as { last?: LastHit[] }).last)) {
@@ -47,6 +53,8 @@ export function AdminDebug() {
     }
     if (win.ok && "settings" in win) setSite(win.settings);
     if (!dbg.ok) setMsg(dbg.error || "Не удалось загрузить отладку.");
+    else if (!win.ok) setMsg(win.error || "Не удалось загрузить настройки окна.");
+    else setMsg("");
   }
 
   useEffect(() => {
@@ -59,8 +67,9 @@ export function AdminDebug() {
   );
 
   async function save() {
+    if (!loaded || busy) return;
     setBusy(true);
-    const res = await adminDebugMode({ data: { token: token(), action: "save", tools, widget } });
+    const res = await adminRequest(() => adminDebugMode({ data: { token: token(), action: "save", tools, widget } }));
     setBusy(false);
     if (res.ok && "tools" in res) {
       setTools(res.tools);
@@ -160,7 +169,8 @@ export function AdminDebug() {
 
       <AdminSaveBar>
         {msg ? <p className="text-sm text-primary">{msg}</p> : null}
-        <Button type="button" disabled={busy} onClick={() => void save()}>
+        {!loaded && msg ? <Button type="button" variant="secondary" disabled={busy} onClick={() => void load()}>Повторить загрузку отладки</Button> : null}
+        <Button type="button" disabled={busy || !loaded} onClick={() => void save()}>
           Сохранить отладку
         </Button>
       </AdminSaveBar>

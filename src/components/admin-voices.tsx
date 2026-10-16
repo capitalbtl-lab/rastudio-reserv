@@ -19,11 +19,14 @@ export function AdminVoices() {
   const [female, setFemale] = useState<{ id: string; label: string }[]>([]);
   const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState("");
   const [msg, setMsg] = useState("");
   const previewRef = useRef<HTMLAudioElement | null>(null);
   const previewGeneration = useRef(0);
   const finishPreview = useRef<(() => void) | null>(null);
+  const loadGeneration = useRef(0);
 
   function stopPreview() {
     previewGeneration.current += 1;
@@ -37,21 +40,30 @@ export function AdminVoices() {
     setPlaying("");
   }
 
+  async function load() {
+    const generation = ++loadGeneration.current;
+    setLoading(true);
+    try {
+      const vo = await adminVoice({ data: { token: token() } });
+      if (generation !== loadGeneration.current) return;
+      if (vo.ok) {
+        setVoice({ ...DEFAULT_VOICE, ...vo.settings });
+        setMale(vo.male);
+        setFemale(vo.female);
+        setRoles(vo.roles);
+        setLoaded(true);
+        setMsg("");
+      } else setMsg(vo.error || "Не удалось загрузить голоса.");
+    } catch (e) {
+      if (generation === loadGeneration.current) setMsg(e instanceof Error ? e.message : "Не удалось загрузить голоса.");
+    } finally {
+      if (generation === loadGeneration.current) setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    void (async () => {
-      try {
-        const vo = await adminVoice({ data: { token: token() } });
-        if (vo.ok) {
-          setVoice({ ...DEFAULT_VOICE, ...vo.settings });
-          setMale(vo.male);
-          setFemale(vo.female);
-          setRoles(vo.roles);
-        } else setMsg(vo.error || "Не удалось загрузить голоса.");
-      } catch (e) {
-        setMsg(e instanceof Error ? e.message : "Не удалось загрузить голоса.");
-      }
-    })();
-    return () => stopPreview();
+    void load();
+    return () => { loadGeneration.current += 1; stopPreview(); };
   }, []);
 
   async function listen(who: "oleg" | "olga" | "both") {
@@ -101,6 +113,9 @@ export function AdminVoices() {
           У Олега и Ольги свои тембр, интонация, темп и громкость. Двигайте ползунки и сразу слушайте.
         </p>
       </div>
+      {loading ? <p className="text-sm text-muted">Загрузка настроек голосов…</p> : null}
+      {!loaded && !loading ? <Button type="button" onClick={() => void load()}>Повторить загрузку голосов</Button> : null}
+      <fieldset disabled={!loaded} className="contents">
       <div className="grid gap-5 lg:grid-cols-2">
         {(
           [
@@ -229,14 +244,15 @@ export function AdminVoices() {
           ) : null}
           <Button
             type="button"
-            disabled={busy}
+            disabled={busy || !loaded}
             onClick={async () => {
+              if (!loaded || busy) return;
               setBusy(true);
               try {
                 const res = await adminSaveVoice({ data: { token: token(), ...voice } });
                 if (!res.ok) setMsg(res.error || "Ошибка");
                 else {
-                  setVoice({ ...DEFAULT_VOICE, ...res.settings });
+                  setVoice((current) => current === voice ? { ...DEFAULT_VOICE, ...res.settings } : current);
                   setMsg("Голоса сохранены");
                 }
               } catch (e) {
@@ -251,6 +267,7 @@ export function AdminVoices() {
         </AdminSaveBar>
         {msg ? <p className="mt-2 text-right text-sm text-primary">{msg}</p> : null}
       </div>
+      </fieldset>
     </div>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { adminRequest } from "@/lib/admin-request";
+
 import { useEffect, useState } from "react";
 import { adminSectionGuides, FACTORY_GUIDES, GUIDE_REV, CORE_ID_NODES, CORE_ID_EDGES, CORE_ID_HINT, type SectionGuide } from "@/data/agent-section-guides";
 import { Button } from "@/components/ui/button";
@@ -80,17 +82,22 @@ export function AdminSectionGuides() {
   const [on, setOn] = useState(start.on);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
 
   const guide = guides.find((g) => g.id === active) || guides[0];
 
   async function load() {
+    setBusy(true);
     try {
-      const res = await adminSectionGuides({ data: { token: token(), action: "get" } });
+      const res = await adminRequest(() => adminSectionGuides({ data: { token: token(), action: "get" } }));
+      setBusy(false);
       if (!res.ok || !("guides" in res) || !res.guides?.length) {
-        setMsg(res.ok ? "" : res.error || "Не удалось загрузить правки. Показана заводская база.");
+        setMsg(!res.ok ? res.error || "Не удалось загрузить правки. Показана заводская база." : "Не удалось загрузить базу знаний.");
         return;
       }
+      setLoaded(true);
+      setMsg("");
       setGuides(res.guides);
       const first = res.guides.find((g) => g.id === active) || res.guides[0];
       if (first) {
@@ -99,6 +106,7 @@ export function AdminSectionGuides() {
         setOn(first.on);
       }
     } catch (e) {
+      setBusy(false);
       setMsg(e instanceof Error ? e.message : "Сервер не ответил. Показана заводская база.");
     }
   }
@@ -118,11 +126,11 @@ export function AdminSectionGuides() {
   }
 
   async function save() {
-    if (!guide) return;
+    if (!guide || !loaded || busy) return;
     setBusy(true);
-    const res = await adminSectionGuides({
+    const res = await adminRequest(() => adminSectionGuides({
       data: { token: token(), action: "save", id: guide.id, on, body },
-    });
+    }));
     setBusy(false);
     if (res.ok && "guides" in res) {
       setGuides(res.guides);
@@ -137,10 +145,10 @@ export function AdminSectionGuides() {
   }
 
   async function reset() {
-    if (!guide) return;
+    if (!guide || !loaded || busy) return;
     if (!window.confirm("Вернуть заводскую Карту ID для этого раздела? Правки текста сотрутся.")) return;
     setBusy(true);
-    const res = await adminSectionGuides({ data: { token: token(), action: "reset", id: guide.id } });
+    const res = await adminRequest(() => adminSectionGuides({ data: { token: token(), action: "reset", id: guide.id } }));
     setBusy(false);
     if (res.ok && "guides" in res) {
       setGuides(res.guides);
@@ -211,7 +219,7 @@ export function AdminSectionGuides() {
                 <p className="mt-1 font-mono text-[0.7rem] text-muted">REV {GUIDE_REV} · id={guide.id}</p>
               </div>
               <label className="flex items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-sm">
-                <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />
+                <input type="checkbox" checked={on} disabled={!loaded} onChange={(e) => setOn(e.target.checked)} />
                 <span className="font-semibold">{on ? "в промпте агента" : "не отдавать агенту"}</span>
                 <InfoTip text="Включено: Олег/Ольга читают «Роли» и «Сайт · запись»; голос админки читает все включённые разделы. Выключено — этот текст агенту не отдаётся." />
               </label>
@@ -310,23 +318,25 @@ export function AdminSectionGuides() {
             {guide.updatedAt ? <p className="mt-1 text-xs text-muted">Правка: {when(guide.updatedAt)}</p> : null}
             <textarea
               value={body}
+              readOnly={!loaded}
               onChange={(e) => setBody(e.target.value)}
               rows={22}
               className="mt-3 w-full resize-y rounded-xl bg-surface-2 px-3 py-2.5 font-mono text-[0.78rem] leading-relaxed ring-1 ring-black/10"
             />
             <AdminSaveBar>
               <TipWrap text="Возвращает заводской текст Карты ID. Тумблер «в промпте» тоже станет включён.">
-                <Button type="button" variant="secondary" disabled={busy} onClick={() => void reset()}>
+                <Button type="button" variant="secondary" disabled={busy || !loaded} onClick={() => void reset()}>
                   Вернуть заводской
                 </Button>
               </TipWrap>
               <TipWrap text="Пишет текст и тумблер. Агент расписания подхватит сразу, без перезапуска сайта.">
-                <Button type="button" disabled={busy} onClick={() => void save()}>
+                <Button type="button" disabled={busy || !loaded} onClick={() => void save()}>
                   Сохранить
                 </Button>
               </TipWrap>
             </AdminSaveBar>
             {msg ? <p className="mt-2 text-right text-sm text-primary">{msg}</p> : null}
+            {!loaded && msg ? <Button type="button" variant="secondary" disabled={busy} onClick={() => void load()}>Повторить загрузку базы</Button> : null}
           </article>
         </div>
       )}

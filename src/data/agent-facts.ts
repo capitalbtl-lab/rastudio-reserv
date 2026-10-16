@@ -59,13 +59,10 @@ function takeSchool(text: string) {
 }
 
 function takeSecondName(text: string) {
-  const m =
-    text.match(/(?:второго?|ещё одн(?:ого|у))[^\n]{0,24}зовут\s+([А-ЯЁ][а-яё]+)/i) ||
-    text.match(/зовут\s+([А-ЯЁ][а-яё]+)/i) ||
-    text.match(/^([А-ЯЁ][а-яё]{2,})\s*[.!,]*$/);
-  const n = m?.[1] || "";
-  if (!n || /лет|год|недел|месяц|робот|худож|программ|спасибо/i.test(n)) return "";
-  return n;
+  const source = (text.match(/зовут\s+([^\n]+)/i)?.[1] || text).trim();
+  const n = source.match(/^([\p{L}][\p{L}'’\u2011-]+(?:[ \t]+[\p{L}][\p{L}'’\u2011-]+){0,2})(?=[,.!?]|$)/u)?.[1] || "";
+  if (!n || takeSchool(n) || /(?:^|\s)(?:лет|год|недел[яьи]|месяц|спасибо|нет|да|не|хочу|интересна)(?=$|\s)/i.test(n)) return "";
+  return n.replace(/(^|[ \t-])\p{L}/gu, (letter) => letter.toUpperCase());
 }
 
 const CLIENT_RE =
@@ -101,17 +98,25 @@ export function identifiedFromMessages(messages: { role: string; content: string
   const yes = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это|конечно|именно|она|он)(?=$|[\s,.!?…])/i;
   messages = identityHistory(messages).messages;
   let ok = false;
+  let names: string[] = [];
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
     if (m.role !== "user") continue;
     const u = m.content.trim();
-    if (rejectIdentify(u)) {
+    if (rejectIdentify(u, ok, names)) {
       ok = false;
+      names = [];
       continue;
     }
     const prev = [...messages.slice(0, i)].reverse().find((x) => x.role === "assistant")?.content || "";
     if (/откройте карточку|да,\s*это\s+|да,\s*[А-ЯЁа-яё]{2,}/i.test(u)) ok = true;
     else if (/это ваш|нашл|ваш ребёнок|несколько детей/i.test(prev) && (yes.test(u) || CLIENT_SERVICE_ASK.test(u))) ok = true;
+    if (ok) {
+      const named = u.match(/откройте карточку\s+([А-ЯЁа-яё-]+(?:[ \t]+[А-ЯЁа-яё-]+){0,2})/i)?.[1] ||
+        ((!names.length || /это ваш|ваш ребёнок|несколько детей/i.test(prev)) ? u.match(/^да[,\s]+(?:это\s+)?([А-ЯЁа-яё-]+(?:[ \t]+[А-ЯЁа-яё-]+){0,2})/i)?.[1] : "") ||
+        (!names.length && /это ваш|ваш ребёнок/i.test(prev) ? prev.match(/(?:на сайте:|нашл[а-яё]*:?)[ \t]+([А-ЯЁа-яё-]+(?:[ \t]+[А-ЯЁа-яё-]+){0,2})(?=[.!?])/i)?.[1] : "");
+      if (named) names = [named, ...named.split(/\s+/)];
+    }
   }
   return ok;
 }
@@ -150,8 +155,10 @@ export function takeWeekday(text: string) {
   const t = String(text || "").trim().toLowerCase();
   if (!t) return "";
   if (WEEKDAY_SHORT[t]) return WEEKDAY_SHORT[t];
-  for (const w of WEEKDAY_NAME) if (w.re.test(t)) return w.day;
-  return "";
+  const mentions = WEEKDAY_NAME.flatMap((w) => [...t.matchAll(new RegExp(w.re.source, "gi"))]
+    .filter((m) => !/(?:^|[\s,])не\s+(?:(?:в|на)\s+)?$/i.test(t.slice(0, m.index)))
+    .map((m) => ({ day: w.day, at: m.index! })));
+  return mentions.sort((a, b) => b.at - a.at)[0]?.day || "";
 }
 
 function takeClientIntent(messages: { role: string; content: string }[]) {
@@ -170,6 +177,30 @@ function takeClientIntent(messages: { role: string; content: string }[]) {
     if (/дополнительн(ое|ый) занят/i.test(u)) return "дополнительное";
   }
   return "";
+}
+
+function clientRequest(messages: { role: string; content: string }[]) {
+  let intent = "";
+  let start = 0;
+  let completed = false;
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.role === "assistant") {
+      if (/^(?:(?:Ольга|Олег):\s*)?(?:Поставил[аи]? (?:паузу|отработку|пробное|занятие)|Отметил[аи]? пропуск|Абонемент tariffId=\d+ на карточке)/i.test(m.content)) completed = true;
+      continue;
+    }
+    if (m.role !== "user") continue;
+    const next = takeClientIntent([m]);
+    if (next) {
+      if (next !== intent || completed) start = i;
+      intent = next;
+      completed = false;
+    } else if (completed) {
+      intent = "";
+      start = i;
+    }
+  }
+  return { intent, messages: messages.slice(start) };
 }
 
 function takeCourse(text: string) {
@@ -226,13 +257,9 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   }
   if (facts.mode === "client") {
     facts.identified = identifiedFromMessages(messages);
-    const want = takeClientIntent(messages);
-    let intentStart = 0;
-    for (let i = 0; i < messages.length; i++) {
-      if (messages[i].role === "user" && takeClientIntent([messages[i]])) intentStart = i;
-    }
-    const request = messages.slice(intentStart);
-    if (want) facts.intent = want;
+    const current = clientRequest(messages);
+    const request = current.messages;
+    facts.intent = current.intent || undefined;
     const day = [...request]
       .filter((m) => m.role === "user")
       .map((m) => takeWeekday(m.content))

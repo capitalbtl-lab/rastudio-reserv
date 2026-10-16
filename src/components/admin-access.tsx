@@ -1,5 +1,7 @@
 "use client";
 
+import { adminRequest } from "@/lib/admin-request";
+
 import { useEffect, useState } from "react";
 import { adminMeta, adminSetCodeword, adminSetPassword } from "@/data/admin";
 import { Button } from "@/components/ui/button";
@@ -21,8 +23,9 @@ export function AdminAccess() {
 
   useEffect(() => {
     void (async () => {
-      const meta = await adminMeta({ data: { token: token() } });
+      const meta = await adminRequest(() => adminMeta({ data: { token: token() } }));
       if (meta.ok) setLog(meta.log || []);
+      else setMsg(meta.error || "Не удалось загрузить журнал доступа.");
     })();
   }, []);
 
@@ -56,7 +59,7 @@ export function AdminAccess() {
             disabled={busy || word.trim().length < 4}
             onClick={async () => {
               setBusy(true);
-              const res = await adminSetCodeword({ data: { token: token(), word } });
+              const res = await adminRequest(() => adminSetCodeword({ data: { token: token(), word } }));
               setBusy(false);
               setMsg(res.ok ? "Слово обновлено" : res.error || "Ошибка");
               if (res.ok) setWord("");
@@ -87,7 +90,7 @@ export function AdminAccess() {
             disabled={busy || newPass.trim().length < 6}
             onClick={async () => {
               setBusy(true);
-              const res = await adminSetPassword({ data: { token: token(), password: newPass } });
+              const res = await adminRequest(() => adminSetPassword({ data: { token: token(), password: newPass } }));
               setBusy(false);
               setMsg(res.ok ? "Пароль кабинета обновлён" : res.error || "Ошибка");
               if (res.ok) setNewPass("");
